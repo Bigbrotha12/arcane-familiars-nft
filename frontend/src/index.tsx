@@ -1,11 +1,8 @@
 import { createRoot, Root } from 'react-dom/client';
-import { Provider } from 'react-redux';
-import { appStore } from './state/Context';
 import "./styles.css";
 import App from "./App";
 import ErrorBoundary from './components/Common/ErrorBoundary';
 
-// Catch unhandled errors and show them on screen
 window.addEventListener('error', (event) => {
   console.error('Uncaught error:', event.error);
   const errorDiv = document.createElement('div');
@@ -28,9 +25,7 @@ const root: Root = createRoot(container);
 try {
   root.render(
     <ErrorBoundary>
-      <Provider store={appStore}>
-        <App />
-      </Provider>
+      <App />
     </ErrorBoundary>
   );
 } catch (error) {

@@ -1,0 +1,64 @@
+:root {
+  --accent: #7C5CFC;
+  --accent-hover: #6A4AE8;
+  --accent-light: #EDE7FF;
+  --teal: #2DD4BF;
+  --pink: #F472B6;
+  --yellow: #FBBF24;
+
+  --bg-primary: #FFF8F0;
+  --bg-secondary: #FFF1E0;
+  --bg-card: #FFFFFF;
+  --bg-surface: #FAF5ED;
+  --text-primary: #1E1B4B;
+  --text-secondary: #6366A1;
+  --text-muted: #A5A3C4;
+  --border: #E8E4F0;
+
+  --success: #10B981;
+  --warning: #F59E0B;
+  --error: #EF4444;
+
+  --font-display: 'Fredoka', sans-serif;
+  --font-body: 'DM Sans', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-full: 9999px;
+
+  --space-xs: 4px;
+  --space-sm: 8px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 32px;
+  --space-2xl: 48px;
+  --space-3xl: 64px;
+
+  --shadow-card: 0 2px 8px rgba(30, 27, 75, 0.06);
+  --shadow-card-hover: 0 8px 24px rgba(30, 27, 75, 0.1);
+  --shadow-btn: 0 2px 4px rgba(124, 92, 252, 0.2);
+  --shadow-btn-hover: 0 4px 12px rgba(124, 92, 252, 0.3);
+
+  --ease-out: cubic-bezier(0, 0, 0.2, 1);
+  --ease-in: cubic-bezier(0.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-micro: 50ms;
+  --duration-short: 150ms;
+  --duration-medium: 250ms;
+  --duration-long: 400ms;
+}
+
+[data-theme="dark"] {
+  --bg-primary: #1E1B4B;
+  --bg-secondary: #2D2A5E;
+  --bg-card: #3B3870;
+  --bg-surface: #2D2A5E;
+  --text-primary: #F0EFFF;
+  --text-secondary: #B8B5E0;
+  --text-muted: #7875A0;
+  --border: #3B3870;
+  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.2);
+  --shadow-card-hover: 0 8px 24px rgba(0, 0, 0, 0.3);
+}

@@ -26,34 +26,17 @@ export default class ErrorBoundary extends Component<Props, State> {
   render() {
     if (this.state.hasError) {
       return (
-        <div style={{
-          padding: '40px',
-          fontFamily: 'sans-serif',
-          maxWidth: '800px',
-          margin: '0 auto',
-          color: '#f0f0f0',
-          backgroundColor: '#242424',
-          minHeight: '100vh'
-        }}>
-          <h1 style={{ color: '#f44336' }}>Arcane Familiars — Render Error</h1>
-          <pre style={{
-            background: '#1a1a1a',
-            padding: '20px',
-            borderRadius: '8px',
-            overflow: 'auto',
-            fontSize: '14px',
-            color: '#ff9800'
-          }}>{this.state.error?.message}</pre>
-          <pre style={{
-            background: '#1a1a1a',
-            padding: '20px',
-            borderRadius: '8px',
-            overflow: 'auto',
-            fontSize: '12px',
-            color: '#9e9e9e',
-            marginTop: '16px'
-          }}>{this.state.error?.stack}</pre>
-          <p style={{ marginTop: '24px', color: '#888' }}>
+        <div className="min-h-screen bg-surface-primary p-xl font-body" style={{ maxWidth: '800px', margin: '0 auto' }}>
+          <h1 className="text-2xl font-display font-semibold mb-md" style={{ color: 'var(--error)' }}>
+            Arcane Familiars — Render Error
+          </h1>
+          <pre className="p-lg rounded-md overflow-auto text-sm mb-md" style={{ background: 'var(--bg-secondary)', color: 'var(--warning)' }}>
+            {this.state.error?.message}
+          </pre>
+          <pre className="p-lg rounded-md overflow-auto text-xs" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+            {this.state.error?.stack}
+          </pre>
+          <p className="mt-lg" style={{ color: 'var(--text-muted)' }}>
             Check the browser console (F12) for more details.
           </p>
         </div>
