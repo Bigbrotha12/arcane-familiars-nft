@@ -14,6 +14,13 @@ import Frame from './components/03_Body/Game/Frame';
 import LandingPage from './components/00_Layout/LandingPage';
 
 export default function App(): JSX.Element {
+  // Simple test render to verify React is working
+  const testRender = (
+    <div style={{ padding: '20px', background: '#1a1a1a', color: '#4caf50', fontFamily: 'monospace', margin: '20px', borderRadius: '8px' }}>
+      ✅ React is rendering successfully!
+    </div>
+  );
+
   const IMXProvider = AppConfig.Mode === "Production" ?
     { IMX: AppConfig.API.IMX.Mainnet, Link: AppConfig.API.Link.Mainnet, Collection: AppConfig.Blockchain.Collection.Mainnet } :
     { IMX: AppConfig.API.IMX.Sandbox, Link: AppConfig.API.Link.Sandbox, Collection: AppConfig.Blockchain.Collection.Sandbox };
@@ -21,7 +28,7 @@ export default function App(): JSX.Element {
 
   return (
     <StrictMode>
-  
+      {testRender}
         <IMX.Provider value={IMXHook}>
           <BrowserRouter>
             <Routes>
@@ -41,7 +48,7 @@ export default function App(): JSX.Element {
             </Routes>
           </BrowserRouter>
         </IMX.Provider>
- 
+  
     </StrictMode>
   ) 
 }
