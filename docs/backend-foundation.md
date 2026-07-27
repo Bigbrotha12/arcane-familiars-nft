@@ -2,7 +2,7 @@
 
 ## Current Status
 
-**Phase 1.6 Backend Foundation: 90% Complete**
+**Phase 1.6 Backend Foundation: 95% Complete**
 
 ✅ Completed:
 - Backend scaffolding with Hono + TypeScript
@@ -11,13 +11,15 @@
 - Frontend wiring (VITE_BACKEND_URL)
 - Local development setup
 - Type-safe bindings with wrangler types
+- `wrangler login` (authenticated with Cloudflare)
+- `wrangler d1 create arcane-familiars` (remote D1 database created, ID: 8e8bce41-464a-42ba-97cc-bfd95b269e36)
+- Applied migrations to production
+- Seeded initial data (WhiteDog, YellowFighter, Brave, Sturdy)
+- Updated wrangler.jsonc with database_id
 
 ⏳ Pending:
-- `wrangler login` (authenticate with Cloudflare)
-- `wrangler d1 create` (create remote D1 database)
-- Apply migrations to production
-- Set secrets (INFURA_API_KEY)
-- Deploy worker to Cloudflare
+- Set secrets (`wrangler secret put INFURA_API_KEY`)
+- Deploy worker (`wrangler deploy`)
 
 ## Overview
 
@@ -240,14 +242,18 @@ CREATE TABLE minting_queue (
 # - Created AGENTS.md with branching + PR convention
 # - All future work uses feature branches
 
-# ⏳ Step 8: Production Deployment (PENDING)
-wrangler login                          # Authenticate with Cloudflare
-wrangler d1 create arcane-familiars     # Create the D1 database
-# Copy the database_id into wrangler.jsonc
-wrangler d1 migrations apply arcane-familiars --remote   # Apply schema
-wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql  # Seed data
-wrangler secret put INFURA_API_KEY      # Set the Infura key
-wrangler deploy                         # Deploy the Worker
+# ✅ Step 8: Cloudflare Authentication
+wrangler login                          # ✅ Authenticated with Cloudflare
+
+# ✅ Step 9: D1 Database Setup
+wrangler d1 create arcane-familiars     # ✅ Created the D1 database (ID: 8e8bce41-464a-42ba-97cc-bfd95b269e36)
+# ✅ Updated wrangler.jsonc with database_id
+wrangler d1 migrations apply arcane-familiars --remote   # ✅ Applied schema
+wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql  # ✅ Seeded data
+
+# ⏳ Step 10: Secrets & Deployment (PENDING)
+wrangler secret put INFURA_API_KEY      # ⏳ Set the Infura key
+wrangler deploy                         # ⏳ Deploy the Worker
 ```
 
 ## Env Variables

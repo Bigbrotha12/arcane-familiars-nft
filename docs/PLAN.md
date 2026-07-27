@@ -169,7 +169,12 @@ This is a good start but very limited content.
   - D1 schema + migrations ✅
   - API endpoints (assets, balances, auth, collection, metadata) ✅
   - Frontend wiring ✅
-  - Deployment pending (wrangler login + deploy)
+  - `wrangler login` ✅
+  - `wrangler d1 create` ✅
+  - Apply migrations ✅
+  - Seed initial data ✅
+  - Set secrets (`wrangler secret put INFURA_API_KEY`) — pending
+  - Deploy worker (`wrangler deploy`) — pending
 - [x] Migrate to Vite + modern React setup (Phase 1.7)
   - Remove webpack + Babel ✅
   - Install Vite + SWC ✅
@@ -207,10 +212,10 @@ This is a good start but very limited content.
 - [ ] Additional familiars and abilities
 
 ### Phase 6: Backend Deployment
-- [ ] Complete `wrangler login`
-- [ ] Create D1 database: `wrangler d1 create arcane-familiars`
-- [ ] Apply migrations: `wrangler d1 migrations apply arcane-familiars --remote`
-- [ ] Seed data: `wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql`
+- [x] Complete `wrangler login`
+- [x] Create D1 database: `wrangler d1 create arcane-familiars`
+- [x] Apply migrations: `wrangler d1 migrations apply arcane-familiars --remote`
+- [x] Seed data: `wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql`
 - [ ] Set secrets: `wrangler secret put INFURA_API_KEY`
 - [ ] Deploy worker: `wrangler deploy`
 
