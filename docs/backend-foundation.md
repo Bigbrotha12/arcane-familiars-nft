@@ -1,5 +1,24 @@
 # Cloudflare Worker Backend — Foundation Plan
 
+## Current Status
+
+**Phase 1.6 Backend Foundation: 90% Complete**
+
+✅ Completed:
+- Backend scaffolding with Hono + TypeScript
+- D1 schema + migrations (5 tables)
+- All API endpoints implemented
+- Frontend wiring (VITE_BACKEND_URL)
+- Local development setup
+- Type-safe bindings with wrangler types
+
+⏳ Pending:
+- `wrangler login` (authenticate with Cloudflare)
+- `wrangler d1 create` (create remote D1 database)
+- Apply migrations to production
+- Set secrets (INFURA_API_KEY)
+- Deploy worker to Cloudflare
+
 ## Overview
 
 Replace the three defunct backend implementations (amplify/, admin/worker/, frontend/backend/functions/) with a single Cloudflare Worker backend. The frontend currently calls IMX API directly for assets/balances/auth. This worker becomes the unified API gateway.
@@ -169,17 +188,59 @@ CREATE TABLE minting_queue (
   - Changes merged via pull requests
   - No direct pushes to `master`
 
-## What's NOT Included
+## What's NOT Included (Deferred)
 
 | Feature | Reason |
 |---------|--------|
 | R2 bucket | No game assets ready to migrate; S3 is already dead |
 | Mint endpoint | Needs Phase 3 smart contract integration |
 | Bridge endpoints | Post-MVP feature |
-| D1 creation/wrangler login | User must `wrangler login` and `wrangler d1 create` after setup |
+| D1 database creation | Pending `wrangler login` + `wrangler d1 create` |
+| Actual deployment | Pending D1 creation and secrets setup |
 
-## To-Do's
+## Deployment Checklist
 
+**All wrangler steps completed except deployment:**
+
+```bash
+# ✅ Step 1: Scaffold Worker Project
+# - Created backend/ directory
+# - Installed hono, wrangler, typescript, @cloudflare/workers-types, ethers, axios
+# - Configured tsconfig.json with moduleResolution: "bundler"
+# - Created wrangler.jsonc with D1 binding (database_id placeholder)
+# - Created src/index.ts with Hono app + health check
+# - Created .dev.vars with placeholder secrets
+
+# ✅ Step 2: D1 Schema + Migrations
+# - Created migrations/0001_initial.sql with 5 tables
+# - Tables: familiars, keepers, abilities, users, minting_queue
+# - Created seeds/0001_seed_familiars.sql with initial data
+
+# ✅ Step 3: IMX Proxy Endpoints
+# - GET /api/v1/assets/:address — proxy to IMX API
+# - GET /api/v2/balances/:address — proxy to IMX API
+# - Created src/utils/imx.ts with IMX API client
+
+# ✅ Step 4: Auth Verification
+# - POST /api/auth/verify — EIP-191 signature verification
+# - Created src/utils/verify.ts with signer recovery
+# - D1 upsert on successful auth
+
+# ✅ Step 5: D1-Backed Endpoints
+# - GET /api/collection — SELECT * FROM familiars
+# - GET /api/metadata/:id — SELECT * FROM familiars WHERE familiar_id = ?
+
+# ✅ Step 6: Frontend Wiring
+# - Added VITE_BACKEND_URL to frontend/.env.example
+# - Updated AppConfig.ts with Backend.URL
+# - Removed hardcoded S3 image URL (dead bucket)
+# - Added ErrorBoundary wrapper for render error visibility
+
+# ✅ Step 7: AGENTS.md
+# - Created AGENTS.md with branching + PR convention
+# - All future work uses feature branches
+
+# ⏳ Step 8: Production Deployment (PENDING)
 wrangler login                          # Authenticate with Cloudflare
 wrangler d1 create arcane-familiars     # Create the D1 database
 # Copy the database_id into wrangler.jsonc
@@ -187,6 +248,7 @@ wrangler d1 migrations apply arcane-familiars --remote   # Apply schema
 wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql  # Seed data
 wrangler secret put INFURA_API_KEY      # Set the Infura key
 wrangler deploy                         # Deploy the Worker
+```
 
 ## Env Variables
 

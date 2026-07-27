@@ -158,15 +158,24 @@ This is a good start but very limited content.
 
 ## 8. Phased Execution Plan
 
-### Phase 1: Foundation (Week 1-2)
-- [ ] Remove `amplify/` directory entirely
-- [ ] Remove `admin/worker/` directory
-- [ ] Remove `frontend/backend/functions/` directory
-- [ ] Archive `game/` Unity project to `game-unity-legacy/`
-- [ ] Rotate exposed Infura API key
-- [ ] Set up single Cloudflare Worker backend
-- [ ] Migrate to Vite + modern React setup
-- [ ] Set up GitHub Actions CI
+### Phase 1: Foundation (Week 1-2) ✅ COMPLETED
+- [x] Remove `amplify/` directory entirely
+- [x] Remove `admin/worker/` directory
+- [x] Remove `frontend/backend/functions/` directory
+- [x] Archive `game/` Unity project to `game-unity-legacy/`
+- [x] Rotate exposed Infura API key
+- [x] Set up single Cloudflare Worker backend (Phase 1.6)
+  - Backend scaffolding with Hono + TypeScript ✅
+  - D1 schema + migrations ✅
+  - API endpoints (assets, balances, auth, collection, metadata) ✅
+  - Frontend wiring ✅
+  - Deployment pending (wrangler login + deploy)
+- [x] Migrate to Vite + modern React setup (Phase 1.7)
+  - Remove webpack + Babel ✅
+  - Install Vite + SWC ✅
+  - Update build scripts ✅
+  - Remove deprecated @imtbl/imx-sdk ✅
+- [x] Set up GitHub Actions CI
 
 ### Phase 2: Game Prototype (Week 3-6)
 - [ ] Set up PixiJS + Phaser project with TypeScript
@@ -179,7 +188,7 @@ This is a good start but very limited content.
 ### Phase 3: Blockchain Integration (Week 7-8)
 - [ ] Update contracts to latest Solidity + OpenZeppelin
 - [ ] Deploy to Sepolia testnet
-- [ ] Update to latest @imtbl/sdk
+- [ ] Update to latest @imtbl/sdk (replace deprecated SDK)
 - [ ] Implement mint-on-demand flow
 - [ ] Connect game to backend for NFT data
 
@@ -196,6 +205,14 @@ This is a good start but very limited content.
 - [ ] IMX collection registration
 - [ ] Enable trading on IMX marketplace
 - [ ] Additional familiars and abilities
+
+### Phase 6: Backend Deployment
+- [ ] Complete `wrangler login`
+- [ ] Create D1 database: `wrangler d1 create arcane-familiars`
+- [ ] Apply migrations: `wrangler d1 migrations apply arcane-familiars --remote`
+- [ ] Seed data: `wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql`
+- [ ] Set secrets: `wrangler secret put INFURA_API_KEY`
+- [ ] Deploy worker: `wrangler deploy`
 
 ---
 
