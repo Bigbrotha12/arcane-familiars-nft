@@ -28,3 +28,4 @@ node_modules
 backend/.dev.vars
 backend/node_modules/
 backend/.wrangler/
+.gstack/
