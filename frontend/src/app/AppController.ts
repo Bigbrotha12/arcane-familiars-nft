@@ -1,5 +1,5 @@
 import { Authentication, AppError, IMXBalance, Familiar, IController } from "../types";
-import { Link } from "@imtbl/imx-sdk";
+// import { Link } from "@imtbl/imx-sdk"; // TODO: Deprecated SDK - will be replaced with @imtbl/sdk
 import { hashMessage } from '@ethersproject/hash';
 import axios, { Axios } from "axios";
 
@@ -22,16 +22,17 @@ export class AppController implements IController {
      * @returns eth address of user
      */
     async connectIMX(): Promise<[AppError | null, string | null]> {
-        let link: Link = new Link(this.LinkProvider);
-    
-        try {
-            const userInfo = await link.setup({});
-            const userAddress = userInfo.address;
-            return [null, userAddress];
-        } catch (error) {
-            const err = error as Error;
-            return [{code: (err as any).code || 10, reason: 'Unable to set-up user account.', stack: err.stack}, null];
-        }
+        // TODO: IMX SDK deprecated - will be replaced with @imtbl/sdk
+        // let link: Link = new Link(this.LinkProvider);
+        // try {
+        //     const userInfo = await link.setup({});
+        //     const userAddress = userInfo.address;
+        //     return [null, userAddress];
+        // } catch (error) {
+        //     const err = error as Error;
+        //     return [{code: (err as any).code || 10, reason: 'Unable to set-up user account.', stack: err.stack}, null];
+        // }
+        return [{code: 10, reason: 'IMX SDK not yet migrated to @imtbl/sdk'}, null];
     }
 
     /**
@@ -40,24 +41,25 @@ export class AppController implements IController {
      * @returns signed timestamp from user's wallet.
      */
     async getAuthentication(address: string): Promise<[AppError | null, Authentication | null]> {
-        let link: Link = new Link(this.LinkProvider);
-
-        try {
-            const now: string = Math.floor(Date.now()/1000).toString();
-            const message: string = hashMessage(now);
-            const signature: { result: string } = await link.sign({ 
-                message: message, 
-                description: "Authentication Request"});
-            const authentication: Authentication = {
-                eth_address: address,
-                eth_timestamp: Number(now),
-                eth_signature: signature.result
-            }
-            return [null, authentication];
-        } catch (error) {
-            const err = error as Error;
-            return [{code: (err as any).code || 11, reason: "Could not obtain authentication data", stack: err.stack}, null];
-        }
+        // TODO: IMX SDK deprecated - will be replaced with @imtbl/sdk
+        // let link: Link = new Link(this.LinkProvider);
+        // try {
+        //     const now: string = Math.floor(Date.now()/1000).toString();
+        //     const message: string = hashMessage(now);
+        //     const signature: { result: string } = await link.sign({ 
+        //         message: message, 
+        //         description: "Authentication Request"});
+        //     const authentication: Authentication = {
+        //         eth_address: address,
+        //         eth_timestamp: Number(now),
+        //         eth_signature: signature.result
+        //     }
+        //     return [null, authentication];
+        // } catch (error) {
+        //     const err = error as Error;
+        //     return [{code: (err as any).code || 11, reason: "Could not obtain authentication data", stack: err.stack}, null];
+        // }
+        return [{code: 11, reason: 'IMX SDK not yet migrated to @imtbl/sdk'}, null];
     }
 
     /**
