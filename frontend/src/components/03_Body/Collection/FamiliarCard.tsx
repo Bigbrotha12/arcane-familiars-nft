@@ -1,4 +1,3 @@
-import React from "react";
 import { Familiar } from '../../../types/Familiar';
 import Material from "../../../assets/Material";
 

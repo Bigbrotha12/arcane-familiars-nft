@@ -1,4 +1,4 @@
-import React, { Fragment } from "react";
+import { Fragment, useState, useCallback, useEffect, useContext } from 'react';
 import Config from "../../../app/constants/AppConfig";
 import { Authentication } from "../../../types/IMX";
 import { Unity, useUnityContext } from "react-unity-webgl";
@@ -11,10 +11,10 @@ import { IMXHandler } from "../../../types";
 export default function UnityCanvas() {
 
   const userAddress: string = useSelector<RootState, string>(state => state.session.address);
-  const [client,,,] = React.useContext<IMXHandler>(IMX);
+  const [client,,,] = useContext<IMXHandler>(IMX);
 
-  const [gameLaunch, setGameLaunch] = React.useState(false);
-  const [showGameMenu, setShowGameMenu] = React.useState(false);
+  const [gameLaunch, setGameLaunch] = useState(false);
+  const [showGameMenu, setShowGameMenu] = useState(false);
   const { unityProvider, sendMessage, addEventListener, removeEventListener, unload, loadingProgression } =
     useUnityContext({
       loaderUrl: Config.Unity.loader,
@@ -28,19 +28,19 @@ export default function UnityCanvas() {
     setGameLaunch(false);
   };
 
-  const requestAuthentication = React.useCallback(async () => {  
+  const requestAuthentication = useCallback(async () => {  
     if(!userAddress) {
       await client.connect();
     }
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     if(userAddress != "") {
       sendMessage("GameManager", "ReceiveWeb3Address", JSON.stringify(userAddress));
     }
   }, [userAddress]);
 
-  const ShowMenu = React.useCallback(async () => {  
+  const ShowMenu = useCallback(async () => {  
     setShowGameMenu(true);
   }, []);
 
@@ -56,11 +56,11 @@ export default function UnityCanvas() {
     sendMessage("GameUI", "ReceiveRestartLevel");
   }
 
-  const HideMenu = React.useCallback(async () => {  
+  const HideMenu = useCallback(async () => {  
     setShowGameMenu(false);
   }, []);
 
-  React.useEffect(() => {
+  useEffect(() => {
     addEventListener("RequestAddress", requestAuthentication);
     addEventListener("DisplayMenu", ShowMenu);
     addEventListener("HideMenu", HideMenu);

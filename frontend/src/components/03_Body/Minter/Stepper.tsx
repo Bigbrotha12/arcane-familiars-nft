@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, Fragment } from 'react';
 import Material from '../../../assets/Material';
 import MintingSteps from './MintingSteps';
 //import style from "../../../styles/Body.module.css";
@@ -6,7 +6,7 @@ import MintingSteps from './MintingSteps';
 const steps = ['Select NFT to Mint', 'Select Recipient Address', 'Sign Transaction'];
 
 export default function HStepper() {
-  const [activeStep, setActiveStep] = React.useState(0);
+  const [activeStep, setActiveStep] = useState(0);
 
   const handleNext = () => {
     setActiveStep((prevActiveStep) => prevActiveStep + 1);
@@ -34,7 +34,7 @@ export default function HStepper() {
       </Material.Stepper>
       </div>
       {activeStep === steps.length ? (
-        <React.Fragment>
+        <Fragment>
           <Material.Typography sx={{ mt: 2, mb: 1 }}>
             All steps completed - Minting in Progress
           </Material.Typography>
@@ -42,9 +42,9 @@ export default function HStepper() {
             <Material.Box sx={{ flex: '1 1 auto' }} />
             <Material.Button onClick={handleReset}>Start Over</Material.Button>
           </Material.Box>
-        </React.Fragment>
+        </Fragment>
       ) : (
-        <React.Fragment>
+        <Fragment>
           <Material.Typography sx={{ mt: 2, mb: 1 }}>Step {activeStep + 1}</Material.Typography>
           <MintingSteps currentStep={activeStep} />
           
@@ -63,7 +63,7 @@ export default function HStepper() {
             </Material.Button>      
           </Material.Box>
 
-        </React.Fragment>
+        </Fragment>
       )}
     </Material.Box>
   );

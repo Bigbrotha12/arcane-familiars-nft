@@ -1,4 +1,3 @@
-import React from "react";
 
 import LandingHeader from "../01_Header/LandingHeader";
 import LandingBody from "../03_Body/LandingBody";

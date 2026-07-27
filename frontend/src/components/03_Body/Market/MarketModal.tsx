@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState } from 'react';
 import Material from '@mui/material';
 import FamiliarCard from '../Collection/FamiliarCard';
 
@@ -15,7 +15,7 @@ const style = {
 };
 
 export default function BasicModal(props: { data: string, stats: string}) {
-  const [open, setOpen] = React.useState(false);
+  const [open, setOpen] = useState(false);
   const handleOpen = () => setOpen(true);
   const handleClose = () => setOpen(false);
 

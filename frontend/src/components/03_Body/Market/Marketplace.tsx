@@ -1,4 +1,3 @@
-import React from 'react';
 // import { Typography, Link, Card, Box } from '@mui/material';
 // import { AppConfig } from '../../../app/constants/AppConfig';
 // import FamiliarCard from '../Collection/FamiliarCard';

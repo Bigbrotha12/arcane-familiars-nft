@@ -1,4 +1,3 @@
-import React from "react";
 import { useSelector } from "react-redux";
 import Validator from "../../app/utils/Validator";
 import profilePic from "../../assets/icons/profilePic.png";

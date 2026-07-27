@@ -1,4 +1,4 @@
-import React from "react";
+import { useState } from 'react';
 import { useSelector } from "react-redux";
 import Material from "../../assets/Material";
 import { RootState } from "../../state/Context";
@@ -6,7 +6,7 @@ import { UserData } from "../../types";
 
 export default function Status() {
   const userBalance = useSelector<RootState, UserData["balance"]>(state => state.session.balance);
-  const [open, setOpen] = React.useState<boolean>(false);
+  const [open, setOpen] = useState<boolean>(false);
 
   return (
     <div className="text-white w-54 h-full flex align-middle justify-center">

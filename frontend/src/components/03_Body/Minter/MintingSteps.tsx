@@ -1,10 +1,10 @@
-import React from 'react';
+import { Fragment } from 'react';
 import Material from "@mui/material"
 
 export default function MintingSteps(props: {currentStep: number}) {
 
   return (
-    <React.Fragment>
+    <Fragment>
       {props.currentStep == 0 &&
       <Material.FormControl fullWidth>
         <Material.InputLabel id="NFT-available">Available NFT</Material.InputLabel>
@@ -25,6 +25,6 @@ export default function MintingSteps(props: {currentStep: number}) {
         <Material.Typography id="Approval">Approve the Transaction</Material.Typography>
         <Material.Button variant="outlined">Approve</Material.Button>
       </Material.FormControl>}
-    </React.Fragment>
+    </Fragment>
   )
 }

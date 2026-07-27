@@ -1,5 +1,5 @@
 import { Authentication, AppError, IMXBalance } from "./IMX";
-import { Familiar } from "./familiar";
+import { Familiar } from "./Familiar";
 
 export interface IController {
     connectIMX(): Promise<[AppError | null, string | null]>,

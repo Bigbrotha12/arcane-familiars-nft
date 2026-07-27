@@ -1,4 +1,3 @@
-import React from "react";
 import Material from "../../assets/Material";
 import Claudio from "../../assets/images/Claudio.png";
 import Renny from "../../assets/images/Renny.png";

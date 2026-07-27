@@ -1,4 +1,4 @@
-import { Familiar } from "./familiar"
+import { Familiar } from "./Familiar"
 
 export type IMXClient = {
     connect: () => Promise<void>,

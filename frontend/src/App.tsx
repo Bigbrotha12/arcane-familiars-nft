@@ -1,4 +1,4 @@
-import React from 'react';
+import { StrictMode } from 'react';
 
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { IMX } from './state/Context';
@@ -20,7 +20,7 @@ export default function App(): JSX.Element {
   const IMXHook: IMXHandler = useIMX(IMXProvider.IMX, IMXProvider.Link, IMXProvider.Collection);
 
   return (
-    <React.StrictMode>
+    <StrictMode>
   
         <IMX.Provider value={IMXHook}>
           <BrowserRouter>
@@ -42,6 +42,6 @@ export default function App(): JSX.Element {
           </BrowserRouter>
         </IMX.Provider>
  
-    </React.StrictMode>
+    </StrictMode>
   ) 
 }

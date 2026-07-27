@@ -29,7 +29,8 @@ export class AppController implements IController {
             const userAddress = userInfo.address;
             return [null, userAddress];
         } catch (error) {
-            return [{code: error.code || 10, reason: 'Unable to set-up user account.', stack: error.stack}, null];
+            const err = error as Error;
+            return [{code: (err as any).code || 10, reason: 'Unable to set-up user account.', stack: err.stack}, null];
         }
     }
 
@@ -54,7 +55,8 @@ export class AppController implements IController {
             }
             return [null, authentication];
         } catch (error) {
-            return [{code: error.code || 11, reason: "Could not obtain authentication data", stack: error.stack}, null];
+            const err = error as Error;
+            return [{code: (err as any).code || 11, reason: "Could not obtain authentication data", stack: err.stack}, null];
         }
     }
 
@@ -74,7 +76,8 @@ export class AppController implements IController {
             return [null, familiars];
 
         } catch (error) {
-            return [{code: error.code || 1, reason: "Unable to fetch user's NFT assets.", stack: error.stack}, null];
+            const err = error as Error;
+            return [{code: (err as any).code || 1, reason: "Unable to fetch user's NFT assets.", stack: err.stack}, null];
         }
     }
 
@@ -88,7 +91,8 @@ export class AppController implements IController {
             return [null, balances];
             
         } catch (error) {
-            return [{code: error.code || 1, reason: "Unable to fetch user's balance.", stack: error.stack}, null];
+            const err = error as Error;
+            return [{code: (err as any).code || 1, reason: "Unable to fetch user's balance.", stack: err.stack}, null];
         }
     }
 
@@ -97,7 +101,7 @@ export class AppController implements IController {
         try {
             localStorage.setItem("UserAddress", value);
         } catch (error) {
-            console.error(error);
+            console.error(error as Error);
         }
     }
 
@@ -111,7 +115,8 @@ export class AppController implements IController {
             return [null, info];
 
         } catch (error) {
-            return [{code: 7, reason: "Unable to get browser data.", stack: error.stack}, null];
+            const err = error as Error;
+            return [{code: 7, reason: "Unable to get browser data.", stack: err.stack}, null];
         }
     }
 
@@ -119,7 +124,7 @@ export class AppController implements IController {
         try {
             localStorage.removeItem("UserAddress");
         } catch(error) {
-            console.error(error);
+            console.error(error as Error);
         }
     }
 }

@@ -1,4 +1,3 @@
-import React from "react";
 import { createRoot, Root } from 'react-dom/client';
 import { Provider } from 'react-redux';
 import { appStore } from './state/Context';

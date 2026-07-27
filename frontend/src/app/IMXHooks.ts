@@ -1,4 +1,4 @@
-import React from "react";
+import { useState, useEffect } from 'react';
 import { AppController } from "./AppController";
 import { Authentication, IMXClient, IMXHandler, IController } from "../types";
 import { useDispatch, useSelector } from "react-redux";
@@ -9,9 +9,9 @@ export const useIMX = (IMXProvider: string, LinkProvider: string, collection: st
     const loginAddress: string = useSelector<RootState, string>(state => state.session.address);
     const controller: IController = new AppController(IMXProvider, LinkProvider);
     
-    const [authentication, setAuthentication] = React.useState<Authentication>({ eth_address: '', eth_signature: '', eth_timestamp: 0 });
-    const [loading, setLoading] = React.useState<boolean>(false);
-    const [error, setError] = React.useState<string>('');
+    const [authentication, setAuthentication] = useState<Authentication>({ eth_address: '', eth_signature: '', eth_timestamp: 0 });
+    const [loading, setLoading] = useState<boolean>(false);
+    const [error, setError] = useState<string>('');
 
     const IMXClient: IMXClient = {
         async connect() {
@@ -45,7 +45,7 @@ export const useIMX = (IMXProvider: string, LinkProvider: string, collection: st
         }
     }
 
-    React.useEffect(() => {
+    useEffect(() => {
         console.log("Running IMX hook.");
         (async () => {
             if (!isValidAddress(loginAddress)) return;

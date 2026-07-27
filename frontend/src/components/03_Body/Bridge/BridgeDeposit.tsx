@@ -1,4 +1,4 @@
-import React from 'react';
+import { useState, FormEvent } from 'react';
 import { Select, MenuItem, FormControl, InputLabel, Button,  Input, Typography } from '@mui/material';
 import { IMXBalance } from '../../../types/IMX';
 import { Familiar } from '../../../types/Familiar';
@@ -9,9 +9,9 @@ export default function BridgeDeposit() {
 
     const assets: Array<Familiar> = useSelector<RootState, Array<Familiar>>(state => state.session.assets);
     const balance: IMXBalance = useSelector<RootState, IMXBalance>(state => state.session.balance);
-    const [amount, setAmount] = React.useState<string>("0");
+    const [amount, setAmount] = useState<string>("0");
 
-    const handleSubmit = (event: React.FormEvent) => {
+    const handleSubmit = (event: FormEvent) => {
         event.preventDefault();
         const data = new FormData(event.target as HTMLFormElement);
         console.log(data);

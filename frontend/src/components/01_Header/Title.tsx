@@ -1,4 +1,3 @@
-import React from "react";
 import Logo from "../../assets/icons/Logo.svg";
 
 export default function Title() {

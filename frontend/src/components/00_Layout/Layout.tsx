@@ -1,4 +1,3 @@
-import React from "react";
 
 import LandingHeader from "../01_Header/LandingHeader";
 import Sidebar from "../02_Sidebar/Sidebar";

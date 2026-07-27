@@ -1,4 +1,3 @@
-import React from "react";
 //import Decoration from "../../../assets/images/fantasy-border.png";
 import UnityCanvas from "./UnityCanvas";
 //import Controller from "./Controller";
