@@ -21,7 +21,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 
 // CORS — allow frontend origin in dev/prod
 app.use('/api/*', cors({
-  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://arcane-familiars.pages.dev'],
+  origin: ['http://localhost:8080', 'http://localhost:3000', 'https://arcane-familiars.pages.dev'],
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));
