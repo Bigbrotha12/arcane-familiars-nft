@@ -1,3 +1,5 @@
+// Environment variables are injected at build time via webpack.DefinePlugin.
+// See frontend/.env.example for available variables.
 const AppConfig = {
     "Mode": "Production", //"Development",
     "API": {
@@ -14,15 +16,15 @@ const AppConfig = {
         "Sandbox": {
           "name": "Ethereum Goerli",
           "chainId": 5,
-          "rpc": "https://goerli.infura.io/v3/28b12f61dabf41379c84687973179f02",
-          "wss": "ws://goerli.infura.io/v3/28b12f61dabf41379c84687973179f02",
+          "rpc": `https://goerli.infura.io/v3/${process.env.INFURA_API_KEY}`,
+          "wss": `ws://goerli.infura.io/v3/${process.env.INFURA_API_KEY}`,
           "explorer": "https://goerli.etherscan.io"
         },
         "Mainnet": {
           "name": "Ethereum Mainnet",
           "chainId": 1,
-          "rpc": "https://mainnet.infura.io/v3/28b12f61dabf41379c84687973179f02",
-          "wss": "ws://mainnet.infura.io/v3/28b12f61dabf41379c84687973179f02",
+          "rpc": `https://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
+          "wss": `ws://mainnet.infura.io/v3/${process.env.INFURA_API_KEY}`,
           "explorer": "https://etherscan.io"
         }
       }

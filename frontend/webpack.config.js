@@ -3,6 +3,7 @@ const HtmlWebpackPlugin = require("html-webpack-plugin");
 const LodashModuleReplacementPlugin = require('lodash-webpack-plugin');
 //const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 const webpack = require("webpack");
+require('dotenv').config();
 
 const htmlPlugin = new HtmlWebpackPlugin({
     template: "./src/index.html",
@@ -75,6 +76,14 @@ module.exports = {
         new LodashModuleReplacementPlugin({
             'collections': true,
             'paths': true
+        }),
+        new webpack.DefinePlugin({
+            'process.env.INFURA_API_KEY': JSON.stringify(process.env.INFURA_API_KEY),
+            'process.env.IMX_SANDBOX_URL': JSON.stringify(process.env.IMX_SANDBOX_URL),
+            'process.env.IMX_MAINNET_URL': JSON.stringify(process.env.IMX_MAINNET_URL),
+            'process.env.COLLECTION_CONTRACT_SANDBOX': JSON.stringify(process.env.COLLECTION_CONTRACT_SANDBOX),
+            'process.env.COLLECTION_CONTRACT_MAINNET': JSON.stringify(process.env.COLLECTION_CONTRACT_MAINNET),
+            'process.env.ETHERSCAN_API_KEY': JSON.stringify(process.env.ETHERSCAN_API_KEY),
         }),
         //new BundleAnalyzerPlugin()
     ],
