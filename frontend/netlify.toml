@@ -1,3 +1,0 @@
-[functions]
-  directory = "./backend/functions"
-  external_node_modules = ["mongodb"]  
