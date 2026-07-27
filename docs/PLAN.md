@@ -2,7 +2,7 @@
 
 ## 1. Project Overview
 
-**Arcane Familiars** is a browser-based NFT game integrated with Immutable X (IMX) L2 marketplace. Players summon familiars (NFTs) with stats (HP, MP, Attack, Defense, Arcane, Speed) and abilities, and interact through a React frontend that embeds the game built with PixiJS + Phaser.
+**Arcane Familiars** is a browser-based NFT game integrated with Immutable X (IMX) L2 marketplace. Players summon familiars (NFTs) with stats (HP, MP, Attack, Defense, Arcane, Speed) and abilities, and interact through a React frontend that embeds the game built with Phaser 3.
 
 **Last commit:** April 28, 2023 (2+ years stale)
 
@@ -27,7 +27,7 @@
 - **No actual game** exists in Unity - only an API test harness (`APIHandler.cs`)
 - **No game mechanics** implemented (no battles, no exploration, no familiar summoning gameplay)
 - **All routes except `/app/game`** show "Coming Soon" placeholder
-- **Decision:** Replacing Unity WebGL with **PixiJS + Phaser** (see Section 11 for rationale)
+- **Decision:** Replacing Unity WebGL with **Phaser 3** (see Section 11 for rationale)
 
 ---
 
@@ -113,7 +113,7 @@ This is a good start but very limited content.
 
 **MVP = Playable game + mint a familiar as NFT**
 
-1. **PixiJS + Phaser Game (Core Loop)**
+1. **Phaser 3 Game (Core Loop)**
    - Simple turn-based battle or exploration
    - 3-5 familiars with stats/abilities
    - Local gameplay first, blockchain second
@@ -146,7 +146,7 @@ This is a good start but very limited content.
 | **Backend** | AWS Amplify + Netlify Functions + Admin Worker | **Cloudflare Workers** (single codebase) |
 | **Database** | MongoDB (Atlas) | **Cloudflare D1** (SQLite) or **Turso** |
 | **Frontend** | React + Webpack + MUI + Redux | **React + Vite** + Tailwind + shadcn/ui |
-| **Game** | Unity WebGL (basic) | **PixiJS + Phaser** (TypeScript, native browser) |
+| **Game** | Unity WebGL (basic) | **Phaser 3** (TypeScript, native browser) |
 | **Blockchain SDK** | @imtbl/imx-sdk, @imtbl/core-sdk | **@imtbl/sdk** (latest unified SDK) |
 | **Contracts** | Hardhat + Solidity 0.8.17 | **Foundry** (faster) + Solidity 0.8.28+ |
 | **Testnet** | Ropsten, Goerli | **Sepolia** |
@@ -158,32 +158,27 @@ This is a good start but very limited content.
 
 ## 8. Phased Execution Plan
 
-### Phase 1: Foundation (Week 1-2) ✅ COMPLETED
+### Phase 1: Foundation ✅ COMPLETED
 - [x] Remove `amplify/` directory entirely
 - [x] Remove `admin/worker/` directory
 - [x] Remove `frontend/backend/functions/` directory
 - [x] Archive `game/` Unity project to `game-unity-legacy/`
 - [x] Rotate exposed Infura API key
-- [x] Set up single Cloudflare Worker backend (Phase 1.6)
-  - Backend scaffolding with Hono + TypeScript ✅
-  - D1 schema + migrations ✅
-  - API endpoints (assets, balances, auth, collection, metadata) ✅
-  - Frontend wiring ✅
-  - `wrangler login` ✅
-  - `wrangler d1 create` ✅
-  - Apply migrations ✅
-  - Seed initial data ✅
-  - Set secrets (`wrangler secret put INFURA_API_KEY`) — pending
-  - Deploy worker (`wrangler deploy`) — pending
-- [x] Migrate to Vite + modern React setup (Phase 1.7)
-  - Remove webpack + Babel ✅
-  - Install Vite + SWC ✅
-  - Update build scripts ✅
-  - Remove deprecated @imtbl/imx-sdk ✅
-- [x] Set up GitHub Actions CI
+- [x] Backend scaffolding with Hono + TypeScript (5 route files)
+- [x] D1 schema + migrations (5 tables, seed data applied)
+- [x] API endpoints (assets, balances, auth, collection, metadata)
+- [x] Vite + SWC migration (webpack/Babel removed)
+- [x] Build scripts (dev, build, type-check for both frontend + backend)
+- [x] Remove deprecated `@imtbl/imx-sdk`
+- [x] Remove `react-unity-webgl` + Unity dead code
+- [x] Remove `ethers` + blockchain verification layer from backend
+- [x] Goerli → Sepolia testnet migration
+- [x] GitHub Actions CI (frontend + backend, type-check + build)
+- [ ] Deploy worker (`wrangler deploy`) — pending infra setup
+- [ ] Frontend re-wiring (Redux→Context, MUI→shadcn/ui) — deferred to Phase 4
 
 ### Phase 2: Game Prototype (Week 3-6)
-- [ ] Set up PixiJS + Phaser project with TypeScript
+- [ ] Set up Phaser 3 project with TypeScript
 - [ ] Build core game loop (turn-based battle or exploration)
 - [ ] Implement 3-5 familiars with stats
 - [ ] Implement basic ability system
@@ -216,7 +211,6 @@ This is a good start but very limited content.
 - [x] Create D1 database: `wrangler d1 create arcane-familiars`
 - [x] Apply migrations: `wrangler d1 migrations apply arcane-familiars --remote`
 - [x] Seed data: `wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql`
-- [ ] Set secrets: `wrangler secret put INFURA_API_KEY`
 - [ ] Deploy worker: `wrangler deploy`
 
 ---
@@ -225,7 +219,7 @@ This is a good start but very limited content.
 
 1. **Security:** Rotate the Infura API key exposed in `AppConfig.ts`
 2. **Cleanup:** Delete `amplify/` directory (dead code, duplicated)
-3. **Cleanup:** Archive/remove `game/` Unity project (replaced by PixiJS + Phaser)
+3. **Cleanup:** Archive/remove `game/` Unity project (replaced by Phaser 3)
 4. **Decision:** Confirm Immutable X is still the chosen L2 (vs Base, Arbitrum, etc.)
 5. **Scope:** Approve the MVP scope above before proceeding
 
@@ -237,15 +231,15 @@ This project has solid architectural bones (proxy contracts, data schemas, front
 
 ---
 
-## 11. Game Engine Migration: Unity WebGL → PixiJS + Phaser
+## 11. Game Engine Migration: Unity WebGL → Phaser 3
 
 ### 11.1 Decision Rationale
 
-**Why PixiJS + Phaser over Unity WebGL:**
+**Why Phaser 3 over Unity WebGL:**
 
-| Factor | Unity WebGL | PixiJS + Phaser | Winner |
+| Factor | Unity WebGL | Phaser 3 | Winner |
 |--------|-------------|-----------------|--------|
-| **Bundle size** | 10-30MB minimum | ~100KB (Phaser) | **Phaser** |
+| **Bundle size** | 10-30MB minimum | ~500KB (Phaser) | **Phaser** |
 | **Load time** | Slow (downloads entire runtime) | Instant | **Phaser** |
 | **Tech stack** | C# (separate from frontend) | TypeScript (same as frontend) | **Phaser** |
 | **Web3 integration** | Awkward (cross-language calls) | Native (same JS context) | **Phaser** |
@@ -376,3 +370,117 @@ class BattleScene extends Phaser.Scene {
 - **PlayCanvas** - if you need 3D in browser
 - **Godot** - if you need cross-platform with visual editor
 - **Three.js** - if you need pure 3D without game engine overhead
+
+---
+
+## 12. Frontend Design Implementation
+
+Based on the **DESIGN.md** design system (created 2026-07-27 via /design-consultation).
+
+### 12.1 Design System Foundation
+
+The complete design system is defined in `DESIGN.md` at the repo root. Key tokens have been extracted as CSS custom properties in the design preview (`/home/bigbrotha/.gstack/projects/Bigbrotha12-arcane-familiars-nft/designs/design-system-20260727/preview.html`).
+
+**The design system must be migrated from the preview HTML into the actual project as:**
+- CSS custom properties on `:root` (matching the preview's `--bg-primary`, `--accent`, etc.)
+- Tailwind CSS theme extension in `tailwind.config.js`
+- Dark mode media query or class toggle
+
+### 12.2 Page Inventory
+
+| Page | Route | Priority | Description |
+|------|-------|----------|-------------|
+| **Landing/Homepage** | `/` | P0 | Full marketing landing: hero → creature showcase → how it works → battle preview → community → footer |
+| **Game Canvas** | `/app/game` | P0 | Phaser 3 game canvas with HUD overlay, stats, ability panel |
+| **Wallet Connect** | *(modal/overlay)* | P0 | "Connect Wallet" modal: MetaMask, WalletConnect, IMX options |
+| **Collection** | `/app/collection` | P1 | Grid of owned familiars with stats, rarity badges |
+| **Marketplace** | `/app/marketplace` | P2 | Browse/trade familiars (or link to IMX marketplace) |
+| **Minter/Summon** | `/app/minter` | P1 | Mint a new familiar flow |
+| **Settings** | `/app/settings` | P2 | Account, preferences, dark mode toggle |
+
+### 12.3 Implementation Order
+
+#### Step 1: Design Token Migration (Phase 4 prep)
+- [ ] Convert CSS custom properties from preview into `frontend/src/styles/design-tokens.css`
+- [ ] Extend `tailwind.config.js` with the design system colors, fonts, spacing, border-radius
+- [ ] Set up dark mode class-based toggle in Tailwind
+- [ ] Remove/archive old MUI theme (`frontend/src/assets/Material.ts`)
+
+#### Step 2: Component Library Setup
+- [ ] Install shadcn/ui components (as planned in Phase 1)
+- [ ] Create design system wrapper components:
+  - `Button` — variants: primary, secondary, ghost (using accent palette)
+  - `Card` — creature card, stat card, feature card
+  - `Badge` — rarity badges (common, rare, epic, legendary)
+  - `Input` — form inputs with the warm palette
+  - `Alert` — success, warning, error variants
+  - `Modal` — wallet connect, summon familiar dialogs
+- [ ] Create layout components:
+  - `Nav` — top nav with logo, links, wallet button
+  - `Footer` — simple footer with links
+  - `PageContainer` — constrained max-width wrapper
+
+#### Step 3: Landing Page Redesign
+- [ ] Hero section: familiar mascot + "Collect. Battle. Earn." + two CTAs
+- [ ] Creature showcase: horizontal scrollable grid of familiar cards
+- [ ] "How It Works" section: 4-step journey
+- [ ] Battle preview: side-by-side creature comparison with ability cards
+- [ ] Community section: Discord/Twitter CTAs
+- [ ] Footer: Privacy, Terms, White Paper, Docs links
+- [ ] Dark mode toggle in header/footer
+
+#### Step 4: Game Canvas Page
+- [ ] Full-screen Phaser 3 canvas with game HUD overlay
+- [ ] Creature stats panel (HP, MP, ATK, DEF, SPD bars)
+- [ ] Ability cards panel at bottom
+- [ ] Battle log / event feed
+- [ ] Player profile mini-card (avatar, level, currency)
+
+#### Step 5: Wallet Integration
+- [ ] Connect Wallet button → modal overlay
+- [ ] Wallet options: MetaMask, WalletConnect, IMX Passport
+- [ ] Connected state: truncated address + balance display
+- [ ] Disconnect option in dropdown
+
+#### Step 6: App Shell
+- [ ] Consistent nav bar across all logged-in pages
+- [ ] Sidebar or bottom tab navigation for app routes
+- [ ] Page transitions with the established motion system
+
+### 12.4 Design Quality Gates
+
+Before shipping any page, verify:
+- [ ] Matches DESIGN.md tokens (colors, fonts, spacing)
+- [ ] Dark mode renders correctly
+- [ ] Responsive at mobile (375px), tablet (768px), desktop (1200px+)
+- [ ] No blockchain jargon on marketing pages (landing, about)
+- [ ] WCAG AA contrast on all text/background combinations
+- [ ] Creature cards use the card style (rounded, shadow, hover lift)
+- [ ] CTA buttons use accent (#7C5CFC) with white text
+- [ ] No Inter, Roboto, Space Grotesk, or system-ui fonts (use Fredoka + DM Sans)
+
+### 12.5 Current Frontend Dependencies
+
+The existing stack uses MUI + TailwindCSS + Redux. The redesign should:
+- **Keep:** TailwindCSS, React Router, Vite
+- **Replace:** MUI components → shadcn/ui + custom design system components
+- **Replace:** Redux → React Context (already planned in Phase 1)
+- **Remove:** MUI theme (`frontend/src/assets/Material.ts`), legacy component structure
+
+### 12.6 File Structure (Proposed)
+
+```
+frontend/src/
+├── components/
+│   ├── ui/              # Design system primitives (Button, Card, Badge, Input, Modal)
+│   ├── layout/          # Nav, Footer, PageContainer
+│   ├── landing/         # Hero, CreatureShowcase, HowItWorks, BattlePreview, Community
+│   └── game/            # GameCanvas, StatPanel, AbilityCards, BattleLog
+├── styles/
+│   └── design-tokens.css
+├── app/
+│   ├── hooks/           # useWallet, useTheme, etc.
+│   └── constants/       # AppConfig (updated)
+├── App.tsx              # Updated routing
+└── index.tsx            # Entry point (keep ErrorBoundary pattern)
+```

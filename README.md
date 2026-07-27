@@ -1,67 +1,101 @@
-# NFT_ArcaneFamiliars
+# Arcane Familiars
 
-# Overview
+A browser-based NFT creature-collector game integrated with the Immutable X (IMX) L2 marketplace. Summon familiars, battle with turn-based combat, and trade on-chain — all from your browser.
 
-Source code Arcane Familiar, a work-in-progress, NFT-based game integrated with IMX L2 marketplace.
+> **Status:** Active development — landing page live, game engine (Phaser 3) and blockchain integration in progress.
 
-# Frontend
+## Project Structure
 
-Current working version:
-[![Netlify Status](https://api.netlify.com/api/v1/badges/3d0d59be-6f0b-4008-8f3c-107aeff535d6/deploy-status)](https://app.netlify.com/sites/arcane-familiars/deploys)
+```
+├── backend/         # Cloudflare Worker (Hono + D1)
+├── blockchain/      # Smart contracts
+├── docs/            # Plans, architecture decisions
+├── frontend/        # React SPA (Vite + SWC + Tailwind)
+└── infrastructure/  # Pulumi IaC
+```
 
-[Arcane Familiar Site](https://arcane-familiars.netlify.app/)
+## Tech Stack
 
-# API Endpoint
+### Frontend
+- **React 18** with TypeScript
+- **Vite** + SWC for fast builds
+- **Tailwind CSS** with custom design tokens (see [DESIGN.md](./DESIGN.md))
+- **React Router v6** for client-side routing
+- Fonts: Fredoka (display), DM Sans (body), JetBrains Mono (data)
 
-Environment: Staging
-https://j9fcxaqaqb.execute-api.ap-northeast-2.amazonaws.com/staging
+### Backend
+- **Hono** on Cloudflare Workers (edge runtime)
+- **Cloudflare D1** (SQLite) for persistent storage
+- **TypeScript** with type-safe env bindings
+- Proxies Immutable X API for asset/balance data
 
-# Blockchain
+### Blockchain
+- **Solidity 0.8.17** with Hardhat
+- **OpenZeppelin** contracts (ERC721 + ERC2981)
+- Transparent proxy pattern with role-based routing (FamiliarProxy / FamiliarLogic / FamiliarAdmin)
+- IMX Bridge integration for L2 minting
+- **Immutable X** for gas-free trading
 
-Deployed contracts
-| Network | Contract | Address |
-|---------|----------|---------|
-| Ropsten | FamiliarProxy | [0x2EF8390d0ED43fD98B785AE414Bb5dd5364d621B](https://ropsten.etherscan.io/address/0x2EF8390d0ED43fD98B785AE414Bb5dd5364d621B#code) |
-| Ropsten | FamiliarAdmin | [0xBb91f367dD50cF80f55EF836c7A46E8dc0D79f55](0xBb91f367dD50cF80f55EF836c7A46E8dc0D79f55) |
-| Ropsten | FamiliarIMX | [0xfB1686D1993508019BbFef53c5065009874cd1a9](https://ropsten.etherscan.io/address/0xfB1686D1993508019BbFef53c5065009874cd1a9#code) |
-| Ropsten | FamiliarLogic | [0x6c755f9644E0ABa078450211aA1320bCbE2647AF](0x6c755f9644E0ABa078450211aA1320bCbE2647AF) |
-| Goerli | FamiliarProxy | [0xB7Eaa855Fa6432D0597F297BaCE4613c33a075d1](https://goerli.etherscan.io/address/0xB7Eaa855Fa6432D0597F297BaCE4613c33a075d1#code) |
-| Goerli | FamiliarAdmin | [0xfB1686D1993508019BbFef53c5065009874cd1a9](https://goerli.etherscan.io/address/0xfB1686D1993508019BbFef53c5065009874cd1a9#code) |
-| Goerli | FamiliarIMX | [0x6c755f9644E0ABa078450211aA1320bCbE2647AF](https://goerli.etherscan.io/address/0x6c755f9644E0ABa078450211aA1320bCbE2647AF#code) |
-| Goerli | FamiliarLogic | [0x2EF8390d0ED43fD98B785AE414Bb5dd5364d621B](https://goerli.etherscan.io/address/0x2EF8390d0ED43fD98B785AE414Bb5dd5364d621B#code) |
+## Getting Started
 
-# IMX Registration
+### Prerequisites
+- Node.js 22+ (see `.nvmrc`)
 
-Environment: Ropsten [DEPRECATED]
-Project ID: 200558
-Collection:
+### Frontend
+```bash
+cd frontend
+npm install
+npm run dev        # http://localhost:8080
+```
 
-    {
-      "address": "0x2ef8390d0ed43fd98b785ae414bb5dd5364d621b",
-      "name": "Arcane Familiars",
-      "description": "",
-      "icon_url": "",
-      "collection_image_url": "",
-      "project_id": 200558,
-      "project_owner_address": "",
-      "metadata_api_url": "",
-      "created_at": "2022-09-25T12:47:20.183116Z",
-      "updated_at": "2022-09-25T12:47:20.183116Z"
-    }
- ----------------------------------------------------------------
- Environment: Goerli
- Project ID: 644
- Collection:
- 
-    {
-        "address": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-        "name": "Arcane Familiars",
-        "description": "A game of exploration and battles of wit. Summon your familiars.",
-        "icon_url": "http://getdrawings.com/free-icon-bw/flat-icon-com-10.png",
-        "collection_image_url": "https://www.dungeonsolvers.com/wp-content/uploads/2019/06/arcanist_800pxweb_by_olgadrebas-dbv455w.jpg",
-        "project_id": 644,
-        "project_owner_address": "",
-        "metadata_api_url": "https://j9fcxaqaqb.execute-api.ap-northeast-2.amazonaws.com/staging/v1/familiars",
-        "created_at": "2022-10-23T12:01:22.676717Z",
-        "updated_at": "2022-10-23T12:12:30.88838Z"
-    }
+### Backend
+```bash
+cd backend
+npm install
+npm run dev        # wrangler dev
+```
+
+### Blockchain
+```bash
+cd blockchain
+npm install
+npx hardhat compile
+npx hardhat test
+```
+
+## Game Mechanics
+
+Players summon **familiars** — creature NFTs with unique stats and abilities:
+
+| Stat | Description |
+|------|-------------|
+| HP | Hit points |
+| MP | Magic points |
+| ATK | Attack power |
+| DEF | Defense |
+| ARC | Arcane power |
+| SPD | Speed |
+
+Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **rarity** tier (common through legendary), and up to 4 **abilities** that affect combat.
+
+## Development Phases
+
+| Phase | Scope | Status |
+|-------|-------|--------|
+| 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
+| 2 — Game Prototype | Phaser 3 engine, core game loop, 3-5 familiars | Pending |
+| 3 — Blockchain | Contract updates, Sepolia deploy, IMX SDK | Pending |
+| 4 — MVP Polish | Wallet connect, mint flow, landing page | In progress |
+| 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
+
+## CI
+
+GitHub Actions runs type-check and build for both frontend and backend on every push/PR to `master`.
+
+## Design
+
+The design system prioritizes a warm, playful aesthetic — "cozy indie game meets Pokemon Center, not crypto exchange." See [DESIGN.md](./DESIGN.md) for tokens, typography, colors, and layout rules.
+
+## License
+
+Private — all rights reserved.

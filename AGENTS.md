@@ -47,3 +47,9 @@
 | Hono over raw Workers | Type-safe routing, middleware ecosystem |
 | Vite over webpack | ~10x faster builds, native ESM |
 | SWC over Babel | ~20x faster JSX transform |
+
+## Design System
+Always read DESIGN.md before making any visual or UI decisions.
+All font choices, colors, spacing, and aesthetic direction are defined there.
+Do not deviate without explicit user approval.
+In QA mode, flag any code that doesn't match DESIGN.md.
