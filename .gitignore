@@ -23,3 +23,8 @@ node_modules
 
 # Local Netlify folder
 .netlify
+
+# Backend local secrets
+backend/.dev.vars
+backend/node_modules/
+backend/.wrangler/

@@ -1,8 +1,11 @@
 // Environment variables are exposed via Vite's import.meta.env.
 // See frontend/.env.example for available variables.
 const AppConfig = {
-    "Mode": "Production", //"Development",
+    "Mode": "Development",
     "API": {
+      "Backend": {
+        "URL": import.meta.env.VITE_BACKEND_URL || "http://localhost:8787"
+      },
       "IMX": {
         "Sandbox": "https://api.sandbox.x.immutable.com",
         "Mainnet": "https://api.x.immutable.com",
@@ -88,7 +91,7 @@ const AppConfig = {
         }
       ],
       "assets": {
-        "images": "http://my-unity-game.s3-website-us-east-1.amazonaws.com/assets/"
+        "images": ""  // TODO: Decommissioned S3 bucket — migrate to Cloudflare R2 when Phaser game assets are ready
       }
     }
   }

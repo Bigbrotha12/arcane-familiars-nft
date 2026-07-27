@@ -1,0 +1,23 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "arcane-familiars-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arcane-familiars",
+      "database_id": "",
+      "migrations_dir": "./migrations"
+    }
+  ],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "IMX_API_SANDBOX": "https://api.sandbox.x.immutable.com",
+    "IMX_API_MAINNET": "https://api.x.immutable.com",
+    "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+    "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c"
+  }
+}

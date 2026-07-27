@@ -1,0 +1,57 @@
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import assetsRouter from './routes/assets';
+import balancesRouter from './routes/balances';
+import authRouter from './routes/auth';
+import collectionRouter from './routes/collection';
+import metadataRouter from './routes/metadata';
+
+// Environment bindings from wrangler.jsonc
+type Bindings = {
+  DB: D1Database;
+  ENVIRONMENT: string;
+  IMX_API_SANDBOX: string;
+  IMX_API_MAINNET: string;
+  COLLECTION_CONTRACT_SANDBOX: string;
+  COLLECTION_CONTRACT_MAINNET: string;
+  INFURA_API_KEY: string;
+};
+
+const app = new Hono<{ Bindings: Bindings }>();
+
+// CORS — allow frontend origin in dev/prod
+app.use('/api/*', cors({
+  origin: ['http://localhost:5173', 'http://localhost:3000', 'https://arcane-familiars.pages.dev'],
+  allowHeaders: ['Content-Type', 'Authorization'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+}));
+
+// Health check
+app.get('/api/health', (c) => {
+  return c.json({
+    status: 'ok',
+    environment: c.env.ENVIRONMENT,
+    timestamp: Date.now(),
+  });
+});
+
+// Routes
+app.route('/api', assetsRouter);
+app.route('/api', balancesRouter);
+app.route('/api', authRouter);
+
+app.route('/api', collectionRouter);
+app.route('/api', metadataRouter);
+
+// 404 handler
+app.notFound((c) => {
+  return c.json({ error: 'Not found' }, 404);
+});
+
+// Error handler
+app.onError((err, c) => {
+  console.error('Unhandled error:', err);
+  return c.json({ error: 'Internal server error' }, 500);
+});
+
+export default app;
