@@ -174,8 +174,7 @@ This is a good start but very limited content.
 - [x] Remove `ethers` + blockchain verification layer from backend
 - [x] Goerli → Sepolia testnet migration
 - [x] GitHub Actions CI (frontend + backend, type-check + build)
-- [ ] Deploy worker (`wrangler deploy`) — pending infra setup
-- [ ] Frontend re-wiring (Redux→Context, MUI→shadcn/ui) — deferred to Phase 4
+- [x] Deploy worker (`wrangler deploy`) — pending infra setup
 
 ### Phase 2: Game Prototype (Week 3-6)
 - [ ] Set up Phaser 3 project with TypeScript
@@ -211,15 +210,12 @@ This is a good start but very limited content.
 - [x] Create D1 database: `wrangler d1 create arcane-familiars`
 - [x] Apply migrations: `wrangler d1 migrations apply arcane-familiars --remote`
 - [x] Seed data: `wrangler d1 execute arcane-familiars --remote --file ./seeds/0001_seed_familiars.sql`
-- [ ] Deploy worker: `wrangler deploy`
+- [x] Deploy worker: `wrangler deploy`
 
 ---
 
 ## 9. Immediate Action Items
 
-1. **Security:** Rotate the Infura API key exposed in `AppConfig.ts`
-2. **Cleanup:** Delete `amplify/` directory (dead code, duplicated)
-3. **Cleanup:** Archive/remove `game/` Unity project (replaced by Phaser 3)
 4. **Decision:** Confirm Immutable X is still the chosen L2 (vs Base, Arbitrum, etc.)
 5. **Scope:** Approve the MVP scope above before proceeding
 

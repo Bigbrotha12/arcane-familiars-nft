@@ -5,6 +5,9 @@ import balancesRouter from './routes/balances';
 import authRouter from './routes/auth';
 import collectionRouter from './routes/collection';
 import metadataRouter from './routes/metadata';
+import gameStateRouter from './routes/game-state';
+import gameExplorationRouter from './routes/game-exploration';
+import gameBattleRouter from './routes/game-battle';
 
 // Environment bindings from wrangler.jsonc
 type Bindings = {
@@ -42,6 +45,11 @@ app.route('/api', authRouter);
 
 app.route('/api', collectionRouter);
 app.route('/api', metadataRouter);
+
+// Game routes
+app.route('/api', gameStateRouter);
+app.route('/api', gameExplorationRouter);
+app.route('/api', gameBattleRouter);
 
 // 404 handler
 app.notFound((c) => {

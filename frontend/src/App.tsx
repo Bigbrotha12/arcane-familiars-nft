@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/00_Layout/Layout';
 import ComingSoon from './components/Common/ComingSoon';
 import LandingPage from './components/00_Layout/LandingPage';
+import GameCanvas from './components/Game/GameCanvas';
 
 export default function App(): JSX.Element {
   return (
@@ -12,7 +13,7 @@ export default function App(): JSX.Element {
           <Route path="/" element={<LandingPage />} />
           <Route path="/app" element={<Layout />}>
             <Route index element={<ComingSoon />} />
-            <Route path="game" element={<ComingSoon />} />
+            <Route path="game" element={<GameCanvas />} />
             <Route path="collection" element={<ComingSoon />} />
             <Route path="marketplace" element={<ComingSoon />} />
             <Route path="minter" element={<ComingSoon />} />

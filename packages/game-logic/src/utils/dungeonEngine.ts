@@ -1,0 +1,219 @@
+import type { Area, Room, DungeonState, RoomExit } from '../types/exploration';
+import type { FamiliarData } from '../data/familiars';
+import { getFamiliar } from '../data/familiars';
+import { AREAS } from '../data/areas';
+import { randomInRange, weightedRandom, randomFloat } from './mathUtils';
+
+const ROOM_NAMES = [
+  'Twilight Path', 'Crystal Alcove', 'Mossy Chamber', 'Stone Corridor',
+  'Glowing Grotto', 'Ancient Hall', 'Silent Passage', 'Whispering Den',
+  'Hidden Nook', 'Dusty Vault', 'Tangled Grove', 'Moonlit Clearing',
+  'Echoing Tunnel', 'Fading Trail', 'Shadowed Bend', 'Rumbling Shaft',
+];
+
+const ROOM_DESCRIPTIONS = [
+  'The air is thick with mystery.',
+  'Strange sounds echo from within.',
+  'The path narrows ahead.',
+  'Light filters through cracks above.',
+  'Something stirs in the darkness.',
+  'The walls glisten with moisture.',
+  'A gentle breeze flows through.',
+  'Ancient runes line the walls.',
+];
+
+const DIRECTIONS = ['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
+
+/**
+ * Generate a dungeon for the given area using a seeded RNG.
+ * Creates a valid room graph with start, normal, and boss rooms.
+ */
+export function generateDungeon(area: Area, seed: number): DungeonState {
+  const rng = seededRandom(seed);
+  const rooms: Record<string, Room> = {};
+  const roomIds: string[] = [];
+
+  // Create start room
+  const startRoom: Room = {
+    id: 'room_0',
+    name: 'Entrance',
+    description: `The entrance to ${area.name}.`,
+    type: 'start',
+    exits: [],
+    encounterChance: 0,
+    treasureChance: 0.1,
+    treasurePool: [{ itemId: 'potion_small', weight: 10 }],
+    cleared: true,
+  };
+  rooms['room_0'] = startRoom;
+  roomIds.push('room_0');
+
+  // Create normal rooms
+  const normalCount = area.roomCount - 2;
+  for (let i = 0; i < normalCount; i++) {
+    const nameIdx = randomInRange(rng, 0, ROOM_NAMES.length - 1);
+    const descIdx = randomInRange(rng, 0, ROOM_DESCRIPTIONS.length - 1);
+    const depth = (i + 1) / normalCount;
+    const room: Room = {
+      id: `room_${i + 1}`,
+      name: ROOM_NAMES[nameIdx],
+      description: ROOM_DESCRIPTIONS[descIdx],
+      type: i === normalCount - 1 ? 'normal' : 'normal',
+      exits: [],
+      encounterChance: 0.3 + depth * 0.3,
+      treasureChance: 0.15 + depth * 0.1,
+      treasurePool: [
+        { itemId: 'potion_small', weight: 10 },
+        { itemId: 'potion_medium', weight: 5 },
+        { itemId: 'ether_small', weight: 3 },
+      ],
+      cleared: false,
+    };
+    rooms[room.id] = room;
+    roomIds.push(room.id);
+  }
+
+  // Create boss room
+  const bossRoom: Room = {
+    id: `room_${normalCount + 1}`,
+    name: 'Boss Chamber',
+    description: `The ${area.bossId} awaits in the final chamber.`,
+    type: 'boss',
+    exits: [],
+    encounterChance: 0,
+    treasureChance: 0,
+    treasurePool: [],
+    cleared: false,
+  };
+  rooms[bossRoom.id] = bossRoom;
+  roomIds.push(bossRoom.id);
+
+  // Build exits: create a linear path with some branches
+  for (let i = 0; i < roomIds.length - 1; i++) {
+    const fromRoom = rooms[roomIds[i]];
+    const toRoom = rooms[roomIds[i + 1]];
+    const dirIdx = randomInRange(rng, 0, DIRECTIONS.length - 1);
+    const dir = DIRECTIONS[dirIdx];
+    fromRoom.exits.push({ direction: dir, roomId: toRoom.id, label: toRoom.name });
+    const oppositeDir = getOppositeDirection(dir);
+    toRoom.exits.push({ direction: oppositeDir, roomId: fromRoom.id, label: fromRoom.name });
+  }
+
+  // Add some cross-connections for interesting dungeon topology
+  if (roomIds.length > 3) {
+    const extraConnections = Math.min(2, Math.floor(roomIds.length / 3));
+    for (let c = 0; c < extraConnections; c++) {
+      const fromIdx = randomInRange(rng, 1, roomIds.length - 2);
+      const toIdx = randomInRange(rng, 1, roomIds.length - 2);
+      if (fromIdx !== toIdx) {
+        const fromRoom = rooms[roomIds[fromIdx]];
+        const toRoom = rooms[roomIds[toIdx]];
+        if (!fromRoom.exits.some((e) => e.roomId === toRoom.id)) {
+          const dirIdx = randomInRange(rng, 0, DIRECTIONS.length - 1);
+          const dir = DIRECTIONS[dirIdx];
+          fromRoom.exits.push({ direction: dir, roomId: toRoom.id, label: toRoom.name });
+          const oppositeDir = getOppositeDirection(dir);
+          toRoom.exits.push({ direction: oppositeDir, roomId: fromRoom.id, label: fromRoom.name });
+        }
+      }
+    }
+  }
+
+  // Boss room exits back to previous room
+  bossRoom.exits.push({ direction: 'south', roomId: roomIds[roomIds.length - 2], label: 'Retreat' });
+
+  return {
+    areaId: area.id,
+    currentRoomId: 'room_0',
+    party: [],
+    partyHp: {},
+    partyMp: {},
+    inventory: { currency: 0, items: [] },
+    rooms,
+  };
+}
+
+function getOppositeDirection(dir: string): string {
+  const opposites: Record<string, string> = {
+    north: 'south',
+    south: 'north',
+    east: 'west',
+    west: 'east',
+    northeast: 'southwest',
+    southwest: 'northeast',
+    northwest: 'southeast',
+    southeast: 'northwest',
+  };
+  return opposites[dir] || dir;
+}
+
+/**
+ * Roll for a random encounter in the given room.
+ */
+export function rollEncounter(room: Room, rng: () => number): boolean {
+  return rng() < room.encounterChance;
+}
+
+/**
+ * Roll for treasure in the given room.
+ */
+export function rollTreasure(room: Room, rng: () => number): boolean {
+  return rng() < room.treasureChance;
+}
+
+/**
+ * Select a random treasure item from the room's pool using weighted random.
+ */
+export function selectTreasure(room: Room, rng: () => number): string | null {
+  if (room.treasurePool.length === 0) return null;
+  const idx = weightedRandom(rng, room.treasurePool);
+  return room.treasurePool[idx].itemId;
+}
+
+/**
+ * Select a random enemy from the area's encounter pool.
+ */
+export function selectEnemy(area: Area, rng: () => number): string {
+  const idx = randomInRange(rng, 0, area.encounterPool.length - 1);
+  return area.encounterPool[idx];
+}
+
+/**
+ * Scale an enemy familiar's stats based on level.
+ * Uses the plan's scaling: base stats * (1 + 0.1 * (level - 1))
+ */
+export function scaleEnemy(baseFamiliar: FamiliarData, level: number): FamiliarData {
+  const scaleFactor = 1 + 0.1 * (level - 1);
+  return {
+    ...baseFamiliar,
+    stats: {
+      hp: Math.round(baseFamiliar.stats.hp * scaleFactor),
+      maxHp: Math.round(baseFamiliar.stats.maxHp * scaleFactor),
+      mp: Math.round(baseFamiliar.stats.mp * scaleFactor),
+      maxMp: Math.round(baseFamiliar.stats.maxMp * scaleFactor),
+      attack: Math.round(baseFamiliar.stats.attack * scaleFactor),
+      defense: Math.round(baseFamiliar.stats.defense * scaleFactor),
+      arcane: Math.round(baseFamiliar.stats.arcane * scaleFactor),
+      speed: Math.round(baseFamiliar.stats.speed * scaleFactor),
+    },
+  };
+}
+
+/**
+ * Validate that a move from one room to another is possible via exits.
+ */
+export function validateMove(fromRoom: Room, toRoomId: string): boolean {
+  return fromRoom.exits.some((exit) => exit.roomId === toRoomId);
+}
+
+// Re-export seededRandom for dungeon generation
+function seededRandom(seed: number): () => number {
+  let state = seed;
+  return () => {
+    state |= 0;
+    state = (state + 0x6d2b79f5) | 0;
+    let t = Math.imul(state ^ (state >>> 15), 1 | state);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
