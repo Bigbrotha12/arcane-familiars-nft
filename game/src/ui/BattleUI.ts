@@ -3,6 +3,7 @@ import {
   BattleFamiliar,
   BattleAction,
   getAbility,
+  ActionType,
 } from '@arcane-familiars/game-logic';
 
 export interface BattleUICallbacks {
@@ -13,22 +14,24 @@ export interface BattleUICallbacks {
 }
 
 const C = {
-  bg: 0x0a0a0f,
-  primary: 0x7c5cfc,
-  primaryHover: 0x6a4ae8,
-  text: '#a0a0b0',
+  bg: 0x0A0A0F,
+  primary: 0x7C5CFC,
+  primaryHover: 0x6A4AE8,
+  text: '#A5A3C4',
   textLight: '#F0EFFF',
   textMuted: '#6366A1',
-  hpBar: 0x2dd4bf,
-  hpBarMid: 0xf59e0b,
-  hpBarLow: 0xef4444,
-  mpBar: 0x6366a1,
-  buttonBg: 0x3b3870,
-  panelBg: 0x1e1b4b,
-  border: 0x3b3870,
-  cardBg: 0x2d2a5e,
-  barBg: 0x1a1a2e,
+  hpBar: 0x2DD4BF,
+  hpBarMid: 0xF59E0B,
+  hpBarLow: 0xEF4444,
+  mpBar: 0x6366A1,
+  buttonBg: 0x3B3870,
+  panelBg: 0x1E1B4B,
+  border: 0x3B3870,
+  cardBg: 0x2D2A5E,
+  barBg: 0x1A1A2E,
 };
+
+export const BATTLE_CONTINUE_EVENT = 'continue-after-battle';
 
 export class BattleUI {
   private scene: Phaser.Scene;
@@ -56,12 +59,23 @@ export class BattleUI {
   private outcomeOverlay!: Phaser.GameObjects.Container;
   private battleLog: string[] = [];
   private connectingText?: Phaser.GameObjects.Text;
+  private owned: Phaser.GameObjects.GameObject[] = [];
+  private floatingTweens: Phaser.Tweens.Tween[] = [];
+  private readonly ENEMY_CENTER_X = 480;
+  private readonly ENEMY_CENTER_Y = 140;
+  private readonly PLAYER_CENTER_X = 180;
+  private readonly PLAYER_CENTER_Y = 400;
 
   constructor(scene: Phaser.Scene, callbacks: BattleUICallbacks) {
     this.scene = scene;
     this.callbacks = callbacks;
     this.gameWidth = scene.scale.width;
     this.gameHeight = scene.scale.height;
+  }
+
+  private register<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.owned.push(obj);
+    return obj;
   }
 
   init(): void {
@@ -77,95 +91,95 @@ export class BattleUI {
   }
 
   private createBackground(): void {
-    this.scene.add.rectangle(
+    this.register(this.scene.add.rectangle(
       this.gameWidth / 2,
       this.gameHeight / 2,
       this.gameWidth,
       this.gameHeight,
       C.bg,
-    );
+    ));
 
     const separatorY = this.gameHeight - 80;
-    this.scene.add.rectangle(
+    this.register(this.scene.add.rectangle(
       this.gameWidth / 2,
       separatorY,
       this.gameWidth - 40,
       2,
-      0x1e1b4b,
-    );
+      0x1E1B4B,
+    ));
   }
 
   private createEnemyArea(): void {
-    const sx = 480;
-    const sy = 140;
+    const sx = this.ENEMY_CENTER_X;
+    const sy = this.ENEMY_CENTER_Y;
 
-    this.enemySprite = this.scene.add.rectangle(sx, sy, 100, 100, 0x4e2a2a);
-    this.enemySprite.setStrokeStyle(2, 0xfc5c5c);
+    this.enemySprite = this.register(this.scene.add.rectangle(sx, sy, 100, 100, 0x4E2A2A));
+    this.enemySprite.setStrokeStyle(2, 0xEF4444);
 
-    this.enemyName = this.scene.add.text(sx, 70, '', {
+    this.enemyName = this.register(this.scene.add.text(sx, 70, '', {
       fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#fc5c5c',
-    });
+      fontFamily: 'DM Sans',
+      color: '#EF4444',
+    }));
     this.enemyName.setOrigin(0.5);
 
-    this.enemyHpBar = this.scene.add.graphics();
-    this.enemyMpBar = this.scene.add.graphics();
+    this.enemyHpBar = this.register(this.scene.add.graphics());
+    this.enemyMpBar = this.register(this.scene.add.graphics());
 
-    this.enemyHpText = this.scene.add.text(560, 200, '', {
+    this.enemyHpText = this.register(this.scene.add.text(560, 200, '', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'JetBrains Mono',
       color: C.text,
-    });
+    }));
 
-    this.enemyMpText = this.scene.add.text(560, 218, '', {
+    this.enemyMpText = this.register(this.scene.add.text(560, 218, '', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'JetBrains Mono',
       color: C.text,
-    });
+    }));
 
-    const enemyLabel = this.scene.add.text(sx, sy + 60, 'ENEMY', {
+    const enemyLabel = this.register(this.scene.add.text(sx, sy + 60, 'ENEMY', {
       fontSize: '9px',
-      fontFamily: 'monospace',
-      color: '#fc5c5c',
-    });
+      fontFamily: 'DM Sans',
+      color: '#EF4444',
+    }));
     enemyLabel.setOrigin(0.5);
   }
 
   private createPlayerArea(): void {
-    const sx = 180;
-    const sy = 400;
+    const sx = this.PLAYER_CENTER_X;
+    const sy = this.PLAYER_CENTER_Y;
 
-    this.playerSprite = this.scene.add.rectangle(sx, sy, 100, 100, 0x2a2a4e);
-    this.playerSprite.setStrokeStyle(2, 0x7c5cfc);
+    this.playerSprite = this.register(this.scene.add.rectangle(sx, sy, 100, 100, 0x2A2A4E));
+    this.playerSprite.setStrokeStyle(2, 0x7C5CFC);
 
-    this.playerName = this.scene.add.text(sx, 455, '', {
+    this.playerName = this.register(this.scene.add.text(sx, 455, '', {
       fontSize: '14px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: '#7C5CFC',
-    });
+    }));
     this.playerName.setOrigin(0.5);
 
-    this.playerHpBar = this.scene.add.graphics();
-    this.playerMpBar = this.scene.add.graphics();
+    this.playerHpBar = this.register(this.scene.add.graphics());
+    this.playerMpBar = this.register(this.scene.add.graphics());
 
-    this.playerHpText = this.scene.add.text(260, 478, '', {
+    this.playerHpText = this.register(this.scene.add.text(260, 478, '', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'JetBrains Mono',
       color: C.text,
-    });
+    }));
 
-    this.playerMpText = this.scene.add.text(260, 496, '', {
+    this.playerMpText = this.register(this.scene.add.text(260, 496, '', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'JetBrains Mono',
       color: C.text,
-    });
+    }));
 
-    const playerLabel = this.scene.add.text(sx, sy + 60, 'PLAYER', {
+    const playerLabel = this.register(this.scene.add.text(sx, sy + 60, 'PLAYER', {
       fontSize: '9px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: '#7C5CFC',
-    });
+    }));
     playerLabel.setOrigin(0.5);
   }
 
@@ -175,38 +189,38 @@ export class BattleUI {
     const pw = 180;
     const ph = 310;
 
-    const logBg = this.scene.add.rectangle(
+    const logBg = this.register(this.scene.add.rectangle(
       px + pw / 2,
       py + ph / 2,
       pw,
       ph,
       C.panelBg,
       0.9,
-    );
+    ));
     logBg.setStrokeStyle(1, C.border);
 
-    const logTitle = this.scene.add.text(px + 8, py + 6, 'Battle Log', {
+    const logTitle = this.register(this.scene.add.text(px + 8, py + 6, 'Battle Log', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: '#7C5CFC',
-    });
+    }));
 
-    this.logText = this.scene.add.text(px + 8, py + 24, '', {
+    this.logText = this.register(this.scene.add.text(px + 8, py + 24, '', {
       fontSize: '10px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: C.text,
       wordWrap: { width: pw - 16 },
       lineSpacing: 4,
-    });
+    }));
   }
 
   private createMainActions(): void {
-    this.mainActions = this.scene.add.container(0, 0);
+    this.mainActions = this.register(this.scene.add.container(0, 0));
     this.mainActions.setVisible(false);
 
     const buttonDefs = [
-      { label: 'Attack', action: () => this.callbacks.onAction({ type: 'attack' }) },
-      { label: 'Defend', action: () => this.callbacks.onAction({ type: 'defend' }) },
+      { label: 'Attack', action: () => this.callbacks.onAction({ type: ActionType.Attack }) },
+      { label: 'Defend', action: () => this.callbacks.onAction({ type: ActionType.Defend }) },
       { label: 'Ability', action: () => this.callbacks.onShowAbility?.() },
       { label: 'Item', action: () => this.callbacks.onShowItem?.() },
       { label: 'Run', action: () => this.callbacks.onFlee() },
@@ -218,17 +232,17 @@ export class BattleUI {
     const by = 565;
 
     buttonDefs.forEach((def, i) => {
-      const bg = this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg);
+      const bg = this.register(this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg));
       bg.setStrokeStyle(1, C.border);
 
-      const label = this.scene.add.text(0, 0, def.label, {
+      const label = this.register(this.scene.add.text(0, 0, def.label, {
         fontSize: '13px',
-        fontFamily: 'monospace',
+        fontFamily: 'DM Sans',
         color: '#F0EFFF',
-      });
+      }));
       label.setOrigin(0.5);
 
-      const container = this.scene.add.container(positions[i], by, [bg, label]);
+      const container = this.register(this.scene.add.container(positions[i], by, [bg, label]));
       container.setSize(bw, bh);
       container.setInteractive({ useHandCursor: true });
 
@@ -242,39 +256,55 @@ export class BattleUI {
   }
 
   private createAbilityPanel(): void {
-    this.abilityPanel = this.scene.add.container(0, 0);
+    this.abilityPanel = this.register(this.scene.add.container(0, 0));
     this.abilityPanel.setVisible(false);
   }
 
   private createItemPanel(): void {
-    this.itemPanel = this.scene.add.container(0, 0);
+    this.itemPanel = this.register(this.scene.add.container(0, 0));
     this.itemPanel.setVisible(false);
   }
 
   private createOutcomeOverlay(): void {
-    this.outcomeOverlay = this.scene.add.container(0, 0);
+    this.outcomeOverlay = this.register(this.scene.add.container(0, 0));
     this.outcomeOverlay.setVisible(false);
   }
 
   showConnecting(): void {
-    this.connectingText = this.scene.add.text(
+    // Guard: destroy any existing connecting text to prevent a leak
+    if (this.connectingText) {
+      this.connectingText.destroy();
+      this.removeFromOwned(this.connectingText);
+      this.connectingText = undefined;
+    }
+    this.connectingText = this.register(this.scene.add.text(
       this.gameWidth / 2,
       this.gameHeight / 2,
       'Connecting...',
       {
         fontSize: '18px',
-        fontFamily: 'monospace',
-        color: '#a0a0b0',
+        fontFamily: 'DM Sans',
+        color: '#A5A3C4',
       },
-    );
+    ));
     this.connectingText.setOrigin(0.5);
   }
 
   hideConnecting(): void {
     if (this.connectingText) {
       this.connectingText.destroy();
+      this.removeFromOwned(this.connectingText);
       this.connectingText = undefined;
     }
+  }
+
+  private removeFromOwned(obj: Phaser.GameObjects.GameObject): void {
+    const idx = this.owned.indexOf(obj);
+    if (idx !== -1) this.owned.splice(idx, 1);
+  }
+
+  private purgeOwned(): void {
+    this.owned = this.owned.filter(o => o && o.scene);
   }
 
   enableMainActions(): void {
@@ -287,26 +317,34 @@ export class BattleUI {
 
   updatePlayerDisplay(familiar: BattleFamiliar): void {
     const stats = familiar.familiarData.stats;
+    if (!stats) return;
+
     this.playerName.setText(familiar.familiarData.name);
+    const hp = Math.max(0, familiar.currentHp);
+    const mp = Math.max(0, familiar.currentMp);
 
-    const hpColor = this.getHpColor(familiar.currentHp, stats.maxHp);
-    this.drawBar(this.playerHpBar, 105, 478, 150, 12, familiar.currentHp, stats.maxHp, hpColor);
-    this.drawBar(this.playerMpBar, 105, 496, 150, 8, familiar.currentMp, stats.maxMp, C.mpBar);
+    const hpColor = this.getHpColor(hp, stats.maxHp);
+    this.drawBar(this.playerHpBar, 105, 478, 150, 12, hp, stats.maxHp, hpColor);
+    this.drawBar(this.playerMpBar, 105, 496, 150, 8, mp, stats.maxMp, C.mpBar);
 
-    this.playerHpText.setText(`HP: ${familiar.currentHp}/${stats.maxHp}`);
-    this.playerMpText.setText(`MP: ${familiar.currentMp}/${stats.maxMp}`);
+    this.playerHpText.setText(`HP: ${hp}/${stats.maxHp}`);
+    this.playerMpText.setText(`MP: ${mp}/${stats.maxMp}`);
   }
 
   updateEnemyDisplay(familiar: BattleFamiliar): void {
     const stats = familiar.familiarData.stats;
+    if (!stats) return;
+
     this.enemyName.setText(familiar.familiarData.name);
+    const hp = Math.max(0, familiar.currentHp);
+    const mp = Math.max(0, familiar.currentMp);
 
-    const hpColor = this.getHpColor(familiar.currentHp, stats.maxHp);
-    this.drawBar(this.enemyHpBar, 405, 200, 150, 12, familiar.currentHp, stats.maxHp, hpColor);
-    this.drawBar(this.enemyMpBar, 405, 218, 150, 8, familiar.currentMp, stats.maxMp, C.mpBar);
+    const hpColor = this.getHpColor(hp, stats.maxHp);
+    this.drawBar(this.enemyHpBar, 405, 200, 150, 12, hp, stats.maxHp, hpColor);
+    this.drawBar(this.enemyMpBar, 405, 218, 150, 8, mp, stats.maxMp, C.mpBar);
 
-    this.enemyHpText.setText(`HP: ${familiar.currentHp}/${stats.maxHp}`);
-    this.enemyMpText.setText(`MP: ${familiar.currentMp}/${stats.maxMp}`);
+    this.enemyHpText.setText(`HP: ${hp}/${stats.maxHp}`);
+    this.enemyMpText.setText(`MP: ${mp}/${stats.maxMp}`);
   }
 
   private getHpColor(current: number, max: number): number {
@@ -335,6 +373,7 @@ export class BattleUI {
 
   showAbilityPanel(familiar: BattleFamiliar): void {
     this.abilityPanel.removeAll(true);
+    this.purgeOwned();
     this.abilityPanel.setVisible(true);
     this.mainActions.setVisible(false);
 
@@ -344,6 +383,7 @@ export class BattleUI {
       0x000000, 0.6,
     );
     overlay.setInteractive();
+    overlay.on('pointerdown', () => this.showMainActions());
     this.abilityPanel.add(overlay);
 
     const panelBg = this.scene.add.rectangle(
@@ -355,8 +395,9 @@ export class BattleUI {
 
     const title = this.scene.add.text(this.gameWidth / 2, 190, 'Select Ability', {
       fontSize: '16px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
       color: '#F0EFFF',
+      fontStyle: '600',
     });
     title.setOrigin(0.5);
     this.abilityPanel.add(title);
@@ -371,28 +412,28 @@ export class BattleUI {
       const y = startY + index * 50;
       const canUse = familiar.currentMp >= ability.mpCost;
 
-      const bg = this.scene.add.rectangle(this.gameWidth / 2, y, 300, 42, canUse ? C.cardBg : 0x1a1a2e);
-      bg.setStrokeStyle(1, canUse ? C.border : 0x2a2a4e);
+      const bg = this.scene.add.rectangle(this.gameWidth / 2, y, 300, 42, canUse ? C.cardBg : 0x1A1A2E);
+      bg.setStrokeStyle(1, canUse ? C.border : 0x2A2A4E);
       this.abilityPanel.add(bg);
 
       const name = this.scene.add.text(this.gameWidth / 2 - 130, y - 7, ability.name, {
         fontSize: '13px',
-        fontFamily: 'monospace',
+        fontFamily: 'DM Sans',
         color: canUse ? '#F0EFFF' : '#6366A1',
       });
       this.abilityPanel.add(name);
 
       const desc = this.scene.add.text(this.gameWidth / 2 - 130, y + 9, `${ability.description}`, {
         fontSize: '9px',
-        fontFamily: 'monospace',
-        color: canUse ? '#a0a0b0' : '#4a4a5a',
+        fontFamily: 'DM Sans',
+        color: canUse ? '#A5A3C4' : '#6366A1',
       });
       this.abilityPanel.add(desc);
 
       const cost = this.scene.add.text(this.gameWidth / 2 + 130, y, `MP:${ability.mpCost}`, {
         fontSize: '11px',
-        fontFamily: 'monospace',
-        color: canUse ? '#6366A1' : '#4a4a5a',
+        fontFamily: 'JetBrains Mono',
+        color: canUse ? '#6366A1' : '#6366A1',
       });
       cost.setOrigin(1, 0.5);
       this.abilityPanel.add(cost);
@@ -406,7 +447,7 @@ export class BattleUI {
         btn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
         btn.on('pointerout', () => bg.setFillStyle(C.cardBg));
         btn.on('pointerdown', () => {
-          this.callbacks.onAction({ type: 'ability', abilityId });
+          this.callbacks.onAction({ type: ActionType.Ability, abilityId });
         });
 
         this.abilityPanel.add(btn);
@@ -418,6 +459,7 @@ export class BattleUI {
 
   showItemPanel(inventory: { itemId: string; quantity: number }[]): void {
     this.itemPanel.removeAll(true);
+    this.purgeOwned();
     this.itemPanel.setVisible(true);
     this.mainActions.setVisible(false);
 
@@ -427,6 +469,7 @@ export class BattleUI {
       0x000000, 0.6,
     );
     overlay.setInteractive();
+    overlay.on('pointerdown', () => this.showMainActions());
     this.itemPanel.add(overlay);
 
     const panelBg = this.scene.add.rectangle(
@@ -438,8 +481,9 @@ export class BattleUI {
 
     const title = this.scene.add.text(this.gameWidth / 2, 190, 'Select Item', {
       fontSize: '16px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
       color: '#F0EFFF',
+      fontStyle: '600',
     });
     title.setOrigin(0.5);
     this.itemPanel.add(title);
@@ -447,7 +491,7 @@ export class BattleUI {
     if (!inventory || inventory.length === 0) {
       const msg = this.scene.add.text(this.gameWidth / 2, 300, 'No items available', {
         fontSize: '13px',
-        fontFamily: 'monospace',
+        fontFamily: 'DM Sans',
         color: C.textMuted,
       });
       msg.setOrigin(0.5);
@@ -462,7 +506,7 @@ export class BattleUI {
 
         const name = this.scene.add.text(this.gameWidth / 2 - 130, y, `${entry.itemId} (x${entry.quantity})`, {
           fontSize: '13px',
-          fontFamily: 'monospace',
+          fontFamily: 'DM Sans',
           color: '#F0EFFF',
         });
         this.itemPanel.add(name);
@@ -475,7 +519,7 @@ export class BattleUI {
         btn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
         btn.on('pointerout', () => bg.setFillStyle(C.cardBg));
         btn.on('pointerdown', () => {
-          this.callbacks.onAction({ type: 'item', itemId: entry.itemId });
+          this.callbacks.onAction({ type: ActionType.Item, itemId: entry.itemId });
         });
 
         this.itemPanel.add(btn);
@@ -491,7 +535,7 @@ export class BattleUI {
 
     const label = this.scene.add.text(0, 0, 'Back', {
       fontSize: '13px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: '#F0EFFF',
     });
     label.setOrigin(0.5);
@@ -530,26 +574,49 @@ export class BattleUI {
     this.logText.setText(this.battleLog.join('\n'));
   }
 
-  showDamageNumber(x: number, y: number, value: number, color: string): void {
-    const prefix = value >= 0 ? '+' : '';
-    const text = this.scene.add.text(x, y, `${prefix}${value}`, {
+  getEnemyDamagePosition(): { x: number; y: number } {
+    return { x: this.ENEMY_CENTER_X, y: this.ENEMY_CENTER_Y - 30 };
+  }
+
+  getPlayerDamagePosition(): { x: number; y: number } {
+    return { x: this.PLAYER_CENTER_X, y: this.PLAYER_CENTER_Y - 30 };
+  }
+
+  showDamageNumber(x: number, y: number, amount: number, color: string): void {
+    this.addFloatingText(x, y, `-${amount}`, color);
+  }
+
+  showHealNumber(x: number, y: number, amount: number): void {
+    this.addFloatingText(x, y, `+${amount}`, '#10B981');
+  }
+
+  private addFloatingText(x: number, y: number, text: string, color: string): void {
+    const textObj = this.scene.add.text(x, y, text, {
       fontSize: '22px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
       color,
-      fontStyle: 'bold',
+      fontStyle: '600',
       stroke: '#000000',
       strokeThickness: 3,
     });
-    text.setOrigin(0.5);
+    textObj.setOrigin(0.5);
 
-    this.scene.tweens.add({
-      targets: text,
+    const tween = this.scene.tweens.add({
+      targets: textObj,
       y: y - 60,
       alpha: 0,
       duration: 1000,
       ease: 'Power2',
-      onComplete: () => text.destroy(),
+      onComplete: () => {
+        textObj.destroy();
+        this.floatingTweens = this.floatingTweens.filter(t => t !== tween);
+      },
+      onStop: () => {
+        textObj.destroy();
+        this.floatingTweens = this.floatingTweens.filter(t => t !== tween);
+      },
     });
+    this.floatingTweens.push(tween);
   }
 
   showVictory(rewards?: { currency?: number; items?: string[] }): void {
@@ -574,6 +641,7 @@ export class BattleUI {
 
   private showOutcomeMessage(title: string, color: string, lines: string[]): void {
     this.outcomeOverlay.removeAll(true);
+    this.purgeOwned();
     this.outcomeOverlay.setVisible(true);
     this.hideActionPanels();
 
@@ -589,9 +657,9 @@ export class BattleUI {
       title,
       {
         fontSize: '36px',
-        fontFamily: 'monospace',
+        fontFamily: 'Fredoka',
         color,
-        fontStyle: 'bold',
+        fontStyle: '600',
         stroke: '#000000',
         strokeThickness: 4,
       },
@@ -605,8 +673,8 @@ export class BattleUI {
         line,
         {
           fontSize: '14px',
-          fontFamily: 'monospace',
-          color: '#a0a0b0',
+          fontFamily: 'DM Sans',
+          color: '#A5A3C4',
         },
       );
       lineText.setOrigin(0.5);
@@ -616,8 +684,8 @@ export class BattleUI {
     const continueBg = this.scene.add.rectangle(0, 0, 140, 40, C.primary);
     const continueLabel = this.scene.add.text(0, 0, 'Continue', {
       fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#FFFFFF',
+      fontFamily: 'DM Sans',
+      color: '#F0EFFF',
     });
     continueLabel.setOrigin(0.5);
 
@@ -630,12 +698,46 @@ export class BattleUI {
 
     continueBtn.on('pointerover', () => continueBg.setFillStyle(C.primaryHover));
     continueBtn.on('pointerout', () => continueBg.setFillStyle(C.primary));
-    continueBtn.on('pointerdown', () => this.scene.events.emit('continue-after-battle'));
+    continueBtn.on('pointerdown', () => this.scene.events.emit(BATTLE_CONTINUE_EVENT));
 
     this.outcomeOverlay.add(continueBtn);
   }
 
   destroy(): void {
-    this.scene.children.removeAll();
+    for (const tween of this.floatingTweens) {
+      tween.stop();
+    }
+    this.floatingTweens = [];
+
+    for (const obj of this.owned) {
+      if (obj && obj.scene) {
+        obj.destroy();
+      }
+    }
+    this.owned = [];
+
+    // Null out all references so no dangling pointers
+    this.playerSprite = null!;
+    this.enemySprite = null!;
+    this.playerName = null!;
+    this.enemyName = null!;
+    this.playerHpBar = null!;
+    this.playerMpBar = null!;
+    this.enemyHpBar = null!;
+    this.enemyMpBar = null!;
+    this.playerHpText = null!;
+    this.playerMpText = null!;
+    this.enemyHpText = null!;
+    this.enemyMpText = null!;
+    this.logText = null!;
+    this.mainActions = null!;
+    this.abilityPanel = null!;
+    this.itemPanel = null!;
+    this.outcomeOverlay = null!;
+    this.actionButtons = [];
+    this.battleLog = [];
+    this.connectingText = undefined;
+    this.scene = null!;
+    this.callbacks = null!;
   }
 }

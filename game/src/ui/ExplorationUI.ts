@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { Room, RoomExit, Area } from '@arcane-familiars/game-logic';
-import { getFamiliar } from '@arcane-familiars/game-logic';
+import { getFamiliar, Directions, RoomType } from '@arcane-familiars/game-logic';
 
 export interface ExplorationUICallbacks {
   onNavigate: (roomId: string) => void;
@@ -13,23 +13,23 @@ export interface ExplorationUICallbacks {
 }
 
 const C = {
-  bg: 0x0a0a0f,
-  primary: 0x7c5cfc,
-  primaryHover: 0x6a4ae8,
-  text: '#a0a0b0',
+  bg: 0x0A0A0F,
+  primary: 0x7C5CFC,
+  primaryHover: 0x6A4AE8,
+  text: '#A5A3C4',
   textLight: '#F0EFFF',
-  textMuted: 0x6366A1,
-  hpBar: 0x2dd4bf,
-  hpBarMid: 0xf59e0b,
-  hpBarLow: 0xef4444,
-  mpBar: 0x6366a1,
-  buttonBg: 0x3b3870,
-  panelBg: 0x1e1b4b,
-  border: 0x3b3870,
-  cardBg: 0x2d2a5e,
-  barBg: 0x1a1a2e,
-  gold: 0xf59e0b,
-  bossRed: 0xfc5c5c,
+  textMuted: '#6366A1',
+  hpBar: 0x2DD4BF,
+  hpBarMid: 0xF59E0B,
+  hpBarLow: 0xEF4444,
+  mpBar: 0x6366A1,
+  buttonBg: 0x3B3870,
+  panelBg: 0x1E1B4B,
+  border: 0x3B3870,
+  cardBg: 0x2D2A5E,
+  barBg: 0x1A1A2E,
+  gold: 0xF59E0B,
+  bossRed: 0xEF4444,
 };
 
 const ROOM_CX = 400;
@@ -74,6 +74,7 @@ export class ExplorationUI {
   private logMessages: string[] = [];
 
   private exitBtn!: Phaser.GameObjects.Container;
+  private mainContainer!: Phaser.GameObjects.Container;
 
   constructor(scene: Phaser.Scene, callbacks: ExplorationUICallbacks) {
     this.scene = scene;
@@ -83,7 +84,8 @@ export class ExplorationUI {
   }
 
   init(area: Area): void {
-    this.createBackground(area);
+    this.mainContainer = this.scene.add.container(0, 0);
+    this.createBackground();
     this.createRoomArea();
     this.createPartyStatus();
     this.createAreaProgress();
@@ -96,56 +98,66 @@ export class ExplorationUI {
     this.createExitButton();
   }
 
-  private createBackground(area: Area): void {
-    this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, C.bg);
+  private createBackground(): void {
+    const bg = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, C.bg);
+    this.mainContainer.add(bg);
 
-    this.scene.add.rectangle(165, this.gh / 2, 2, this.gh - 20, C.border);
-    this.scene.add.rectangle(this.gw - 165, this.gh / 2, 2, this.gh - 20, C.border);
+    const line1 = this.scene.add.rectangle(165, this.gh / 2, 2, this.gh - 20, C.border);
+    this.mainContainer.add(line1);
+    const line2 = this.scene.add.rectangle(this.gw - 165, this.gh / 2, 2, this.gh - 20, C.border);
+    this.mainContainer.add(line2);
   }
 
   private createRoomArea(): void {
     this.roomBg = this.scene.add.rectangle(ROOM_CX, ROOM_CY, ROOM_W, ROOM_H, C.panelBg, 0.6);
     this.roomBg.setStrokeStyle(1, C.border);
+    this.mainContainer.add(this.roomBg);
 
     this.roomName = this.scene.add.text(ROOM_CX, ROOM_CY - ROOM_H / 2 + 20, '', {
       fontSize: '18px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
       color: C.textLight,
-      fontStyle: 'bold',
+      fontStyle: '600',
     });
     this.roomName.setOrigin(0.5);
+    this.mainContainer.add(this.roomName);
 
     this.roomTypeIndicator = this.scene.add.text(ROOM_CX, ROOM_CY - ROOM_H / 2 + 44, '', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
     });
     this.roomTypeIndicator.setOrigin(0.5);
+    this.mainContainer.add(this.roomTypeIndicator);
 
     this.roomDesc = this.scene.add.text(ROOM_CX, ROOM_CY + 10, '', {
       fontSize: '13px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: C.text,
       wordWrap: { width: ROOM_W - 40 },
       align: 'center',
     });
     this.roomDesc.setOrigin(0.5);
+    this.mainContainer.add(this.roomDesc);
   }
 
   private createPartyStatus(): void {
     this.partyContainer = this.scene.add.container(0, 0);
+    this.mainContainer.add(this.partyContainer);
   }
 
   private createAreaProgress(): void {
     this.areaProgress = this.scene.add.text(this.gw - 14, 12, '', {
       fontSize: '12px',
-      fontFamily: 'monospace',
+      fontFamily: 'JetBrains Mono',
       color: C.text,
     });
     this.areaProgress.setOrigin(1, 0);
+    this.mainContainer.add(this.areaProgress);
   }
 
   private createMiniMap(): void {
     this.miniMapGfx = this.scene.add.graphics();
+    this.mainContainer.add(this.miniMapGfx);
   }
 
   private createLogPanel(): void {
@@ -153,59 +165,62 @@ export class ExplorationUI {
 
     const logBg = this.scene.add.rectangle(RIGHT_X + RIGHT_W / 2, 200, RIGHT_W, 340, C.panelBg, 0.7);
     logBg.setStrokeStyle(1, C.border);
+    this.mainContainer.add(logBg);
 
     const logTitle = this.scene.add.text(RIGHT_X, ly, 'Room Log', {
       fontSize: '11px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: '#7C5CFC',
     });
+    this.mainContainer.add(logTitle);
 
     this.logText = this.scene.add.text(RIGHT_X, ly + 18, '', {
       fontSize: '10px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: C.text,
       wordWrap: { width: RIGHT_W - 12 },
       lineSpacing: 3,
     });
+    this.mainContainer.add(this.logText);
   }
 
   private createNavPanel(): void {
     this.navPanel = this.scene.add.container(0, 0);
     this.navPanel.setVisible(false);
+    this.mainContainer.add(this.navPanel);
   }
 
   private createEncounterPanel(): void {
     this.encounterPanel = this.scene.add.container(0, 0);
     this.encounterPanel.setVisible(false);
+    this.mainContainer.add(this.encounterPanel);
   }
 
   private createTreasurePanel(): void {
     this.treasurePanel = this.scene.add.container(0, 0);
     this.treasurePanel.setVisible(false);
+    this.mainContainer.add(this.treasurePanel);
   }
 
   private createBossWarning(): void {
     this.bossWarning = this.scene.add.container(0, 0);
     this.bossWarning.setVisible(false);
+    this.mainContainer.add(this.bossWarning);
   }
 
   private createExitButton(): void {
-    const bg = this.scene.add.rectangle(0, 0, 100, 28, 0x3b3870);
-    bg.setStrokeStyle(1, C.border);
-    const label = this.scene.add.text(0, 0, 'Exit', {
-      fontSize: '11px',
-      fontFamily: 'monospace',
-      color: C.text,
-    });
-    label.setOrigin(0.5);
-
-    this.exitBtn = this.scene.add.container(82, 18, [bg, label]);
-    this.exitBtn.setSize(100, 28);
-    this.exitBtn.setInteractive({ useHandCursor: true });
-
-    this.exitBtn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
-    this.exitBtn.on('pointerout', () => bg.setFillStyle(0x3b3870));
-    this.exitBtn.on('pointerdown', () => this.callbacks.onExitDungeon());
+    const btn = this.makeButton(
+      82, 18, 100, 28, 'Exit',
+      0x3B3870, C.primaryHover,
+      () => this.callbacks.onExitDungeon(),
+      {
+        borderColor: C.border,
+        labelColor: C.text,
+        fontSize: '11px',
+      },
+    );
+    this.exitBtn = btn.container;
+    this.mainContainer.add(this.exitBtn);
   }
 
   showRoomInfo(room: Room, roomIndex: number, totalRooms: number, area: Area): void {
@@ -222,13 +237,13 @@ export class ExplorationUI {
     this.roomName.setText(room.name);
     this.roomDesc.setText(room.description);
 
-    const typeStyles: Record<string, { label: string; color: string }> = {
-      start: { label: 'START', color: '#2DD4BF' },
-      normal: { label: 'ROOM', color: '#a0a0b0' },
-      deadend: { label: 'DEAD END', color: '#6366A1' },
-      boss: { label: 'BOSS', color: '#FC5C5C' },
+    const typeStyles: Record<RoomType, { label: string; color: string }> = {
+      [RoomType.Start]: { label: 'START', color: '#2DD4BF' },
+      [RoomType.Normal]: { label: 'ROOM', color: '#A5A3C4' },
+      [RoomType.Deadend]: { label: 'DEAD END', color: '#6366A1' },
+      [RoomType.Boss]: { label: 'BOSS', color: '#EF4444' },
     };
-    const style = typeStyles[room.type] || typeStyles.normal;
+    const style = typeStyles[room.type] ?? typeStyles[RoomType.Normal];
     this.roomTypeIndicator.setText(style.label);
     this.roomTypeIndicator.setColor(style.color);
   }
@@ -236,7 +251,7 @@ export class ExplorationUI {
   showExits(exits: RoomExit[]): void {
     this.navPanel.removeAll(true);
     this.exitButtons = [];
-    this.navPanel.setVisible(true);
+    this.navPanel.setVisible(false);
 
     if (exits.length === 0) return;
 
@@ -247,34 +262,27 @@ export class ExplorationUI {
     const startX = (this.gw - totalW) / 2 + bw / 2;
 
     exits.forEach((exit, i) => {
-      const bg = this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg);
-      bg.setStrokeStyle(1, C.border);
+      const btn = this.makeButton(
+        startX + i * (bw + spacing), NAV_Y,
+        bw, bh,
+        exit.label, C.buttonBg, C.primaryHover,
+        () => this.callbacks.onNavigate(exit.roomId),
+        { labelColor: C.textLight, fontSize: '12px', borderColor: C.border, labelY: -2 },
+      );
 
-      const label = this.scene.add.text(0, -2, exit.label, {
-        fontSize: '12px',
-        fontFamily: 'monospace',
-        color: C.textLight,
-      });
-      label.setOrigin(0.5);
-
-      const dirLabel = this.scene.add.text(0, -14, exit.direction.toUpperCase(), {
+      const dirLabel = this.scene.add.text(0, -14, (Directions[exit.direction] ?? '').toUpperCase(), {
         fontSize: '9px',
-        fontFamily: 'monospace',
+        fontFamily: 'DM Sans',
         color: '#6366A1',
       });
       dirLabel.setOrigin(0.5);
+      btn.container.add(dirLabel);
 
-      const container = this.scene.add.container(startX + i * (bw + spacing), NAV_Y, [bg, label, dirLabel]);
-      container.setSize(bw, bh);
-      container.setInteractive({ useHandCursor: true });
-
-      container.on('pointerover', () => bg.setFillStyle(C.primaryHover));
-      container.on('pointerout', () => bg.setFillStyle(C.buttonBg));
-      container.on('pointerdown', () => this.callbacks.onNavigate(exit.roomId));
-
-      this.navPanel.add(container);
-      this.exitButtons.push(container);
+      this.navPanel.add(btn.container);
+      this.exitButtons.push(btn.container);
     });
+
+    this.navPanel.setVisible(true);
   }
 
   showEncounter(enemyId: string): void {
@@ -291,57 +299,41 @@ export class ExplorationUI {
 
     const title = this.scene.add.text(ROOM_CX, ROOM_CY - 60, 'A wild familiar appears!', {
       fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#F97316',
-      fontStyle: 'bold',
+      fontFamily: 'Fredoka',
+      color: '#F59E0B',
+      fontStyle: '600',
     });
     title.setOrigin(0.5);
     this.encounterPanel.add(title);
 
     const nameText = this.scene.add.text(ROOM_CX, ROOM_CY - 25, enemyName, {
       fontSize: '20px',
-      fontFamily: 'monospace',
-      color: '#FC5C5C',
-      fontStyle: 'bold',
+      fontFamily: 'Fredoka',
+      color: '#EF4444',
+      fontStyle: '600',
     });
     nameText.setOrigin(0.5);
     this.encounterPanel.add(nameText);
 
-    const enemySprite = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 64, 64, 0x4e2a2a);
-    enemySprite.setStrokeStyle(2, 0xfc5c5c);
+    const enemySprite = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 64, 64, 0x4E2A2A);
+    enemySprite.setStrokeStyle(2, 0xEF4444);
     this.encounterPanel.add(enemySprite);
 
-    const battleBg = this.scene.add.rectangle(0, 0, 120, 36, C.primary);
-    const battleLabel = this.scene.add.text(0, 0, '[ Battle! ]', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#FFFFFF',
-      fontStyle: 'bold',
-    });
-    battleLabel.setOrigin(0.5);
-    const battleBtn = this.scene.add.container(ROOM_CX - 70, ROOM_CY + 85, [battleBg, battleLabel]);
-    battleBtn.setSize(120, 36);
-    battleBtn.setInteractive({ useHandCursor: true });
-    battleBtn.on('pointerover', () => battleBg.setFillStyle(C.primaryHover));
-    battleBtn.on('pointerout', () => battleBg.setFillStyle(C.primary));
-    battleBtn.on('pointerdown', () => this.callbacks.onBattle(enemyId));
-    this.encounterPanel.add(battleBtn);
+    const battleBtn = this.makeButton(
+      ROOM_CX - 70, ROOM_CY + 85,
+      120, 36, '[ Battle! ]', C.primary, C.primaryHover,
+      () => this.callbacks.onBattle(enemyId),
+      { fontStyle: 'bold' },
+    );
+    this.encounterPanel.add(battleBtn.container);
 
-    const fleeBg = this.scene.add.rectangle(0, 0, 120, 36, 0x3b3870);
-    fleeBg.setStrokeStyle(1, C.border);
-    const fleeLabel = this.scene.add.text(0, 0, '[ Flee ]', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: C.text,
-    });
-    fleeLabel.setOrigin(0.5);
-    const fleeBtn = this.scene.add.container(ROOM_CX + 70, ROOM_CY + 85, [fleeBg, fleeLabel]);
-    fleeBtn.setSize(120, 36);
-    fleeBtn.setInteractive({ useHandCursor: true });
-    fleeBtn.on('pointerover', () => fleeBg.setFillStyle(C.primaryHover));
-    fleeBtn.on('pointerout', () => fleeBg.setFillStyle(0x3b3870));
-    fleeBtn.on('pointerdown', () => this.callbacks.onFlee());
-    this.encounterPanel.add(fleeBtn);
+    const fleeBtn = this.makeButton(
+      ROOM_CX + 70, ROOM_CY + 85,
+      120, 36, '[ Flee ]', 0x3B3870, C.primaryHover,
+      () => this.callbacks.onFlee(),
+      { borderColor: C.border, labelColor: C.text },
+    );
+    this.encounterPanel.add(fleeBtn.container);
   }
 
   showTreasure(itemId: string): void {
@@ -355,56 +347,40 @@ export class ExplorationUI {
 
     const title = this.scene.add.text(ROOM_CX, ROOM_CY - 50, 'You found a treasure!', {
       fontSize: '18px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
       color: '#F59E0B',
-      fontStyle: 'bold',
+      fontStyle: '600',
     });
     title.setOrigin(0.5);
     this.treasurePanel.add(title);
 
     const itemName = this.scene.add.text(ROOM_CX, ROOM_CY - 15, itemId, {
       fontSize: '15px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: C.textLight,
     });
     itemName.setOrigin(0.5);
     this.treasurePanel.add(itemName);
 
-    const chestIcon = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 48, 40, 0x7c5cfc);
+    const chestIcon = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 48, 40, 0x7C5CFC);
     chestIcon.setStrokeStyle(2, C.gold);
     this.treasurePanel.add(chestIcon);
 
-    const takeBg = this.scene.add.rectangle(0, 0, 120, 36, C.primary);
-    const takeLabel = this.scene.add.text(0, 0, '[ Take ]', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#FFFFFF',
-      fontStyle: 'bold',
-    });
-    takeLabel.setOrigin(0.5);
-    const takeBtn = this.scene.add.container(ROOM_CX - 70, ROOM_CY + 85, [takeBg, takeLabel]);
-    takeBtn.setSize(120, 36);
-    takeBtn.setInteractive({ useHandCursor: true });
-    takeBtn.on('pointerover', () => takeBg.setFillStyle(C.primaryHover));
-    takeBtn.on('pointerout', () => takeBg.setFillStyle(C.primary));
-    takeBtn.on('pointerdown', () => this.callbacks.onTakeTreasure(itemId));
-    this.treasurePanel.add(takeBtn);
+    const takeBtn = this.makeButton(
+      ROOM_CX - 70, ROOM_CY + 85,
+      120, 36, '[ Take ]', C.primary, C.primaryHover,
+      () => this.callbacks.onTakeTreasure(itemId),
+      { fontStyle: 'bold' },
+    );
+    this.treasurePanel.add(takeBtn.container);
 
-    const leaveBg = this.scene.add.rectangle(0, 0, 120, 36, 0x3b3870);
-    leaveBg.setStrokeStyle(1, C.border);
-    const leaveLabel = this.scene.add.text(0, 0, '[ Leave ]', {
-      fontSize: '14px',
-      fontFamily: 'monospace',
-      color: C.text,
-    });
-    leaveLabel.setOrigin(0.5);
-    const leaveBtn = this.scene.add.container(ROOM_CX + 70, ROOM_CY + 85, [leaveBg, leaveLabel]);
-    leaveBtn.setSize(120, 36);
-    leaveBtn.setInteractive({ useHandCursor: true });
-    leaveBtn.on('pointerover', () => leaveBg.setFillStyle(C.primaryHover));
-    leaveBtn.on('pointerout', () => leaveBg.setFillStyle(0x3b3870));
-    leaveBtn.on('pointerdown', () => this.callbacks.onLeaveTreasure());
-    this.treasurePanel.add(leaveBtn);
+    const leaveBtn = this.makeButton(
+      ROOM_CX + 70, ROOM_CY + 85,
+      120, 36, '[ Leave ]', 0x3B3870, C.primaryHover,
+      () => this.callbacks.onLeaveTreasure(),
+      { borderColor: C.border, labelColor: C.text },
+    );
+    this.treasurePanel.add(leaveBtn.container);
   }
 
   updatePartyStatus(partyHp: Record<string, number>, partyMp: Record<string, number>, familiars: string[]): void {
@@ -428,7 +404,7 @@ export class ExplorationUI {
 
       const nameText = this.scene.add.text(LEFT_CX, y, familiar.name, {
         fontSize: '12px',
-        fontFamily: 'monospace',
+        fontFamily: 'DM Sans',
         color: C.textLight,
       });
       nameText.setOrigin(0.5);
@@ -444,7 +420,7 @@ export class ExplorationUI {
 
       const hpText = this.scene.add.text(LEFT_CX, y + 44, `HP: ${hp}/${stats.maxHp}`, {
         fontSize: '9px',
-        fontFamily: 'monospace',
+        fontFamily: 'JetBrains Mono',
         color: C.text,
       });
       hpText.setOrigin(0.5);
@@ -454,7 +430,7 @@ export class ExplorationUI {
 
       const mpText = this.scene.add.text(LEFT_CX, y + 68, `MP: ${mp}/${stats.maxMp}`, {
         fontSize: '9px',
-        fontFamily: 'monospace',
+        fontFamily: 'JetBrains Mono',
         color: C.text,
       });
       mpText.setOrigin(0.5);
@@ -476,7 +452,14 @@ export class ExplorationUI {
     const dotSpacing = 14;
     const maxDots = 8;
 
-    const roomIds = Object.keys(rooms).slice(0, maxDots);
+    const roomIds = Object.keys(rooms).sort((a, b) => {
+      if (a === currentRoomId) return -1;
+      if (b === currentRoomId) return 1;
+      const aVisited = visitedRoomIds.has(a) ? 1 : 0;
+      const bVisited = visitedRoomIds.has(b) ? 1 : 0;
+      if (aVisited !== bVisited) return bVisited - aVisited;
+      return 0;
+    }).slice(0, maxDots);
 
     roomIds.forEach((roomId, i) => {
       const x = mx + (i % 4) * dotSpacing - dotSpacing * 1.5;
@@ -486,8 +469,8 @@ export class ExplorationUI {
       if (roomId === currentRoomId) {
         color = C.primary;
       } else if (visitedRoomIds.has(roomId)) {
-        color = C.textMuted;
-      } else if (rooms[roomId]?.type === 'boss') {
+        color = 0x6366A1;
+      } else if (rooms[roomId]?.type === RoomType.Boss) {
         color = C.bossRed;
       } else {
         color = C.barBg;
@@ -500,8 +483,8 @@ export class ExplorationUI {
 
   addLogMessage(text: string): void {
     this.logMessages.push(text);
-    if (this.logMessages.length > 5) {
-      this.logMessages.splice(0, this.logMessages.length - 5);
+    if (this.logMessages.length > 10) {
+      this.logMessages.splice(0, this.logMessages.length - 10);
     }
     this.logText.setText(this.logMessages.join('\n'));
   }
@@ -516,71 +499,51 @@ export class ExplorationUI {
 
     const icon = this.scene.add.text(ROOM_CX, ROOM_CY - 60, '⚠', {
       fontSize: '32px',
-      color: '#FC5C5C',
+      color: '#EF4444',
     });
     icon.setOrigin(0.5);
     this.bossWarning.add(icon);
 
     const title = this.scene.add.text(ROOM_CX, ROOM_CY - 25, 'BOSS ROOM AHEAD', {
       fontSize: '20px',
-      fontFamily: 'monospace',
-      color: '#FC5C5C',
-      fontStyle: 'bold',
+      fontFamily: 'Fredoka',
+      color: '#EF4444',
+      fontStyle: '600',
     });
     title.setOrigin(0.5);
     this.bossWarning.add(title);
 
     const desc = this.scene.add.text(ROOM_CX, ROOM_CY + 10, 'A powerful guardian awaits.\nPrepare your party before entering.', {
       fontSize: '13px',
-      fontFamily: 'monospace',
+      fontFamily: 'DM Sans',
       color: C.text,
       align: 'center',
     });
     desc.setOrigin(0.5);
     this.bossWarning.add(desc);
 
-    const enterBg = this.scene.add.rectangle(0, 0, 120, 36, C.bossRed);
-    const enterLabel = this.scene.add.text(0, 0, 'Enter', {
-      fontSize: '15px',
-      fontFamily: 'monospace',
-      color: '#FFFFFF',
-    });
-    enterLabel.setOrigin(0.5);
-    const enterBtn = this.scene.add.container(ROOM_CX - 70, ROOM_CY + 70, [enterBg, enterLabel]);
-    enterBtn.setSize(120, 36);
-    enterBtn.setInteractive({ useHandCursor: true });
-    enterBtn.on('pointerover', () => enterBg.setFillStyle(0xef4444));
-    enterBtn.on('pointerout', () => enterBg.setFillStyle(C.bossRed));
-    enterBtn.on('pointerdown', () => {
-      this.bossWarning.setVisible(false);
-      this.callbacks.onBattle(enemyId);
-    });
-    this.bossWarning.add(enterBtn);
+    const enterBtn = this.makeButton(
+      ROOM_CX - 70, ROOM_CY + 70,
+      120, 36, 'Enter', C.bossRed, 0xDC2626,
+      () => {
+        this.bossWarning.setVisible(false);
+        this.callbacks.onBattle(enemyId);
+      },
+    );
+    this.bossWarning.add(enterBtn.container);
 
-    const retreatBg = this.scene.add.rectangle(0, 0, 120, 36, 0x3b3870);
-    retreatBg.setStrokeStyle(1, C.border);
-    const retreatLabel = this.scene.add.text(0, 0, 'Retreat', {
-      fontSize: '15px',
-      fontFamily: 'monospace',
-      color: C.text,
-    });
-    retreatLabel.setOrigin(0.5);
-    const retreatBtn = this.scene.add.container(ROOM_CX + 70, ROOM_CY + 70, [retreatBg, retreatLabel]);
-    retreatBtn.setSize(120, 36);
-    retreatBtn.setInteractive({ useHandCursor: true });
-    retreatBtn.on('pointerover', () => retreatBg.setFillStyle(C.primaryHover));
-    retreatBtn.on('pointerout', () => retreatBg.setFillStyle(0x3b3870));
-    retreatBtn.on('pointerdown', () => {
-      this.bossWarning.setVisible(false);
-      if (this.callbacks.onRetreatFromBoss) {
-        this.callbacks.onRetreatFromBoss();
-      }
-    });
-    this.bossWarning.add(retreatBtn);
-  }
-
-  showNewGameArea(): void {
-    this.addLogMessage('Entered a new dungeon area.');
+    const retreatBtn = this.makeButton(
+      ROOM_CX + 70, ROOM_CY + 70,
+      120, 36, 'Retreat', 0x3B3870, C.primaryHover,
+      () => {
+        this.bossWarning.setVisible(false);
+        if (this.callbacks.onRetreatFromBoss) {
+          this.callbacks.onRetreatFromBoss();
+        }
+      },
+      { borderColor: C.border, labelColor: C.text },
+    );
+    this.bossWarning.add(retreatBtn.container);
   }
 
   hideEncounterPanel(): void {
@@ -600,7 +563,53 @@ export class ExplorationUI {
   }
 
   destroy(): void {
-    this.scene.children.removeAll();
+    this.exitButtons = [];
+    this.partyMemberElements = [];
+    this.logMessages = [];
+    this.mainContainer.destroy(true);
+  }
+
+  private makeButton(
+    x: number, y: number,
+    w: number, h: number,
+    label: string,
+    bgColor: number,
+    hoverColor: number,
+    onClick: () => void,
+    options?: {
+      borderColor?: number;
+      labelColor?: string;
+      fontSize?: string;
+      fontStyle?: string;
+      labelY?: number;
+    },
+  ): { container: Phaser.GameObjects.Container; bg: Phaser.GameObjects.Rectangle; label: Phaser.GameObjects.Text } {
+    const bg = this.scene.add.rectangle(0, 0, w, h, bgColor);
+    if (options?.borderColor !== undefined) {
+      bg.setStrokeStyle(1, options.borderColor);
+    }
+
+    const labelY = options?.labelY ?? 0;
+    const labelColor = options?.labelColor ?? '#F0EFFF';
+    const fontSize = options?.fontSize ?? '14px';
+
+    const labelText = this.scene.add.text(0, labelY, label, {
+      fontSize,
+      fontFamily: 'DM Sans',
+      color: labelColor,
+      ...(options?.fontStyle ? { fontStyle: options.fontStyle } : {}),
+    });
+    labelText.setOrigin(0.5);
+
+    const container = this.scene.add.container(x, y, [bg, labelText]);
+    container.setSize(w, h);
+    container.setInteractive({ useHandCursor: true });
+
+    container.on('pointerover', () => bg.setFillStyle(hoverColor));
+    container.on('pointerout', () => bg.setFillStyle(bgColor));
+    container.on('pointerdown', onClick);
+
+    return { container, bg, label: labelText };
   }
 
   private getHpColor(current: number, max: number): number {

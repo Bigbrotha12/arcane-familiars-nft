@@ -1,72 +1,111 @@
 import Phaser from 'phaser';
 import { AREAS, FAMILIARS } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '../api/client';
+import { gameApiClient } from '@/api/client';
+import { SCENE_KEYS } from '@/constants/scenes';
 
 interface AreaCard {
   areaId: string;
+  areaName: string;
   unlocked: boolean;
   border: Phaser.GameObjects.Rectangle;
   texts: Phaser.GameObjects.Text[];
 }
 
 export class WorldMapScene extends Phaser.Scene {
+  private readonly MESSAGE_DISPLAY_MS = 2000;
   private cards: AreaCard[] = [];
   private loadingText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
-  private messageTimer: Phaser.Time.TimerEvent | null = null;
+  private timers: Phaser.Time.TimerEvent[] = [];
+  private _sceneGeneration = 0;
+  private selectedCardIndex = -1;
+  private ariaLiveElement: HTMLDivElement | null = null;
 
   constructor() {
-    super({ key: 'WorldMapScene' });
+    super({ key: SCENE_KEYS.WORLD_MAP });
+    this.ariaLiveElement = document.createElement('div');
+    this.ariaLiveElement.setAttribute('role', 'status');
+    this.ariaLiveElement.setAttribute('aria-live', 'polite');
+    this.ariaLiveElement.setAttribute('aria-atomic', 'true');
+    this.ariaLiveElement.style.position = 'absolute';
+    this.ariaLiveElement.style.left = '-9999px';
+    this.ariaLiveElement.style.width = '1px';
+    this.ariaLiveElement.style.height = '1px';
+    this.ariaLiveElement.style.overflow = 'hidden';
+    document.body.appendChild(this.ariaLiveElement);
+  }
+
+  init(): void {
+    this._sceneGeneration++;
+    this.cards = [];
+    this.timers = [];
+    this.selectedCardIndex = -1;
+    this.events.off('shutdown', this.cleanupTimers, this);
+    this.events.on('shutdown', this.cleanupTimers, this);
   }
 
   async create(): Promise<void> {
+    const gen = this._sceneGeneration;
     const { width, height } = this.scale;
 
     this.add.text(width / 2, 35, 'Arcane Familiars', {
       fontSize: '32px',
-      fontFamily: 'monospace',
+      fontFamily: 'Fredoka',
+      fontStyle: '600',
       color: '#7C5CFC',
     }).setOrigin(0.5);
 
     this.add.text(width / 2, 70, 'Choose a Dungeon', {
       fontSize: '15px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontFamily: 'DM Sans',
+      fontStyle: '500',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
 
     this.loadingText = this.add.text(width / 2, height / 2, 'Loading...', {
       fontSize: '18px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontFamily: 'DM Sans',
+      fontStyle: '400',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    this.messageText = this.add.text(width / 2, 330, '', {
+    this.messageText = this.add.text(width / 2, height - 55, '', {
       fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#ef4444',
+      fontFamily: 'DM Sans',
+      fontStyle: '400',
+      color: '#EF4444',
     }).setOrigin(0.5).setAlpha(0);
 
-    const statsBg = this.add.rectangle(width / 2, height - 18, width - 40, 36, 0x1e1b4b);
-    statsBg.setStrokeStyle(1, 0x3b3870);
+    const statsBg = this.add.rectangle(width / 2, height - 18, width - 40, 36, 0x1E1B4B);
+    statsBg.setStrokeStyle(1, 0x3B3870);
 
     this.statsText = this.add.text(width / 2, height - 18, '', {
-      fontSize: '13px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontSize: '12px',
+      fontFamily: 'JetBrains Mono',
+      fontStyle: '500',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
+
+    this.setupKeyboardNavigation();
 
     try {
       const result = await gameApiClient.loadGameState();
+      if (this._sceneGeneration !== gen) return;
+
       const state = result.state;
 
       this.statsText.setText(
-        `Battles: ${state.battleCount}  |  Wins: ${state.winCount}  |  Currency: ${state.inventory.currency}`
+        `Battles: ${state.battleCount}  |  Wins: ${state.winCount}  |  Currency: ${state.inventory?.currency ?? 0}`
       );
 
-      this.createAreaCards(state.unlockedAreas ?? ['verdantMeadow']);
+      const unlockedAreas = state.unlockedAreas?.length ? state.unlockedAreas : ['verdantMeadow'];
+      this.createAreaCards(unlockedAreas);
       this.loadingText.setAlpha(0);
-    } catch {
+    } catch (err) {
+      if (this._sceneGeneration !== gen) return;
+      console.error('WorldMapScene: failed to load game state:', err);
+
       this.statsText.setText('Battles: 0  |  Wins: 0  |  Currency: 0');
       this.createAreaCards(['verdantMeadow']);
       this.loadingText.setAlpha(0);
@@ -74,39 +113,49 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private createAreaCards(unlockedAreas: string[]): void {
-    const { width } = this.scale;
+    const { width, height } = this.scale;
     const areaList = Object.values(AREAS);
     const startY = 100;
     const cardHeight = 125;
     const gap = 12;
     const cardWidth = width - 100;
 
-    areaList.forEach((area, index) => {
+    const availableHeight = height - 60 - startY;
+    const maxCards = Math.max(1, Math.floor(availableHeight / (cardHeight + gap)));
+    const displayAreas = areaList.length > maxCards ? areaList.slice(0, maxCards) : areaList;
+
+    if (areaList.length > maxCards) {
+      console.warn(`WorldMapScene: ${areaList.length} areas exceed available space. Displaying ${maxCards} of ${areaList.length}.`);
+    }
+
+    displayAreas.forEach((area, index) => {
       const unlocked = unlockedAreas.includes(area.id);
       const y = startY + index * (cardHeight + gap);
       const cx = width / 2;
 
       const bossData = FAMILIARS[area.bossId];
 
-      const border = this.add.rectangle(cx, y + cardHeight / 2, cardWidth, cardHeight, unlocked ? 0x1e1b4b : 0x111827);
-      border.setStrokeStyle(2, unlocked ? 0x7C5CFC : 0x374151);
+      const border = this.add.rectangle(cx, y + cardHeight / 2, cardWidth, cardHeight, unlocked ? 0x1E1B4B : 0x15133A);
+      border.setStrokeStyle(2, unlocked ? 0x7C5CFC : 0x3B3870);
 
       const texts: Phaser.GameObjects.Text[] = [];
       const left = cx - cardWidth / 2 + 15;
 
       texts.push(
         this.add.text(left, y + 8, area.name, {
-          fontSize: '18px',
-          fontFamily: 'monospace',
-          color: unlocked ? '#7C5CFC' : '#6b7280',
+          fontSize: '19px',
+          fontFamily: 'Fredoka',
+          fontStyle: '600',
+          color: unlocked ? '#7C5CFC' : '#6366A1',
         })
       );
 
       texts.push(
         this.add.text(left, y + 32, area.description, {
           fontSize: '12px',
-          fontFamily: 'monospace',
-          color: unlocked ? '#a0a0b0' : '#4b5563',
+          fontFamily: 'DM Sans',
+          fontStyle: '400',
+          color: unlocked ? '#A5A3C4' : '#6366A1',
         })
       );
 
@@ -114,53 +163,126 @@ export class WorldMapScene extends Phaser.Scene {
       texts.push(
         this.add.text(left, y + 54, `Level ${area.levelRange[0]}-${area.levelRange[1]}  |  Boss: ${bossName}`, {
           fontSize: '11px',
-          fontFamily: 'monospace',
-          color: unlocked ? '#808090' : '#374151',
+          fontFamily: 'DM Sans',
+          fontStyle: '400',
+          color: unlocked ? '#6366A1' : '#3B3870',
         })
       );
 
       texts.push(
         this.add.text(left, y + 74, `Recommended Level: ${area.levelRange[0]}+`, {
           fontSize: '11px',
-          fontFamily: 'monospace',
-          color: unlocked ? '#808090' : '#374151',
+          fontFamily: 'DM Sans',
+          fontStyle: '400',
+          color: unlocked ? '#6366A1' : '#3B3870',
         })
       );
 
-      const statusColor = unlocked ? '#10b981' : '#ef4444';
+      const statusColor = unlocked ? '#10B981' : '#EF4444';
       const statusText = unlocked ? '● AVAILABLE' : '● LOCKED';
       texts.push(
         this.add.text(cx + cardWidth / 2 - 15, y + 8, statusText, {
           fontSize: '11px',
-          fontFamily: 'monospace',
+          fontFamily: 'DM Sans',
+          fontStyle: '500',
           color: statusColor,
         }).setOrigin(1, 0)
       );
 
       if (unlocked) {
         border.setInteractive({ useHandCursor: true });
-        border.on('pointerover', () => border.setFillStyle(0x2a2560));
-        border.on('pointerout', () => border.setFillStyle(0x1e1b4b));
+        border.on('pointerover', () => border.setFillStyle(0x2D2A5E));
+        border.on('pointerout', () => border.setFillStyle(0x1E1B4B));
         border.on('pointerdown', () => {
-          this.scene.start('PartySelectScene', { areaId: area.id });
+          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: area.id });
         });
       } else {
-        border.setInteractive({ useHandCursor: true });
+        border.setInteractive();
         border.on('pointerover', () => this.showMessage('Not yet unlocked'));
         border.on('pointerout', () => this.hideMessage());
       }
 
-      this.cards.push({ areaId: area.id, unlocked, border, texts });
+      this.cards.push({ areaId: area.id, areaName: area.name, unlocked, border, texts });
     });
   }
 
   private showMessage(msg: string): void {
     this.messageText.setText(msg).setAlpha(1);
-    if (this.messageTimer) this.messageTimer.remove();
-    this.messageTimer = this.time.delayedCall(2000, () => this.hideMessage());
+    this.cleanupTimers();
+    const timer = this.time.delayedCall(this.MESSAGE_DISPLAY_MS, () => this.hideMessage());
+    this.timers.push(timer);
   }
 
   private hideMessage(): void {
     this.messageText.setAlpha(0);
+  }
+
+  private cleanupTimers(): void {
+    for (const timer of this.timers) {
+      timer.destroy();
+    }
+    this.timers = [];
+  }
+
+  private announceForScreenReader(message: string): void {
+    if (this.ariaLiveElement) {
+      this.ariaLiveElement.textContent = message;
+    }
+  }
+
+  private setupKeyboardNavigation(): void {
+    this.input.keyboard?.on('keydown-TAB', (event: KeyboardEvent) => {
+      const unlockedIndices = this.cards
+        .map((card, i) => ({ card, i }))
+        .filter(({ card }) => card.unlocked)
+        .map(({ i }) => i);
+
+      if (unlockedIndices.length === 0) return;
+
+      const currentPos = unlockedIndices.indexOf(this.selectedCardIndex);
+      if (event.shiftKey) {
+        const nextPos = (currentPos - 1 + unlockedIndices.length) % unlockedIndices.length;
+        this.focusCard(unlockedIndices[nextPos]);
+      } else {
+        const nextPos = (currentPos + 1) % unlockedIndices.length;
+        this.focusCard(unlockedIndices[nextPos]);
+      }
+    });
+
+    this.input.keyboard?.on('keydown-ENTER', () => {
+      if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
+        const card = this.cards[this.selectedCardIndex];
+        if (card.unlocked) {
+          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
+        }
+      }
+    });
+
+    this.input.keyboard?.on('keydown-SPACE', () => {
+      if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
+        const card = this.cards[this.selectedCardIndex];
+        if (card.unlocked) {
+          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
+        }
+      }
+    });
+  }
+
+  private focusCard(index: number): void {
+    if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
+      const prevCard = this.cards[this.selectedCardIndex];
+      prevCard.border.setStrokeStyle(2, prevCard.unlocked ? 0x7C5CFC : 0x3B3870);
+      prevCard.border.setFillStyle(0x1E1B4B);
+    }
+
+    this.selectedCardIndex = index;
+
+    if (index >= 0 && index < this.cards.length) {
+      const card = this.cards[index];
+      card.border.setStrokeStyle(3, 0xA78BFA);
+
+      const status = card.unlocked ? 'Available' : 'Locked';
+      this.announceForScreenReader(`${card.areaName} — ${status}`);
+    }
   }
 }

@@ -9,6 +9,9 @@ interface DungeonFailData {
 export class DungeonFailScene extends Phaser.Scene {
   private roomsExplored = 0;
   private enemiesDefeated = 0;
+  private activeTweens: Phaser.Tweens.Tween[] = [];
+  private isExiting = false;
+  private keyboardHandlers: { enter: () => void; space: () => void } | null = null;
 
   constructor() {
     super({ key: 'DungeonFailScene' });
@@ -22,69 +25,138 @@ export class DungeonFailScene extends Phaser.Scene {
   create(): void {
     const { width, height } = this.scale;
 
-    const overlay = this.add.rectangle(width / 2, height / 2, width, height, 0x0a0a0f);
+    const SKULL_Y_RATIO = 0.25;
+    const TITLE_Y_RATIO = 0.38;
+    const SUBTITLE_Y_RATIO = 0.44;
+    const DIVIDER_Y_RATIO = 0.52;
+    const ROOMS_STAT_Y_RATIO = 0.57;
+    const ENEMIES_STAT_Y_RATIO = 0.62;
+    const BUTTON_Y_RATIO = 0.75;
+    const ERROR_Y_OFFSET = 48;
+    const BUTTON_WIDTH = 240;
+    const BUTTON_HEIGHT = 40;
+    const DIVIDER_WIDTH = 200;
 
-    const skull = this.add.text(width / 2, height * 0.25, '☠', {
+    this.add.rectangle(width / 2, height / 2, width, height, 0x0A0A0F);
+
+    const skull = this.add.text(width / 2, height * SKULL_Y_RATIO, '☠', {
       fontSize: '64px',
-      fontFamily: 'monospace',
-      color: '#ef4444',
+      fontFamily: 'Fredoka',
+      fontStyle: '600',
+      color: '#EF4444',
     }).setOrigin(0.5);
 
-    this.tweens.add({
+    const skullTween = this.tweens.add({
       targets: skull,
       alpha: { from: 0.6, to: 1 },
       duration: 1500,
       yoyo: true,
       repeat: -1,
     });
+    this.activeTweens.push(skullTween);
 
-    this.add.text(width / 2, height * 0.38, 'Defeated', {
+    this.events.on('shutdown', this.cleanupTweens, this);
+    this.events.on('destroy', this.cleanupTweens, this);
+
+    this.add.text(width / 2, height * TITLE_Y_RATIO, 'Defeated', {
       fontSize: '36px',
-      fontFamily: 'monospace',
-      color: '#ef4444',
+      fontFamily: 'Fredoka',
+      fontStyle: '600',
+      color: '#EF4444',
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, height * 0.44, 'Your party has fallen...', {
+    this.add.text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen...', {
       fontSize: '16px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontFamily: 'DM Sans',
+      fontStyle: '400',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    const lineY = height * 0.52;
-    this.add.rectangle(width / 2, lineY, 200, 1, 0x3b3870);
+    this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, 1, 0x3B3870);
 
-    this.add.text(width / 2, height * 0.57, `Rooms Explored: ${this.roomsExplored}`, {
+    this.add.text(width / 2, height * ROOMS_STAT_Y_RATIO, `Rooms Explored: ${this.roomsExplored}`, {
       fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontFamily: 'JetBrains Mono',
+      fontStyle: '500',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, height * 0.62, `Enemies Defeated: ${this.enemiesDefeated}`, {
+    this.add.text(width / 2, height * ENEMIES_STAT_Y_RATIO, `Enemies Defeated: ${this.enemiesDefeated}`, {
       fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#a0a0b0',
+      fontFamily: 'JetBrains Mono',
+      fontStyle: '500',
+      color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    const btnBg = this.add.rectangle(width / 2, height * 0.75, 240, 40, 0x7C5CFC);
-    btnBg.setStrokeStyle(1, 0x9b7eff);
+    const btnBg = this.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x7C5CFC);
 
-    const btnText = this.add.text(width / 2, height * 0.75, 'Return to World Map', {
+    const btnText = this.add.text(0, 0, 'Return to World Map', {
       fontSize: '14px',
-      fontFamily: 'monospace',
-      color: '#ffffff',
+      fontFamily: 'DM Sans',
+      fontStyle: '600',
+      color: '#F0EFFF',
     }).setOrigin(0.5);
 
-    btnBg.setInteractive({ useHandCursor: true });
-    btnBg.on('pointerover', () => btnBg.setFillStyle(0x6b4ce0));
-    btnBg.on('pointerout', () => btnBg.setFillStyle(0x7C5CFC));
-    btnBg.on('pointerdown', async () => {
-      btnText.setText('Leaving dungeon...');
-      btnBg.disableInteractive();
-      try {
-        await gameApiClient.exitDungeon();
-      } catch {
-      }
-      this.scene.start('WorldMapScene');
+    const button = this.add.container(width / 2, height * BUTTON_Y_RATIO, [btnBg, btnText]);
+    button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
+    button.setInteractive({ useHandCursor: true });
+
+    const errorText = this.add.text(width / 2, height * BUTTON_Y_RATIO + ERROR_Y_OFFSET, '', {
+      fontSize: '12px',
+      fontFamily: 'DM Sans',
+      fontStyle: '400',
+      color: '#EF4444',
+    }).setOrigin(0.5);
+
+    button.on('pointerover', () => {
+      if (!this.isExiting) btnBg.setFillStyle(0x6A4AE8);
     });
+    button.on('pointerout', () => {
+      if (!this.isExiting) btnBg.setFillStyle(0x7C5CFC);
+    });
+    button.on('pointerdown', () => this.handleExit(btnBg, btnText, errorText));
+
+    const onEnter = () => this.handleExit(btnBg, btnText, errorText);
+    const onSpace = () => this.handleExit(btnBg, btnText, errorText);
+    this.input.keyboard?.on('keydown-ENTER', onEnter);
+    this.input.keyboard?.on('keydown-SPACE', onSpace);
+    this.keyboardHandlers = { enter: onEnter, space: onSpace };
+  }
+
+  private async handleExit(
+    btnBg: Phaser.GameObjects.Rectangle,
+    btnText: Phaser.GameObjects.Text,
+    errorText: Phaser.GameObjects.Text,
+  ): Promise<void> {
+    if (this.isExiting) return;
+    this.isExiting = true;
+
+    errorText.setText('');
+    btnText.setText('Leaving dungeon...');
+    btnBg.setAlpha(0.6);
+
+    try {
+      await gameApiClient.exitDungeon();
+      this.scene.start('WorldMapScene');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to exit dungeon';
+      errorText.setText(message);
+      btnText.setText('Return to World Map');
+      btnBg.setAlpha(1);
+      this.isExiting = false;
+    }
+  }
+
+  private cleanupTweens(): void {
+    for (const tween of this.activeTweens) {
+      tween.stop();
+    }
+    this.activeTweens = [];
+
+    if (this.keyboardHandlers) {
+      this.input.keyboard?.off('keydown-ENTER', this.keyboardHandlers.enter);
+      this.input.keyboard?.off('keydown-SPACE', this.keyboardHandlers.space);
+      this.keyboardHandlers = null;
+    }
   }
 }

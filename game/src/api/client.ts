@@ -1,4 +1,4 @@
-import type { GameState, BattleState, BattleAction, ActionResult, DungeonState, Room, Area } from '@arcane-familiars/game-logic';
+import type { GameState, BattleState, BattleAction, BattleTurnResult, DungeonState, Room, Area, Inventory } from '@arcane-familiars/game-logic';
 
 class GameApiClient {
   private baseUrl: string;
@@ -23,7 +23,13 @@ class GameApiClient {
     };
     if (body) options.body = JSON.stringify(body);
 
-    const res = await fetch(url, options);
+    let res: Response;
+    try {
+      res = await fetch(url, options);
+    } catch (err) {
+      throw new Error(`Network error: ${(err as Error).message}`);
+    }
+
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
       throw new Error(err.error || `Request failed: ${res.status}`);
@@ -43,23 +49,27 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/enter', { anonymousId: this.anonymousId, areaId });
   }
 
-  async exploreRoom(roomId: string): Promise<{ room: Room; encounter: boolean; enemy: string | null; treasure: string | null }> {
+  async exploreRoom(roomId: string): Promise<{ room: Room; encounter: boolean; enemy: string | null; treasure: boolean; treasureItem: string | null }> {
     return this.request('POST', '/api/game/dungeon/explore', { anonymousId: this.anonymousId, roomId });
+  }
+
+  async collectTreasure(roomId: string, itemId: string): Promise<{ success: boolean; inventory: Inventory }> {
+    return this.request('POST', '/api/game/dungeon/collect-treasure', { anonymousId: this.anonymousId, roomId, itemId });
   }
 
   async exitDungeon(): Promise<{ success: boolean }> {
     return this.request('POST', '/api/game/dungeon/exit', { anonymousId: this.anonymousId });
   }
 
-  async startBattle(enemyId: string, isBoss?: boolean): Promise<{ battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, enemyId, isBoss });
+  async startBattle(playerFamiliarId: string, enemyFamiliarId: string): Promise<{ battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId, enemyFamiliarId });
   }
 
-  async battleAction(battleId: string, action: BattleAction): Promise<{ battle: BattleState; playerResult: ActionResult; enemyResult: ActionResult; outcome: string }> {
+  async battleAction(battleId: string, action: BattleAction): Promise<{ turnResult: BattleTurnResult }> {
     return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action });
   }
 
-  async fleeBattle(battleId: string): Promise<{ battle: BattleState; outcome: string }> {
+  async fleeBattle(battleId: string): Promise<{ success: boolean; message: string; battle: BattleState }> {
     return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId });
   }
 }

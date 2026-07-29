@@ -1,15 +1,18 @@
 import Phaser from 'phaser';
 import type { DungeonState, Area } from '@arcane-familiars/game-logic';
-import { AREAS } from '@arcane-familiars/game-logic';
-import { GameApiClient } from '../api/client';
-import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
+import { AREAS, RoomType } from '@arcane-familiars/game-logic';
+import { gameApiClient } from '@/api/client';
+import { ExplorationUI, ExplorationUICallbacks } from '@/ui/ExplorationUI';
 
 interface ExplorationSceneData {
   areaId: string;
 }
 
 export class ExplorationScene extends Phaser.Scene {
-  private gameApi!: GameApiClient;
+  private readonly ENCOUNTER_DELAY_MS = 300;
+  private readonly TREASURE_DELAY_MS = 300;
+  private readonly EXITS_DELAY_MS = 200;
+  private gameApi = gameApiClient;
   private explorationUI!: ExplorationUI;
   private dungeon: DungeonState | null = null;
   private area: Area | null = null;
@@ -17,6 +20,7 @@ export class ExplorationScene extends Phaser.Scene {
   private isProcessing = false;
   private visitedRoomIds: Set<string> = new Set();
   private currentRoomIndex = 0;
+  private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
     super({ key: 'ExplorationScene' });
@@ -32,13 +36,15 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
-    this.gameApi = new GameApiClient();
-
     const callbacks: ExplorationUICallbacks = {
-      onNavigate: (roomId) => this.navigateToRoom(roomId),
+      onNavigate: (roomId) => this.navigateToRoom(roomId).catch((err) => {
+        console.error('Navigate error:', err);
+      }),
       onBattle: (enemyId) => this.startBattle(enemyId),
       onFlee: () => this.handleFlee(),
-      onTakeTreasure: (itemId) => this.handleTakeTreasure(itemId),
+      onTakeTreasure: (itemId) => this.handleTakeTreasure(itemId).catch((err) => {
+        console.error('Take treasure error:', err);
+      }),
       onLeaveTreasure: () => this.handleLeaveTreasure(),
       onExitDungeon: () => this.exitDungeon(),
       onRetreatFromBoss: () => this.handleBossRetreat(),
@@ -48,8 +54,8 @@ export class ExplorationScene extends Phaser.Scene {
     if (!area) {
       this.add.text(400, 300, `Unknown area: ${this.areaId}`, {
         fontSize: '16px',
-        fontFamily: 'monospace',
-        color: '#ef4444',
+        fontFamily: 'DM Sans',
+        color: '#EF4444',
       }).setOrigin(0.5);
       return;
     }
@@ -57,6 +63,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.area = area;
     this.explorationUI = new ExplorationUI(this, callbacks);
     this.explorationUI.init(area);
+    this.events.on('shutdown', this.cleanupTimers, this);
 
     await this.enterDungeon();
   }
@@ -67,7 +74,10 @@ export class ExplorationScene extends Phaser.Scene {
       this.dungeon = result.dungeon;
 
       const currentRoom = result.dungeon.rooms[result.dungeon.currentRoomId];
-      if (!currentRoom) return;
+      if (!currentRoom) {
+        console.error(`Room ${result.dungeon.currentRoomId} not found in dungeon`);
+        return;
+      }
 
       this.visitedRoomIds.add(currentRoom.id);
       this.currentRoomIndex = 0;
@@ -81,7 +91,6 @@ export class ExplorationScene extends Phaser.Scene {
       );
       this.explorationUI.updateMiniMap(result.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
       this.explorationUI.addLogMessage(`Entering ${this.area!.name}...`);
-      this.explorationUI.showNewGameArea();
       this.explorationUI.showExits(currentRoom.exits);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to enter dungeon';
@@ -112,31 +121,32 @@ export class ExplorationScene extends Phaser.Scene {
       );
       this.explorationUI.updateMiniMap(this.dungeon.rooms, roomId, this.visitedRoomIds);
 
-      const isBossRoom = result.room.type === 'boss';
+      const isBossRoom = result.room.type === RoomType.Boss;
 
       if (isBossRoom) {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
         this.explorationUI.showBossWarning(this.area.bossId);
+        this.isProcessing = false;
       } else if (result.encounter && result.enemy) {
         this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
-        this.time.delayedCall(300, () => {
+        this.timers.push(this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
           this.explorationUI.showEncounter(result.enemy!);
-        });
+          this.isProcessing = false;
+        }));
       } else if (result.treasure) {
         this.explorationUI.addLogMessage(`You find something in ${result.room.name}.`);
-        this.time.delayedCall(300, () => {
-          this.explorationUI.showTreasure(result.treasure!);
-        });
+        this.timers.push(this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
+          this.explorationUI.showTreasure(result.treasureItem!);
+          this.isProcessing = false;
+        }));
       } else {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
-        this.time.delayedCall(200, () => {
+        this.timers.push(this.time.delayedCall(this.EXITS_DELAY_MS, () => {
           this.explorationUI.showExits(result.room.exits);
           this.isProcessing = false;
-        });
+        }));
         return;
       }
-
-      this.isProcessing = false;
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to explore room';
       this.explorationUI.addLogMessage(`Error: ${message}`);
@@ -147,9 +157,8 @@ export class ExplorationScene extends Phaser.Scene {
 
   private startBattle(enemyId: string): void {
     if (!this.area) return;
-    const isBoss = this.area.bossId === enemyId;
     this.explorationUI.destroy();
-    this.scene.start('BattleScene', { enemyId, isBoss, areaId: this.areaId });
+    this.scene.start('BattleScene', { enemyId, returnScene: 'ExplorationScene' });
   }
 
   private handleFlee(): void {
@@ -163,14 +172,23 @@ export class ExplorationScene extends Phaser.Scene {
     }
   }
 
-  private handleTakeTreasure(itemId: string): void {
-    this.explorationUI.addLogMessage(`You took ${itemId}.`);
+  private async handleTakeTreasure(itemId: string): Promise<void> {
+    if (!this.dungeon) return;
+
+    const currentRoomId = this.dungeon.currentRoomId;
+
+    try {
+      await this.gameApi.collectTreasure(currentRoomId, itemId);
+      this.explorationUI.addLogMessage(`You took ${itemId}.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to collect treasure';
+      this.explorationUI.addLogMessage(message);
+    }
+
     this.explorationUI.hideTreasurePanel();
-    if (this.dungeon) {
-      const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
-      if (currentRoom) {
-        this.explorationUI.showExits(currentRoom.exits);
-      }
+    const currentRoom = this.dungeon.rooms[currentRoomId];
+    if (currentRoom) {
+      this.explorationUI.showExits(currentRoom.exits);
     }
   }
 
@@ -201,7 +219,9 @@ export class ExplorationScene extends Phaser.Scene {
 
     try {
       await this.gameApi.exitDungeon();
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      console.error('Exit dungeon error:', message);
       // Continue to world map even if exit API fails
     }
 
@@ -209,9 +229,21 @@ export class ExplorationScene extends Phaser.Scene {
     this.scene.start('WorldMapScene');
   }
 
+  private cleanupTimers(): void {
+    for (const timer of this.timers) {
+      timer.destroy();
+    }
+    this.timers = [];
+  }
+
   private getRoomIndex(roomId: string): number {
     if (!this.dungeon) return 0;
-    const roomIds = Object.keys(this.dungeon.rooms).sort();
+    const roomIds = Object.keys(this.dungeon.rooms).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
     return roomIds.indexOf(roomId);
   }
 }

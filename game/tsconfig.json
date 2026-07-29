@@ -1,5 +1,8 @@
 {
   "compilerOptions": {
+    "paths": {
+      "@/*": ["./src/*", "../packages/game-logic/src/*"]
+    },
     "target": "ES2020",
     "module": "ESNext",
     "moduleResolution": "bundler",
@@ -10,6 +13,7 @@
     "resolveJsonModule": true,
     "isolatedModules": true,
     "skipLibCheck": true,
+    "types": ["vite/client"],
     "allowImportingTsExtensions": true,
     "noEmit": true
   },
