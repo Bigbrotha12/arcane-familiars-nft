@@ -102,10 +102,7 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
         this.explorationUI.showExits(currentRoom.exits);
       } else {
-        this.explorationUI.addLogMessage('No active dungeon. Returning to world map...');
-        this.time.delayedCall(1000, () => {
-          this.scene.start('WorldMapScene');
-        });
+        await this.enterDungeon();
       }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load dungeon state';
