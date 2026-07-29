@@ -1,5 +1,0 @@
-#!/bin/bash
-echo "Application starting..."
-cd /server
-npm install
-pm2 start server.js

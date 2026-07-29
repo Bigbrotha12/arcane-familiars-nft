@@ -12,7 +12,7 @@ export default function App(): JSX.Element {
           <Route path="/" element={<LandingPage />} />
           <Route path="/app" element={<Layout />}>
             <Route index element={<ComingSoon />} />
-            <Route path="game" element={<ComingSoon />} />
+            <Route path="game" element={<GameCanvas />} />
             <Route path="collection" element={<ComingSoon />} />
             <Route path="marketplace" element={<ComingSoon />} />
             <Route path="minter" element={<ComingSoon />} />
