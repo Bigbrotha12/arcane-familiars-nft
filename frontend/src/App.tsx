@@ -1,9 +1,8 @@
 import { StrictMode } from 'react';
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
-import Layout from './components/00_Layout/Layout';
+import Layout from './components/layout/Layout';
 import ComingSoon from './components/Common/ComingSoon';
-import LandingPage from './components/00_Layout/LandingPage';
-import GameCanvas from './components/Game/GameCanvas';
+import LandingPage from './components/layout/LandingPage';
 
 export default function App(): JSX.Element {
   return (

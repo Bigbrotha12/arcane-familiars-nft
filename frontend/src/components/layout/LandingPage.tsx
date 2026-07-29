@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import Nav from '../layout/Nav'
-import Footer from '../layout/Footer'
+import Nav from './Nav'
+import Footer from './Footer'
 import Modal from '../ui/Modal'
 import Button from '../ui/Button'
 import Hero from '../landing/Hero'
