@@ -147,7 +147,9 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       const state = result.state;
-      const familiarIds = state.playerFamiliars?.length ? state.playerFamiliars : DEFAULT_FALLBACK_FAMILIARS;
+      const savedFamiliars = state.playerFamiliars || [];
+      const validSavedFamiliars = savedFamiliars.filter((id) => FAMILIARS[id]);
+      const familiarIds = validSavedFamiliars.length >= MAX_PARTY_SIZE ? validSavedFamiliars : DEFAULT_FALLBACK_FAMILIARS;
 
       this.loadingText.setAlpha(0);
       this.createFamiliarCards(familiarIds);

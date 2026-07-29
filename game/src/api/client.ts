@@ -72,6 +72,10 @@ class GameApiClient {
   async fleeBattle(battleId: string): Promise<{ success: boolean; message: string; battle: BattleState }> {
     return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId });
   }
+
+  async swapFamiliar(battleId: string, newFamiliarId: string): Promise<{ battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId });
+  }
 }
 
 export const gameApiClient = new GameApiClient();

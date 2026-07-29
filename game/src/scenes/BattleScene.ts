@@ -6,6 +6,7 @@ import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '@/ui/BattleU
 interface BattleSceneData {
   enemyId: string;
   returnScene?: string;
+  areaId?: string;
 }
 
 export class BattleScene extends Phaser.Scene {
@@ -31,6 +32,8 @@ export class BattleScene extends Phaser.Scene {
   private isProcessingAction = false;
   private enemyId!: string;
   private returnScene!: string;
+  private areaId?: string;
+  private activeFamiliarIndex = 0;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -39,6 +42,7 @@ export class BattleScene extends Phaser.Scene {
   init(data: BattleSceneData): void {
     this.enemyId = data.enemyId;
     this.returnScene = data.returnScene ?? 'WorldMapScene';
+    this.areaId = data.areaId;
     this.isProcessingAction = false;
     this.battleState = null;
   }
@@ -61,6 +65,9 @@ export class BattleScene extends Phaser.Scene {
           this.battleUI.showItemPanel(this.gameState.inventory.items);
         }
       },
+      onSwap: () => this.handleSwap().catch((err) => {
+        console.error('Swap handler error:', err);
+      }),
     };
 
     this.battleUI = new BattleUI(this, callbacks);
@@ -180,6 +187,39 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  private async handleSwap(): Promise<void> {
+    if (this.isProcessingAction || !this.battleState || !this.gameState) return;
+    
+    const party = this.gameState.activeParty || this.gameState.playerFamiliars;
+    if (!party || party.length < 2) {
+      this.battleUI.addLogMessage('No other familiars to swap with.');
+      return;
+    }
+
+    this.isProcessingAction = true;
+    this.battleUI.hideActionPanels();
+
+    const nextIndex = (this.activeFamiliarIndex + 1) % party.length;
+    const newFamiliarId = party[nextIndex];
+
+    try {
+      const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId);
+      this.battleState = result.battle;
+      this.activeFamiliarIndex = nextIndex;
+
+      this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
+      this.battleUI.addLogMessage(`Switched to ${result.battle.playerFamiliar.familiarData.name}!`);
+
+      this.battleUI.showMainActions();
+      this.isProcessingAction = false;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to swap familiar';
+      this.battleUI.addLogMessage(message);
+      this.battleUI.showMainActions();
+      this.isProcessingAction = false;
+    }
+  }
+
   private showActionResultVisual(result: ActionResult): void {
     const isDamage = result.effectType === EffectType.Damage
       || result.effectType === EffectType.Debuff
@@ -218,7 +258,7 @@ export class BattleScene extends Phaser.Scene {
 
   private handleContinue(): void {
     this.battleUI.destroy();
-    this.scene.start(this.returnScene);
+    this.scene.start(this.returnScene, { areaId: this.areaId });
   }
 
   private cleanupTimers(): void {
