@@ -65,7 +65,52 @@ export class ExplorationScene extends Phaser.Scene {
     this.explorationUI.init(area);
     this.events.on('shutdown', this.cleanupTimers, this);
 
-    await this.enterDungeon();
+    await this.loadDungeonState();
+  }
+
+  private async loadDungeonState(): Promise<void> {
+    try {
+      const { state } = await this.gameApi.loadGameState();
+      
+      if (state.dungeon) {
+        this.dungeon = state.dungeon;
+        this.areaId = state.dungeon.areaId;
+        this.area = AREAS[this.areaId];
+        
+        if (!this.area) {
+          this.explorationUI.addLogMessage(`Unknown area: ${this.areaId}`);
+          return;
+        }
+
+        const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
+        if (!currentRoom) {
+          console.error(`Room ${this.dungeon.currentRoomId} not found in dungeon`);
+          return;
+        }
+
+        this.visitedRoomIds.add(currentRoom.id);
+        this.currentRoomIndex = this.getRoomIndex(currentRoom.id);
+
+        this.explorationUI.showRoomInfo(currentRoom, this.currentRoomIndex, this.area.roomCount, this.area);
+        this.explorationUI.showAreaProgress(this.currentRoomIndex + 1, this.area.roomCount);
+        this.explorationUI.updatePartyStatus(
+          this.dungeon.partyHp,
+          this.dungeon.partyMp,
+          this.dungeon.party,
+        );
+        this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
+        this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
+        this.explorationUI.showExits(currentRoom.exits);
+      } else {
+        this.explorationUI.addLogMessage('No active dungeon. Returning to world map...');
+        this.time.delayedCall(1000, () => {
+          this.scene.start('WorldMapScene');
+        });
+      }
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to load dungeon state';
+      this.explorationUI.addLogMessage(`Error: ${message}`);
+    }
   }
 
   private async enterDungeon(): Promise<void> {
@@ -158,7 +203,7 @@ export class ExplorationScene extends Phaser.Scene {
   private startBattle(enemyId: string): void {
     if (!this.area) return;
     this.explorationUI.destroy();
-    this.scene.start('BattleScene', { enemyId, returnScene: 'ExplorationScene' });
+    this.scene.start('BattleScene', { enemyId, returnScene: 'ExplorationScene', areaId: this.areaId });
   }
 
   private handleFlee(): void {

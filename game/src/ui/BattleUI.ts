@@ -11,6 +11,7 @@ export interface BattleUICallbacks {
   onFlee: () => void;
   onShowAbility?: () => void;
   onShowItem?: () => void;
+  onSwap?: () => void;
 }
 
 const C = {
@@ -223,11 +224,12 @@ export class BattleUI {
       { label: 'Defend', action: () => this.callbacks.onAction({ type: ActionType.Defend }) },
       { label: 'Ability', action: () => this.callbacks.onShowAbility?.() },
       { label: 'Item', action: () => this.callbacks.onShowItem?.() },
+      { label: 'Swap', action: () => this.callbacks.onSwap?.() },
       { label: 'Run', action: () => this.callbacks.onFlee() },
     ];
 
-    const positions = [210, 305, 400, 495, 590];
-    const bw = 80;
+    const positions = [120, 210, 300, 390, 480, 570];
+    const bw = 75;
     const bh = 34;
     const by = 565;
 
