@@ -10,8 +10,7 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 ├── backend/         # Cloudflare Worker (Hono + D1)
 ├── blockchain/      # Smart contracts
 ├── docs/            # Plans, architecture decisions
-├── frontend/        # React SPA (Vite + SWC + Tailwind)
-└── infrastructure/  # Pulumi IaC
+└── frontend/        # React SPA (Vite + SWC + Tailwind)
 ```
 
 ## Tech Stack
