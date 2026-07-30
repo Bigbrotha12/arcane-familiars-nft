@@ -12,7 +12,7 @@ const AppConfig = {
           "content": [
             {
               "label": "Play Game",
-              "link": "/app/game"
+              "link": "/play/game"
             },
             {
               "label": "Collection",

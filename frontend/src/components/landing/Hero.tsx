@@ -23,7 +23,7 @@ function Hero() {
             creatures in a magical world where your collection is truly yours.
           </p>
           <div className="mt-xl flex flex-col sm:flex-row items-center justify-center gap-3">
-            <Link to="/app/game">
+            <Link to="/play/game">
               <Button size="lg">Start Playing</Button>
             </Link>
             <Link to="/app/collection">
