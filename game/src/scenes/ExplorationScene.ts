@@ -3,6 +3,8 @@ import type { DungeonState, Area } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '@/api/client';
 import { ExplorationUI, ExplorationUICallbacks } from '@/ui/ExplorationUI';
+import { gameEventBus } from '@/event-bus';
+import { GameEvent } from '@/events';
 
 interface ExplorationSceneData {
   areaId: string;
@@ -63,7 +65,13 @@ export class ExplorationScene extends Phaser.Scene {
     this.area = area;
     this.explorationUI = new ExplorationUI(this, callbacks);
     this.explorationUI.init(area);
-    this.events.on('shutdown', this.cleanupTimers, this);
+    this.events.on('shutdown', this.onShutdown, this);
+
+    // Wire EventBus for save/exit
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
     await this.loadDungeonState();
   }
@@ -276,6 +284,28 @@ export class ExplorationScene extends Phaser.Scene {
       timer.destroy();
     }
     this.timers = [];
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      const { state } = await this.gameApi.loadGameState();
+      await this.gameApi.saveGameState(state);
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleExit = (): void => {
+    this.explorationUI.destroy();
+    this.scene.start('WorldMapScene');
+  };
+
+  private onShutdown(): void {
+    this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
   }
 
   private getRoomIndex(roomId: string): number {

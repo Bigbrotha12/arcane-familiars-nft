@@ -1,5 +1,5 @@
 {
-  "name": "game",
+  "name": "@arcane-familiars/game",
   "version": "1.0.0",
   "private": true,
   "description": "Arcane Familiars - Phaser 4 game engine",

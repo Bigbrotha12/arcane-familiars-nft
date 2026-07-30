@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '@/api/client';
 import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '@/ui/BattleUI';
+import { gameEventBus } from '@/event-bus';
+import { GameEvent } from '@/events';
 
 interface BattleSceneData {
   enemyId: string;
@@ -74,8 +76,15 @@ export class BattleScene extends Phaser.Scene {
     this.battleUI.init();
 
     this.events.on(BATTLE_CONTINUE_EVENT, () => this.handleContinue());
+    this.events.on('shutdown', this.onShutdown, this);
 
-    this.events.on('shutdown', this.cleanupTimers, this);
+    // Wire EventBus for save/exit
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+
+    gameEventBus.emit(GameEvent.BATTLE_STARTED, {
+      enemyId: this.enemyId,
+    });
 
     try {
       const { state } = await gameApiClient.loadGameState();
@@ -259,6 +268,30 @@ export class BattleScene extends Phaser.Scene {
   private handleContinue(): void {
     this.battleUI.destroy();
     this.scene.start(this.returnScene, { areaId: this.areaId });
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      if (this.gameState) {
+        await gameApiClient.saveGameState(this.gameState);
+      }
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleExit = (): void => {
+    this.battleUI.destroy();
+    this.scene.start('WorldMapScene');
+  };
+
+  private onShutdown(): void {
+    this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.emit(GameEvent.BATTLE_ENDED);
   }
 
   private cleanupTimers(): void {

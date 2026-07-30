@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import Layout from './components/layout/Layout';
 import ComingSoon from './components/Common/ComingSoon';
 import LandingPage from './components/layout/LandingPage';
+import GameCanvas from './components/Game/GameCanvas';
 
 export default function App(): JSX.Element {
   return (

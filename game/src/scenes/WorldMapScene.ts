@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { AREAS, FAMILIARS } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '@/api/client';
 import { SCENE_KEYS } from '@/constants/scenes';
+import { gameEventBus } from '@/event-bus';
+import { GameEvent } from '@/events';
 
 interface AreaCard {
   areaId: string;
@@ -41,11 +43,14 @@ export class WorldMapScene extends Phaser.Scene {
     this.cards = [];
     this.timers = [];
     this.selectedCardIndex = -1;
-    this.events.off('shutdown', this.cleanupTimers, this);
-    this.events.on('shutdown', this.cleanupTimers, this);
+    this.events.off('shutdown', this.onShutdown, this);
+    this.events.on('shutdown', this.onShutdown, this);
   }
 
   async create(): Promise<void> {
+    // Wire EventBus for save
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
     const { width, height } = this.scale;
 
@@ -215,6 +220,22 @@ export class WorldMapScene extends Phaser.Scene {
 
   private hideMessage(): void {
     this.messageText.setAlpha(0);
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      const { state } = await gameApiClient.loadGameState();
+      await gameApiClient.saveGameState(state);
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private onShutdown(): void {
+    this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
   }
 
   private cleanupTimers(): void {
