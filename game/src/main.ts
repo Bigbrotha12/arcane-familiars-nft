@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { gameConfig } from '@/config';
+import { gameConfig } from './config';
 
 export function createGame(parentId: string): Phaser.Game {
   return new Phaser.Game({

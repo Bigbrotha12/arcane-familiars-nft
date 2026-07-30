@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '@/ui/BattleUI';
-import { gameEventBus } from '@/event-bus';
-import { GameEvent } from '@/events';
+import { gameApiClient } from '../api/client';
+import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '../ui/BattleUI';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
 
 interface BattleSceneData {
   enemyId: string;

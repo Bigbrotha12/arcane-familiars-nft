@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
 import { AREAS, FAMILIARS } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { SCENE_KEYS } from '@/constants/scenes';
-import { gameEventBus } from '@/event-bus';
-import { GameEvent } from '@/events';
+import { gameApiClient } from '../api/client';
+import { SCENE_KEYS } from '../constants/scenes';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
 
 interface AreaCard {
   areaId: string;

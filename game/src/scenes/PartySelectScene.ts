@@ -1,7 +1,7 @@
 import Phaser from 'phaser';
 import { FAMILIARS, getAbility, Affinity, AREAS, validateParty } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { SCENE_KEYS } from '@/constants/scenes';
+import { gameApiClient } from '../api/client';
+import { SCENE_KEYS } from '../constants/scenes';
 
 interface PartySelectData {
   areaId: string;

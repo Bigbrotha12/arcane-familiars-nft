@@ -4,6 +4,7 @@ import Layout from './components/layout/Layout';
 import PlayLayout from './components/layout/PlayLayout';
 import ComingSoon from './components/Common/ComingSoon';
 import LandingPage from './components/layout/LandingPage';
+import GamePage from './components/Game/GamePage';
 
 export default function App(): JSX.Element {
   return (
@@ -23,7 +24,7 @@ export default function App(): JSX.Element {
           </Route>
           <Route path="/play" element={<PlayLayout />}>
             <Route index element={<Navigate to="/play/game" replace />} />
-            <Route path="game" element={<ComingSoon />} />
+            <Route path="game" element={<GamePage />} />
           </Route>
         </Routes>
       </BrowserRouter>

@@ -1,10 +1,10 @@
 import Phaser from 'phaser';
 import type { DungeonState, Area } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { ExplorationUI, ExplorationUICallbacks } from '@/ui/ExplorationUI';
-import { gameEventBus } from '@/event-bus';
-import { GameEvent } from '@/events';
+import { gameApiClient } from '../api/client';
+import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
 
 interface ExplorationSceneData {
   areaId: string;
