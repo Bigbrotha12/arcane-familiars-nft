@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import Button from '../ui/Button'
+import Button from '@/components/ui/Button'
 
 interface NavProps {
   onConnectWallet?: () => void
@@ -25,7 +25,7 @@ function Nav({ onConnectWallet, connected, address }: NavProps) {
           <Link to="/" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
             Home
           </Link>
-          <Link to="/app/game" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
+          <Link to="/play/game" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
             Play
           </Link>
           <Link to="/app/collection" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">

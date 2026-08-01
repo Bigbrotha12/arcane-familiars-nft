@@ -1,5 +1,5 @@
-import type { BattleAction, BattleFamiliar } from '../types/battle';
-import { getAbility } from '../data/abilities';
+import { ActionType, type BattleAction, type BattleFamiliar } from '@/types/battle';
+import { getAbility, Target, EffectType } from '@/data/abilities';
 
 /**
  * Select an enemy action using a priority-based decision tree:
@@ -19,26 +19,26 @@ export function selectEnemyAction(
   if (hpPercent < 0.3) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === 'heal' && ability.target === 'ally' && enemy.currentMp >= ability.mpCost) {
-        return { type: 'ability', abilityId, targetId: enemy.familiarData.id };
+      if (ability && ability.effectType === EffectType.Heal && ability.target === Target.Ally && enemy.currentMp >= ability.mpCost) {
+        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
     // Also check self-heal abilities
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === 'heal' && ability.target === 'self' && enemy.currentMp >= ability.mpCost) {
-        return { type: 'ability', abilityId, targetId: enemy.familiarData.id };
+      if (ability && ability.effectType === EffectType.Heal && ability.target === Target.Self && enemy.currentMp >= ability.mpCost) {
+        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
   }
 
   // 2. Check for buff if not already buffed
-  const hasBuffs = enemy.statusEffects.some((e) => e.type === 'buff');
+  const hasBuffs = enemy.statusEffects.some((e) => e.type === EffectType.Buff);
   if (!hasBuffs && rng() < 0.5) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === 'buff' && enemy.currentMp >= ability.mpCost) {
-        return { type: 'ability', abilityId, targetId: enemy.familiarData.id };
+      if (ability && ability.effectType === EffectType.Buff && enemy.currentMp >= ability.mpCost) {
+        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
   }
@@ -50,7 +50,7 @@ export function selectEnemyAction(
       const ability = getAbility(abilityId);
       if (
         ability &&
-        (ability.effectType === 'damage' || ability.effectType === 'damage_debuff') &&
+        (ability.effectType === EffectType.Damage || ability.effectType === EffectType.Dot) &&
         enemy.currentMp >= ability.mpCost
       ) {
         if (!bestDamageAbility || ability.multiplier > bestDamageAbility.multiplier) {
@@ -59,10 +59,10 @@ export function selectEnemyAction(
       }
     }
     if (bestDamageAbility) {
-      return { type: 'ability', abilityId: bestDamageAbility.id, targetId: player.familiarData.id };
+      return { type: ActionType.Ability, abilityId: bestDamageAbility.id, targetId: player.familiarData.id };
     }
   }
 
   // 4. Basic attack
-  return { type: 'attack', targetId: player.familiarData.id };
+  return { type: ActionType.Attack, targetId: player.familiarData.id };
 }

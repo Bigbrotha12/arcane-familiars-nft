@@ -2,6 +2,8 @@ import { describe, it, expect } from "vitest";
 import { selectEnemyAction } from "../enemyAI";
 import { seededRandom } from "../mathUtils";
 import { getFamiliar } from "../../data/familiars";
+import { ActionType } from "../../types/battle";
+import { EffectType, StatName } from "../../data/abilities";
 import type { BattleFamiliar, BattleAction } from "../../types/battle";
 
 function makeEnemy(overrides: Partial<BattleFamiliar> = {}): BattleFamiliar {
@@ -40,7 +42,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.99, 0.99]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "attack",
+      type: ActionType.Attack,
       targetId: player.familiarData.id,
     });
   });
@@ -50,7 +52,7 @@ describe("selectEnemyAction", () => {
     const player = makePlayer();
     const action = selectEnemyAction(enemy, player, () => 0);
     expect(action).toEqual<BattleAction>({
-      type: "ability",
+      type: ActionType.Ability,
       abilityId: "naturabless",
       targetId: enemy.familiarData.id,
     });
@@ -62,7 +64,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.99, 0.99]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "attack",
+      type: ActionType.Attack,
       targetId: player.familiarData.id,
     });
   });
@@ -73,7 +75,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.01]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "ability",
+      type: ActionType.Ability,
       abilityId: "sturdy",
       targetId: enemy.familiarData.id,
     });
@@ -85,7 +87,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.99, 0.99]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "attack",
+      type: ActionType.Attack,
       targetId: player.familiarData.id,
     });
   });
@@ -95,8 +97,8 @@ describe("selectEnemyAction", () => {
       statusEffects: [
         {
           abilityId: "sturdy",
-          type: "buff",
-          stat: "defense",
+          type: EffectType.Buff,
+          stat: StatName.Defense,
           value: 1.5,
           turnsRemaining: 2,
         },
@@ -106,7 +108,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.01]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "ability",
+      type: ActionType.Ability,
       abilityId: "brave",
       targetId: player.familiarData.id,
     });
@@ -120,8 +122,8 @@ describe("selectEnemyAction", () => {
       statusEffects: [
         {
           abilityId: "quickstep",
-          type: "buff",
-          stat: "speed",
+          type: EffectType.Buff,
+          stat: StatName.Speed,
           value: 1.5,
           turnsRemaining: 2,
         },
@@ -131,7 +133,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.01]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "ability",
+      type: ActionType.Ability,
       abilityId: "fireball",
       targetId: player.familiarData.id,
     });
@@ -142,7 +144,7 @@ describe("selectEnemyAction", () => {
     const player = makePlayer();
     const rng = seededRandom(42);
     const action = selectEnemyAction(enemy, player, rng);
-    expect(action.type).toBe("ability");
+    expect(action.type).toBe(ActionType.Ability);
     expect(action.abilityId).toBe("naturabless");
   });
 
@@ -152,7 +154,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.99, 0.99]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "attack",
+      type: ActionType.Attack,
       targetId: player.familiarData.id,
     });
   });
@@ -162,8 +164,8 @@ describe("selectEnemyAction", () => {
       statusEffects: [
         {
           abilityId: "sturdy",
-          type: "buff",
-          stat: "defense",
+          type: EffectType.Buff,
+          stat: StatName.Defense,
           value: 1.5,
           turnsRemaining: 2,
         },
@@ -173,7 +175,7 @@ describe("selectEnemyAction", () => {
     const rng = rngFrom([0.99]);
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
-      type: "attack",
+      type: ActionType.Attack,
       targetId: player.familiarData.id,
     });
   });

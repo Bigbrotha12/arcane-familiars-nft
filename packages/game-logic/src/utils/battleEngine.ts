@@ -1,38 +1,32 @@
-import type { BattleAction, BattleFamiliar, ActionResult, StatusEffect } from '../types/battle';
-import type { AbilityData } from '../data/abilities';
-import { getAbility } from '../data/abilities';
+import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
+import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
+import { getAbility } from '@/data/abilities';
 
-/**
- * Get the effective stat value after applying all active buff/debuff multipliers.
- */
-export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: string): number {
+export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
   for (const effect of effects) {
-    if (effect.stat === statName && (effect.type === 'buff' || effect.type === 'debuff')) {
+    if (effect.stat === statName && (effect.type === EffectType.Buff || effect.type === EffectType.Debuff)) {
       multiplier *= effect.value;
     }
   }
   return Math.max(1, Math.round(baseStat * multiplier));
 }
 
-/**
- * Calculate damage using the plan's formula:
- * base = attackerStat * abilityMultiplier - defenderStat / 2
- * 10% crit chance for 1.5x multiplier
- * Minimum 1 damage
- */
+function toStatName(scalingStat: ScalingStat): StatName {
+  if (scalingStat === ScalingStat.Attack) return StatName.Attack;
+  return StatName.Arcane;
+}
+
 export function calculateDamage(
   attacker: BattleFamiliar,
   defender: BattleFamiliar,
   abilityMultiplier: number,
-  isArcaneScaled: boolean,
+  scalingStat: ScalingStat,
   rng: () => number,
 ): { damage: number; isCritical: boolean } {
-  const attackerStat = isArcaneScaled
-    ? getEffectiveStat(attacker.familiarData.stats.arcane, attacker.statusEffects, 'arcane')
-    : getEffectiveStat(attacker.familiarData.stats.attack, attacker.statusEffects, 'attack');
-
-  const defenderStat = getEffectiveStat(defender.familiarData.stats.defense, defender.statusEffects, 'defense');
+  const offensiveStat = scalingStat === ScalingStat.Arcane ? attacker.familiarData.stats.arcane : attacker.familiarData.stats.attack;
+  const attackerStat = getEffectiveStat(offensiveStat, attacker.statusEffects, toStatName(scalingStat));
+  const defenderStat = getEffectiveStat(defender.familiarData.stats.defense, defender.statusEffects, StatName.Defense);
 
   let baseDamage = attackerStat * abilityMultiplier - defenderStat / 2;
 
@@ -53,9 +47,9 @@ export function applyStatusEffects(familiar: BattleFamiliar): BattleFamiliar {
   let hpChange = 0;
 
   for (const effect of updated.statusEffects) {
-    if (effect.type === 'hot') {
+    if (effect.type === EffectType.Hot) {
       hpChange += effect.value;
-    } else if (effect.type === 'dot') {
+    } else if (effect.type === EffectType.Dot) {
       hpChange -= effect.value;
     }
   }
@@ -81,11 +75,71 @@ export function resolveTurn(
   enemyFamiliar: BattleFamiliar,
   enemyAction: BattleAction,
   rng: () => number,
-): { playerResult: ActionResult; enemyResult: ActionResult } {
+): {
+  playerResult: ActionResult;
+  enemyResult: ActionResult;
+  updatedPlayerFamiliar: BattleFamiliar;
+  updatedEnemyFamiliar: BattleFamiliar;
+} {
+  // Execute player action with original familiars
   const playerResult = executeAction(playerAction, playerFamiliar, enemyFamiliar, rng);
-  const enemyResult = executeAction(enemyAction, enemyFamiliar, playerFamiliar, rng);
 
-  return { playerResult, enemyResult };
+  // Apply player action result
+  let updatedPlayer = applyActionResult(playerFamiliar, playerResult, playerFamiliar.familiarData.id);
+  let updatedEnemy = applyActionResult(enemyFamiliar, playerResult, enemyFamiliar.familiarData.id);
+
+  // Deduct MP for player ability use
+  if (playerAction.type === ActionType.Ability && playerAction.abilityId) {
+    const ability = getAbility(playerAction.abilityId);
+    if (ability && playerFamiliar.currentMp >= ability.mpCost) {
+      updatedPlayer = { ...updatedPlayer, currentMp: updatedPlayer.currentMp - ability.mpCost };
+    }
+  }
+
+  // Execute enemy action with updated familiars (so defend buff affects damage calc)
+  const enemyResult = executeAction(enemyAction, updatedEnemy, updatedPlayer, rng);
+
+  // Apply enemy action result
+  updatedPlayer = applyActionResult(updatedPlayer, enemyResult, playerFamiliar.familiarData.id);
+  updatedEnemy = applyActionResult(updatedEnemy, enemyResult, enemyFamiliar.familiarData.id);
+
+  // Deduct MP for enemy ability use
+  if (enemyAction.type === ActionType.Ability && enemyAction.abilityId) {
+    const ability = getAbility(enemyAction.abilityId);
+    if (ability && updatedEnemy.currentMp >= ability.mpCost) {
+      updatedEnemy = { ...updatedEnemy, currentMp: updatedEnemy.currentMp - ability.mpCost };
+    }
+  }
+
+  // Tick status effects
+  updatedPlayer = applyStatusEffects(updatedPlayer);
+  updatedEnemy = applyStatusEffects(updatedEnemy);
+
+  return { playerResult, enemyResult, updatedPlayerFamiliar: updatedPlayer, updatedEnemyFamiliar: updatedEnemy };
+}
+
+function applyActionResult(
+  familiar: BattleFamiliar,
+  result: ActionResult,
+  targetId: string,
+): BattleFamiliar {
+  if (result.targetId !== targetId) return familiar;
+
+  let updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
+
+  // Apply damage/healing
+  if (result.effectType === EffectType.Damage || result.effectType === EffectType.Dot) {
+    updated.currentHp = Math.max(0, updated.currentHp - result.value);
+  } else if (result.effectType === EffectType.Heal || result.effectType === EffectType.Hot) {
+    updated.currentHp = Math.min(updated.familiarData.stats.maxHp, updated.currentHp + result.value);
+  }
+
+  // Apply status effects
+  if (result.appliedEffects) {
+    updated.statusEffects.push(...result.appliedEffects);
+  }
+
+  return updated;
 }
 
 function executeAction(
@@ -94,37 +148,80 @@ function executeAction(
   target: BattleFamiliar,
   rng: () => number,
 ): ActionResult {
-  if (action.type === 'attack') {
-    const { damage, isCritical } = calculateDamage(source, target, 1.0, false, rng);
+  let actualTarget: BattleFamiliar;
+
+  if (action.type === ActionType.Ability && action.abilityId) {
+    const ability = getAbility(action.abilityId);
+    if (ability) {
+      actualTarget = (ability.target === Target.Self || ability.target === Target.Ally) ? source : target;
+    } else {
+      actualTarget = action.targetId === source.familiarData.id ? source : target;
+    }
+  } else {
+    actualTarget = action.targetId === source.familiarData.id ? source : target;
+  }
+
+  if (action.type === ActionType.Attack) {
+    const { damage, isCritical } = calculateDamage(source, actualTarget, 1.0, ScalingStat.Attack, rng);
     return {
-      effectType: 'damage',
-      targetId: target.familiarData.id,
+      effectType: EffectType.Damage,
+      targetId: actualTarget.familiarData.id,
       value: damage,
       isCritical,
       description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
     };
   }
 
-  if (action.type === 'ability' && action.abilityId) {
+  if (action.type === ActionType.Ability && action.abilityId) {
     const ability = getAbility(action.abilityId);
     if (!ability) {
       return {
-        effectType: 'damage',
-        targetId: target.familiarData.id,
+        effectType: EffectType.Damage,
+        targetId: actualTarget.familiarData.id,
         value: 0,
         isCritical: false,
         description: 'Unknown ability used',
       };
     }
-    return executeAbility(ability, source, target, rng);
+    if (source.currentMp < ability.mpCost) {
+      return {
+        effectType: EffectType.Damage,
+        targetId: actualTarget.familiarData.id,
+        value: 0,
+        isCritical: false,
+        description: `${source.familiarData.name} does not have enough MP to use ${ability.name}`,
+      };
+    }
+    return executeAbility(ability, source, actualTarget, rng);
+  }
+
+  if (action.type === ActionType.Defend) {
+    return {
+      effectType: EffectType.Buff,
+      targetId: source.familiarData.id,
+      value: 1.5,
+      isCritical: false,
+      description: `${source.familiarData.name} defends`,
+      appliedEffects: [createDefendEffect()],
+    };
+  }
+
+  if (action.type === ActionType.Run) {
+    return {
+      effectType: EffectType.Damage,
+      targetId: source.familiarData.id,
+      value: 0,
+      isCritical: false,
+      description: `${source.familiarData.name} attempts to flee`,
+    };
   }
 
   return {
-    effectType: 'damage',
-    targetId: target.familiarData.id,
+    effectType: EffectType.Damage,
+    targetId: actualTarget.familiarData.id,
     value: 0,
     isCritical: false,
-    description: 'No action taken',
+    description: action.type === ActionType.Item ? 'Item use not implemented' : 'No action taken',
   };
 }
 
@@ -134,19 +231,18 @@ function executeAbility(
   target: BattleFamiliar,
   rng: () => number,
 ): ActionResult {
-  if (ability.effectType === 'damage' || ability.effectType === 'damage_debuff') {
-    const isArcaneScaled = ability.id === 'fireball' || ability.id === 'shadowstrike';
-    const { damage, isCritical } = calculateDamage(source, target, ability.multiplier, isArcaneScaled, rng);
+  if (ability.effectType === EffectType.Damage) {
+    const { damage, isCritical } = calculateDamage(source, target, ability.multiplier, ability.scalingStat, rng);
 
     const statusEffects = ability.statusEffect
       ? [{
-          abilityId: ability.id,
-          type: ability.statusEffect.type as 'buff' | 'debuff' | 'dot' | 'hot',
-          stat: ability.statusEffect.stat,
-          value: ability.statusEffect.value,
-          turnsRemaining: ability.statusEffect.duration,
-        }]
-      : [];
+        abilityId: ability.id,
+        type: ability.statusEffect.type,
+        stat: ability.statusEffect.stat,
+        value: ability.statusEffect.value,
+        turnsRemaining: ability.statusEffect.duration,
+      }]
+      : undefined;
 
     return {
       effectType: ability.effectType,
@@ -154,27 +250,51 @@ function executeAbility(
       value: damage,
       isCritical,
       description: `${source.familiarData.name} uses ${ability.name} for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
+      appliedEffects: statusEffects,
     };
   }
 
-  if (ability.effectType === 'heal') {
+  if (ability.effectType === EffectType.Heal) {
     const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier);
+
+    const statusEffects = ability.statusEffect
+      ? [{
+        abilityId: ability.id,
+        type: ability.statusEffect.type,
+        stat: ability.statusEffect.stat,
+        value: ability.statusEffect.value,
+        turnsRemaining: ability.statusEffect.duration,
+      }]
+      : undefined;
+
     return {
-      effectType: 'heal',
+      effectType: EffectType.Heal,
       targetId: target.familiarData.id,
       value: healAmount,
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name} to restore ${healAmount} HP`,
+      appliedEffects: statusEffects,
     };
   }
 
-  if (ability.effectType === 'buff') {
+  if (ability.effectType === EffectType.Buff) {
+    const statusEffects = ability.statusEffect
+      ? [{
+        abilityId: ability.id,
+        type: ability.statusEffect.type,
+        stat: ability.statusEffect.stat,
+        value: ability.statusEffect.value,
+        turnsRemaining: ability.statusEffect.duration,
+      }]
+      : undefined;
+
     return {
-      effectType: 'buff',
+      effectType: EffectType.Buff,
       targetId: source.familiarData.id,
       value: ability.multiplier,
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name}`,
+      appliedEffects: statusEffects,
     };
   }
 
@@ -193,26 +313,28 @@ function executeAbility(
 export function checkBattleOutcome(
   playerFamiliar: BattleFamiliar,
   enemyFamiliar: BattleFamiliar,
-): 'win' | 'lose' | 'continue' {
-  if (enemyFamiliar.currentHp <= 0) return 'win';
-  if (playerFamiliar.currentHp <= 0) return 'lose';
-  return 'continue';
+): Outcome {
+  if (enemyFamiliar.currentHp <= 0) return Outcome.Win;
+  if (playerFamiliar.currentHp <= 0) return Outcome.Loss;
+  return Outcome.Continue;
+}
+
+function createDefendEffect(): StatusEffect {
+  return {
+    abilityId: 'defend',
+    type: EffectType.Buff,
+    stat: StatName.Defense,
+    value: 1.5,
+    turnsRemaining: 1,
+  };
 }
 
 /**
  * Apply defend action: temporary 1.5x defense for the current round.
  */
 export function applyDefend(familiar: BattleFamiliar): BattleFamiliar {
-  const defendEffect: StatusEffect = {
-    abilityId: 'defend',
-    type: 'buff',
-    stat: 'defense',
-    value: 1.5,
-    turnsRemaining: 1,
-  };
-
   return {
     ...familiar,
-    statusEffects: [...familiar.statusEffects, defendEffect],
+    statusEffects: [...familiar.statusEffects, createDefendEffect()],
   };
 }

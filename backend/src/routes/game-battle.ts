@@ -10,9 +10,10 @@ import {
   getFamiliar,
   selectEnemyAction,
   resolveTurn,
-  applyStatusEffects,
-  applyDefend,
   checkBattleOutcome,
+  BattleResult,
+  ActionType,
+  Outcome,
 } from '@arcane-familiars/game-logic';
 
 const gameBattleRouter = new Hono<{ Bindings: { DB: D1Database } }>();
@@ -73,7 +74,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       enemyFamiliar,
       isBoss: enemyData?.isBoss ?? false,
       turnCount: 0,
-      status: 'active',
+      status: BattleResult.Active,
     };
 
     await c.env.DB
@@ -114,27 +115,20 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
 
     const battle: BattleState = JSON.parse(row.battle_json);
 
-    if (battle.status !== 'active') {
+    if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
-    if (action.type === 'ability' && action.abilityId) {
+    if (action.type === ActionType.Ability && action.abilityId) {
       const ability = battle.playerFamiliar.familiarData.abilities.includes(action.abilityId);
       if (!ability) {
         return c.json({ error: 'Player familiar does not know this ability' }, 400);
       }
     }
 
-    battle.playerFamiliar = applyStatusEffects(battle.playerFamiliar);
-    battle.enemyFamiliar = applyStatusEffects(battle.enemyFamiliar);
-
-    if (action.type === 'defend') {
-      battle.playerFamiliar = applyDefend(battle.playerFamiliar);
-    }
-
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, seededRandom);
 
-    const { playerResult, enemyResult } = resolveTurn(
+    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar } = resolveTurn(
       action,
       battle.playerFamiliar,
       battle.enemyFamiliar,
@@ -142,40 +136,37 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       seededRandom,
     );
 
-    if (playerResult.effectType === 'damage') {
-      battle.enemyFamiliar.currentHp = Math.max(
-        0,
-        battle.enemyFamiliar.currentHp - playerResult.value,
-      );
-    } else if (playerResult.effectType === 'heal') {
-      battle.enemyFamiliar.currentHp = Math.min(
-        battle.enemyFamiliar.familiarData.stats.maxHp,
-        battle.enemyFamiliar.currentHp + playerResult.value,
-      );
-    }
-
-    if (enemyResult.effectType === 'damage') {
-      battle.playerFamiliar.currentHp = Math.max(
-        0,
-        battle.playerFamiliar.currentHp - enemyResult.value,
-      );
-    } else if (enemyResult.effectType === 'heal') {
-      battle.playerFamiliar.currentHp = Math.min(
-        battle.playerFamiliar.familiarData.stats.maxHp,
-        battle.playerFamiliar.currentHp + enemyResult.value,
-      );
-    }
+    battle.playerFamiliar = updatedPlayerFamiliar;
+    battle.enemyFamiliar = updatedEnemyFamiliar;
 
     battle.turnCount += 1;
 
     const outcome = checkBattleOutcome(battle.playerFamiliar, battle.enemyFamiliar);
 
     let rewards: BattleRewards | undefined;
-    if (outcome === 'win') {
-      battle.status = 'won';
+    if (outcome === Outcome.Win) {
+      battle.status = BattleResult.Won;
       rewards = generateBattleRewards(battle.isBoss);
-    } else if (outcome === 'lose') {
-      battle.status = 'lost';
+    } else if (outcome === Outcome.Loss) {
+      battle.status = BattleResult.Lost;
+      
+      const stateRow = await c.env.DB
+        .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
+        .bind(anonymousId)
+        .first<{ state_json: string }>();
+      
+      if (stateRow) {
+        const gameState = JSON.parse(stateRow.state_json);
+        gameState.dungeon = null;
+        gameState.lastSaved = Date.now();
+        
+        await c.env.DB
+          .prepare(
+            `UPDATE game_states SET state_json = ?, updated_at = datetime('now') WHERE anonymous_id = ?`
+          )
+          .bind(JSON.stringify(gameState), anonymousId)
+          .run();
+      }
     }
 
     const turnResult: BattleTurnResult = {
@@ -196,7 +187,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       .bind(JSON.stringify(battle), battleId, anonymousId)
       .run();
 
-    if (outcome !== 'continue') {
+    if (outcome !== Outcome.Continue) {
       await c.env.DB
         .prepare(
           `DELETE FROM active_battles WHERE battle_id = ? AND anonymous_id = ?`
@@ -209,6 +200,54 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
   } catch (error: any) {
     console.error('Battle action error:', error.message);
     return c.json({ error: 'Failed to process battle action' }, 500);
+  }
+});
+
+gameBattleRouter.post('/game/battle/swap', async (c) => {
+  try {
+    const { anonymousId, battleId, newFamiliarId } = await c.req.json<{
+      anonymousId: string;
+      battleId: string;
+      newFamiliarId: string;
+    }>();
+
+    if (!anonymousId || !battleId || !newFamiliarId) {
+      return c.json({ error: 'Missing required fields: anonymousId, battleId, newFamiliarId' }, 400);
+    }
+
+    const row = await c.env.DB
+      .prepare('SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
+
+    if (!row) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+
+    const battle: BattleState = JSON.parse(row.battle_json);
+
+    if (battle.status !== BattleResult.Active) {
+      return c.json({ error: 'Battle is not active' }, 400);
+    }
+
+    const newFamiliar = createBattleFamiliar(newFamiliarId);
+    newFamiliar.isAlly = true;
+
+    battle.playerFamiliar = newFamiliar;
+
+    await c.env.DB
+      .prepare(
+        `UPDATE active_battles
+         SET battle_json = ?, updated_at = datetime('now')
+         WHERE battle_id = ? AND anonymous_id = ?`
+      )
+      .bind(JSON.stringify(battle), battleId, anonymousId)
+      .run();
+
+    return c.json({ battle });
+  } catch (error: any) {
+    console.error('Swap familiar error:', error.message);
+    return c.json({ error: 'Failed to swap familiar' }, 500);
   }
 });
 
@@ -234,7 +273,7 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     const battle: BattleState = JSON.parse(row.battle_json);
 
-    if (battle.status !== 'active') {
+    if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
@@ -242,7 +281,7 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
       return c.json({ error: 'Cannot flee from a boss battle' }, 400);
     }
 
-    battle.status = 'fled';
+    battle.status = BattleResult.Fled;
 
     await c.env.DB
       .prepare(

@@ -1,8 +1,12 @@
 import Phaser from 'phaser';
 import type { DungeonState, Area } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { ExplorationUI, ExplorationUICallbacks } from '@/ui/ExplorationUI';
+import { gameApiClient } from '../api/client';
+import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
+import type { GameStateSnapshot, FamiliarState } from '../events';
+import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
   areaId: string;
@@ -15,6 +19,7 @@ export class ExplorationScene extends Phaser.Scene {
   private gameApi = gameApiClient;
   private explorationUI!: ExplorationUI;
   private dungeon: DungeonState | null = null;
+  private fullGameState: GameState | null = null;
   private area: Area | null = null;
   private areaId!: string;
   private isProcessing = false;
@@ -63,7 +68,13 @@ export class ExplorationScene extends Phaser.Scene {
     this.area = area;
     this.explorationUI = new ExplorationUI(this, callbacks);
     this.explorationUI.init(area);
-    this.events.on('shutdown', this.cleanupTimers, this);
+    this.events.on('shutdown', this.onShutdown, this);
+
+    // Wire EventBus for save/exit
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
     await this.loadDungeonState();
   }
@@ -71,7 +82,8 @@ export class ExplorationScene extends Phaser.Scene {
   private async loadDungeonState(): Promise<void> {
     try {
       const { state } = await this.gameApi.loadGameState();
-      
+      this.fullGameState = state;
+
       if (state.dungeon) {
         this.dungeon = state.dungeon;
         this.areaId = state.dungeon.areaId;
@@ -98,9 +110,10 @@ export class ExplorationScene extends Phaser.Scene {
           this.dungeon.partyMp,
           this.dungeon.party,
         );
-        this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
-        this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
-        this.explorationUI.showExits(currentRoom.exits);
+      this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
+      this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
+      this.explorationUI.showExits(currentRoom.exits);
+      this.emitStateUpdate();
       } else {
         await this.enterDungeon();
       }
@@ -134,6 +147,7 @@ export class ExplorationScene extends Phaser.Scene {
       this.explorationUI.updateMiniMap(result.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
       this.explorationUI.addLogMessage(`Entering ${this.area!.name}...`);
       this.explorationUI.showExits(currentRoom.exits);
+      this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to enter dungeon';
       this.explorationUI.addLogMessage(`Error: ${message}`);
@@ -165,6 +179,8 @@ export class ExplorationScene extends Phaser.Scene {
 
       const isBossRoom = result.room.type === RoomType.Boss;
 
+      this.emitStateUpdate()
+
       if (isBossRoom) {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
         this.explorationUI.showBossWarning(this.area.bossId);
@@ -183,6 +199,7 @@ export class ExplorationScene extends Phaser.Scene {
         }));
       } else {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
+        this.emitStateUpdate();
         this.timers.push(this.time.delayedCall(this.EXITS_DELAY_MS, () => {
           this.explorationUI.showExits(result.room.exits);
           this.isProcessing = false;
@@ -276,6 +293,44 @@ export class ExplorationScene extends Phaser.Scene {
       timer.destroy();
     }
     this.timers = [];
+  }
+
+  private emitStateUpdate(): void {
+    const currentRoom = this.dungeon ? this.dungeon.rooms[this.dungeon.currentRoomId] : null
+    const snapshot: GameStateSnapshot = {
+      familiars: [],
+      currency: this.fullGameState?.inventory?.currency ?? 0,
+      battleCount: this.fullGameState?.battleCount ?? 0,
+      wins: this.fullGameState?.winCount ?? 0,
+      currentScene: 'exploration',
+      areaName: this.area?.name,
+      roomName: currentRoom?.name,
+    }
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      if (this.fullGameState && this.dungeon) {
+        this.fullGameState.dungeon = this.dungeon
+        await this.gameApi.saveGameState(this.fullGameState);
+      }
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleExit = (): void => {
+    this.explorationUI.destroy();
+    this.scene.start('WorldMapScene');
+  };
+
+  private onShutdown(): void {
+    this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
   }
 
   private getRoomIndex(roomId: string): number {

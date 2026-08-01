@@ -1,4 +1,4 @@
-export { default as Button } from './Button'
-export { default as Badge } from './Badge'
-export { default as Card, CardImage, CardBody } from './Card'
-export { default as Modal } from './Modal'
+export { default as Button } from '@/components/ui/Button'
+export { default as Badge } from '@/components/ui/Badge'
+export { default as Card, CardImage, CardBody } from '@/components/ui/Card'
+export { default as Modal } from '@/components/ui/Modal'

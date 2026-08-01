@@ -1,9 +1,13 @@
 {
-  "name": "game",
+  "name": "@arcane-familiars/game",
   "version": "1.0.0",
   "private": true,
   "description": "Arcane Familiars - Phaser 4 game engine",
   "type": "module",
+  "main": "src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",

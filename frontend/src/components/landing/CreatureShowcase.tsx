@@ -1,5 +1,5 @@
-import Card, { CardBody } from '../ui/Card'
-import Badge from '../ui/Badge'
+import Card, { CardBody } from '@/components/ui/Card'
+import Badge from '@/components/ui/Badge'
 
 const familiars = [
   { name: 'Whitedog', rarity: 'rare' as const, emoji: '🐕', desc: 'A loyal companion with fierce protective instincts.' },

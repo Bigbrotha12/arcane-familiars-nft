@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
+import type { GameState } from '@arcane-familiars/game-logic';
 import { AREAS, FAMILIARS } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { SCENE_KEYS } from '@/constants/scenes';
+import { gameApiClient } from '../api/client';
+import { SCENE_KEYS } from '../constants/scenes';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
+import type { GameStateSnapshot } from '../events';
 
 interface AreaCard {
   areaId: string;
@@ -20,6 +24,7 @@ export class WorldMapScene extends Phaser.Scene {
   private timers: Phaser.Time.TimerEvent[] = [];
   private _sceneGeneration = 0;
   private selectedCardIndex = -1;
+  private fullGameState: GameState | null = null;
   private ariaLiveElement: HTMLDivElement | null = null;
 
   constructor() {
@@ -41,11 +46,15 @@ export class WorldMapScene extends Phaser.Scene {
     this.cards = [];
     this.timers = [];
     this.selectedCardIndex = -1;
-    this.events.off('shutdown', this.cleanupTimers, this);
-    this.events.on('shutdown', this.cleanupTimers, this);
+    this.events.off('shutdown', this.onShutdown, this);
+    this.events.on('shutdown', this.onShutdown, this);
   }
 
   async create(): Promise<void> {
+    // Wire EventBus for save/exit
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
     const { width, height } = this.scale;
 
@@ -94,6 +103,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       const state = result.state;
+      this.fullGameState = state;
 
       this.statsText.setText(
         `Battles: ${state.battleCount}  |  Wins: ${state.winCount}  |  Currency: ${state.inventory?.currency ?? 0}`
@@ -102,6 +112,7 @@ export class WorldMapScene extends Phaser.Scene {
       const unlockedAreas = state.unlockedAreas?.length ? state.unlockedAreas : ['verdantMeadow'];
       this.createAreaCards(unlockedAreas);
       this.loadingText.setAlpha(0);
+      this.emitStateUpdate();
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
       console.error('WorldMapScene: failed to load game state:', err);
@@ -215,6 +226,41 @@ export class WorldMapScene extends Phaser.Scene {
 
   private hideMessage(): void {
     this.messageText.setAlpha(0);
+  }
+
+  private emitStateUpdate(): void {
+    const snapshot: GameStateSnapshot = {
+      familiars: [],
+      currency: this.fullGameState?.inventory?.currency ?? 0,
+      battleCount: this.fullGameState?.battleCount ?? 0,
+      wins: this.fullGameState?.winCount ?? 0,
+      currentScene: 'world_map',
+    }
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      if (this.fullGameState) {
+        await gameApiClient.saveGameState(this.fullGameState);
+      }
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleExit = (): void => {
+    this.cleanupTimers();
+  };
+
+  private onShutdown(): void {
+    this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
+    this.ariaLiveElement?.remove();
+    this.ariaLiveElement = null;
   }
 
   private cleanupTimers(): void {

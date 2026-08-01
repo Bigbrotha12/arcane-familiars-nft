@@ -11,7 +11,7 @@ function createDefaultGameState(anonymousId: string): GameState {
     version: 1,
     id,
     anonymousId,
-    playerFamiliars: ['starter-fire', 'starter-water'],
+    playerFamiliars: ['yellowFighter', 'aquaSprite'],
     activeParty: [],
     inventory: {
       currency: 100,

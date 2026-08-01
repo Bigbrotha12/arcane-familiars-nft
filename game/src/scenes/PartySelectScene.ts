@@ -1,7 +1,11 @@
 import Phaser from 'phaser';
+import type { GameState } from '@arcane-familiars/game-logic';
 import { FAMILIARS, getAbility, Affinity, AREAS, validateParty } from '@arcane-familiars/game-logic';
-import { gameApiClient } from '@/api/client';
-import { SCENE_KEYS } from '@/constants/scenes';
+import { gameApiClient } from '../api/client';
+import { SCENE_KEYS } from '../constants/scenes';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
+import type { GameStateSnapshot } from '../events';
 
 interface PartySelectData {
   areaId: string;
@@ -58,6 +62,7 @@ const DEFAULT_FALLBACK_FAMILIARS = ['whiteDog', 'yellowFighter'];
 
 export class PartySelectScene extends Phaser.Scene {
   private areaId!: string;
+  private fullGameState: GameState | null = null;
   private cards: FamiliarCard[] = [];
   private cardMap: Map<string, FamiliarCard> = new Map();
   private selectedIds: string[] = [];
@@ -97,6 +102,12 @@ export class PartySelectScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     if (!this.areaId) return;
+
+    // Wire EventBus for save, exit, and scene change notification
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'party_select' });
+
     const gen = this._sceneGeneration;
     const { width, height } = this.scale;
 
@@ -147,6 +158,7 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       const state = result.state;
+      this.fullGameState = state;
       const savedFamiliars = state.playerFamiliars || [];
       const validSavedFamiliars = savedFamiliars.filter((id) => FAMILIARS[id]);
       const familiarIds = validSavedFamiliars.length >= MAX_PARTY_SIZE ? validSavedFamiliars : DEFAULT_FALLBACK_FAMILIARS;
@@ -398,8 +410,38 @@ export class PartySelectScene extends Phaser.Scene {
     goBackText.on('pointerout', () => goBackText.setColor(COLORS.SUBTITLE));
   }
 
+  private emitStateUpdate(): void {
+    const snapshot: GameStateSnapshot = {
+      familiars: [],
+      currency: this.fullGameState?.inventory?.currency ?? 0,
+      battleCount: this.fullGameState?.battleCount ?? 0,
+      wins: this.fullGameState?.winCount ?? 0,
+      currentScene: 'party_select',
+    }
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      if (this.fullGameState) {
+        await gameApiClient.saveGameState(this.fullGameState);
+      }
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleExit = (): void => {
+    this.cleanupTimers();
+    this.scene.start(SCENE_KEYS.WORLD_MAP);
+  };
+
   private onShutdown(): void {
     this.cleanupTimers();
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
   }
 
   private cleanupTimers(): void {

@@ -1,6 +1,7 @@
-import type { BattleAction, BattleState } from './battle';
-import type { DungeonState } from './exploration';
-import type { GameState, Inventory } from './gameState';
+import type { BattleAction, BattleTurnResult } from '@/types/battle';
+import type { Directions } from '@/utils/dungeonEngine';
+import type { DungeonState, Room } from '@/types/exploration';
+import type { GameState } from '@/types/gameState';
 
 export interface LoadStateRequest {
   anonymousId: string;
@@ -30,11 +31,11 @@ export interface EnterDungeonResponse {
 
 export interface ExploreRequest {
   dungeonId: string;
-  direction?: string;
+  direction?: Directions;
 }
 
 export interface ExploreResponse {
-  room: import('./exploration').Room;
+  room: Room;
   encounter?: string;
   treasure?: string;
   dungeon: DungeonState;
@@ -54,6 +55,6 @@ export interface BattleActionRequest {
 }
 
 export interface BattleActionResponse {
-  result: import('./battle').BattleTurnResult;
+  result: BattleTurnResult;
   state: GameState;
 }
