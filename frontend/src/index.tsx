@@ -1,7 +1,7 @@
 import { createRoot, Root } from 'react-dom/client';
-import "./styles.css";
-import App from "./App";
-import ErrorBoundary from './components/Common/ErrorBoundary';
+import "@/styles.css";
+import App from "@/App";
+import ErrorBoundary from '@/components/common/ErrorBoundary';
 
 window.addEventListener('error', (event) => {
   console.error('Uncaught error:', event.error);

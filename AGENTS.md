@@ -2,8 +2,6 @@
 
 ## Branching & Pull Requests
 
-> **Established Phase 1.6** — all future work follows this convention.
-
 1. **No direct commits to `master`.** All changes must go through feature branches and pull requests.
 
 2. **Branch naming:**
@@ -20,33 +18,17 @@
    - Request review (human or agent) before merging
    - Merge with squash to keep history clean
 
-4. **Commit message style:**
-   ```
-   <area>: <brief description>
-   
-   <optional details, why, tradeoffs>
-   ```
-
 ## Project Structure
 
 ```
 /
-├── backend/         # Cloudflare Worker (Hono + D1)
-├── blockchain/      # Smart contracts (Hardhat)
+├── backend/         # Cloudflare Worker
+├── blockchain/      # Smart contracts
 ├── docs/            # Plans, decisions, reference
-├── frontend/        # React SPA (Vite + SWC)
+├── frontend/        # React SPA
+├── game/            # web-based 2d game
 └── AGENTS.md        # This file — agent conventions
 ```
-
-## Key Decisions
-
-| Decision | Rationale |
-|----------|-----------|
-| Cloudflare Workers over AWS Lambda | Single provider for compute + DB + storage |
-| D1 (SQLite) over MongoDB | No existing Mongo schemas, simpler, no separate DB server |
-| Hono over raw Workers | Type-safe routing, middleware ecosystem |
-| Vite over webpack | ~10x faster builds, native ESM |
-| SWC over Babel | ~20x faster JSX transform |
 
 ## Design System
 Always read DESIGN.md before making any visual or UI decisions.

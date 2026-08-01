@@ -1,3 +1,6 @@
+import type { Inventory } from '@/types/gameState';
+import type { Directions } from '@/utils/dungeonEngine';
+
 export interface Area {
   id: string;
   name: string;
@@ -10,11 +13,18 @@ export interface Area {
   bgColor: number;
 }
 
+export enum RoomType {
+  Start,
+  Normal,
+  Deadend,
+  Boss
+}
+
 export interface Room {
   id: string;
   name: string;
   description: string;
-  type: 'start' | 'normal' | 'deadend' | 'boss';
+  type: RoomType;
   exits: RoomExit[];
   encounterChance: number;
   treasureChance: number;
@@ -28,7 +38,7 @@ export interface TreasureEntry {
 }
 
 export interface RoomExit {
-  direction: string;
+  direction: Directions;
   roomId: string;
   label: string;
 }
@@ -44,6 +54,6 @@ export interface DungeonState {
   party: string[];
   partyHp: Record<string, number>;
   partyMp: Record<string, number>;
-  inventory: import('./gameState').Inventory;
+  inventory: Inventory;
   rooms: Record<string, Room>;
 }

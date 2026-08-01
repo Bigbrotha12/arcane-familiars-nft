@@ -1,5 +1,5 @@
 import { Outlet } from 'react-router-dom'
-import Nav from './Nav'
+import Nav from '@/components/layout/Nav'
 
 export default function PlayLayout() {
   return (

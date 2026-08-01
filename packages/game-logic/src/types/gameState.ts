@@ -1,3 +1,5 @@
+import type { DungeonState } from '@/types/exploration';
+
 export interface Inventory {
   currency: number;
   items: InventoryItem[];
@@ -23,4 +25,3 @@ export interface GameState {
   lastSaved: number;
 }
 
-import type { DungeonState } from './exploration';

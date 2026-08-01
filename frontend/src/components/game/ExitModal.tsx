@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import Modal from '../ui/Modal'
-import Button from '../ui/Button'
+import { useState, useEffect } from 'react'
+import Modal from '@/components/ui/Modal'
+import Button from '@/components/ui/Button'
 
 interface ExitModalProps {
   open: boolean
@@ -12,6 +12,11 @@ interface ExitModalProps {
 
 export default function ExitModal({ open, onSaveAndExit, onExitWithoutSave, onCancel, saving }: ExitModalProps) {
   const [confirmDangerous, setConfirmDangerous] = useState(false)
+
+  // Reset confirmation state when modal opens/closes
+  useEffect(() => {
+    if (!open) setConfirmDangerous(false)
+  }, [open])
 
   if (confirmDangerous) {
     return (
@@ -54,6 +59,14 @@ export default function ExitModal({ open, onSaveAndExit, onExitWithoutSave, onCa
           onClick={() => setConfirmDangerous(true)}
         >
           Exit Without Saving
+        </Button>
+        <Button
+          variant="ghost"
+          size="md"
+          className="w-full"
+          onClick={onCancel}
+        >
+          Cancel
         </Button>
       </div>
     </Modal>

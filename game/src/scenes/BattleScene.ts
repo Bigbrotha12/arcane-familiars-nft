@@ -4,6 +4,7 @@ import { gameApiClient } from '../api/client';
 import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '../ui/BattleUI';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
+import type { GameStateSnapshot, FamiliarState } from '../events';
 
 interface BattleSceneData {
   enemyId: string;
@@ -82,9 +83,11 @@ export class BattleScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
 
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'battle' });
     gameEventBus.emit(GameEvent.BATTLE_STARTED, {
       enemyId: this.enemyId,
     });
+    this.emitStateUpdate();
 
     try {
       const { state } = await gameApiClient.loadGameState();
@@ -155,6 +158,8 @@ export class BattleScene extends Phaser.Scene {
       }));
 
       const outcome = turnResult.battleOutcome;
+      this.emitStateUpdate();
+
       this.timers.push(this.time.delayedCall(this.OUTCOME_DELAY_MS, () => {
         if (outcome === Outcome.Win) {
           this.handleVictory(rewards);
@@ -268,6 +273,35 @@ export class BattleScene extends Phaser.Scene {
   private handleContinue(): void {
     this.battleUI.destroy();
     this.scene.start(this.returnScene, { areaId: this.areaId });
+  }
+
+  private emitStateUpdate(): void {
+    if (!this.battleState) return
+    const player = this.battleState.playerFamiliar
+    const familiars: FamiliarState[] = []
+    if (player) {
+      familiars.push({
+        id: player.familiarData.id,
+        name: player.familiarData.name,
+        hp: player.currentHp,
+        maxHp: player.familiarData.stats.maxHp || player.currentHp,
+        mp: 0,
+        maxMp: 0,
+        attack: player.familiarData.stats.attack,
+        defense: player.familiarData.stats.defense,
+        speed: player.familiarData.stats.speed,
+        arcane: 0,
+        affinity: '',
+      })
+    }
+    const snapshot: GameStateSnapshot = {
+      familiars,
+      currency: this.gameState?.inventory?.currency ?? 0,
+      battleCount: this.gameState?.battleCount ?? 0,
+      wins: this.gameState?.winCount ?? 0,
+      currentScene: 'battle',
+    }
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
   }
 
   private handleSave = async (): Promise<void> => {

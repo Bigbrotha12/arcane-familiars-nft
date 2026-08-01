@@ -1,4 +1,4 @@
-import Card, { CardBody } from '../ui/Card'
+import Card from '@/components/ui/Card'
 
 const abilities = [
   { name: 'Brave', desc: '+20% ATK for 3 turns', color: 'text-error' },

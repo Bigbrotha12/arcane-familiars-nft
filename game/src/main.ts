@@ -12,7 +12,11 @@ export function destroyGame(game: Phaser.Game): void {
   game.destroy(true);
 }
 
-// Standalone mode: auto-init when loaded directly (not imported by frontend)
-if (typeof window !== 'undefined' && document.getElementById('game-container')) {
+export type PhaserGame = Phaser.Game
+
+// Standalone mode: auto-init only when loaded directly with ?standalone=true
+// This prevents dual Phaser instances when the frontend dynamically imports this module
+// after the React component has already rendered the #game-container element.
+if (typeof window !== 'undefined' && window.location.search.includes('standalone=true') && document.getElementById('game-container')) {
   createGame('game-container');
 }

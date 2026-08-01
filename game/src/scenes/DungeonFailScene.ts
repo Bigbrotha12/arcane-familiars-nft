@@ -1,5 +1,8 @@
 import Phaser from 'phaser';
 import { gameApiClient } from '../api/client';
+import { gameEventBus } from '../event-bus';
+import { GameEvent } from '../events';
+import type { GameStateSnapshot } from '../events';
 
 interface DungeonFailData {
   roomsExplored?: number;
@@ -20,9 +23,15 @@ export class DungeonFailScene extends Phaser.Scene {
   init(data: DungeonFailData): void {
     this.roomsExplored = data.roomsExplored ?? 0;
     this.enemiesDefeated = data.enemiesDefeated ?? 0;
+    this.events.off('shutdown', this.onShutdown, this);
+    this.events.on('shutdown', this.onShutdown, this);
   }
 
   create(): void {
+    // Wire EventBus for save/exit
+    gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.on(GameEvent.EXIT_GAME, this.handleEventExit);
+
     const { width, height } = this.scale;
 
     const SKULL_Y_RATIO = 0.25;
@@ -145,6 +154,41 @@ export class DungeonFailScene extends Phaser.Scene {
       btnBg.setAlpha(1);
       this.isExiting = false;
     }
+  }
+
+  private emitStateUpdate(): void {
+    const snapshot: GameStateSnapshot = {
+      familiars: [],
+      currency: 0,
+      battleCount: 0,
+      wins: 0,
+      currentScene: 'dungeon_fail',
+    }
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+  }
+
+  private handleSave = async (): Promise<void> => {
+    try {
+      const { state } = await gameApiClient.loadGameState();
+      await gameApiClient.saveGameState(state);
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Save failed';
+      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
+    }
+  };
+
+  private handleEventExit = (): void => {
+    if (!this.isExiting) {
+      this.isExiting = true;
+      this.scene.start('WorldMapScene');
+    }
+  };
+
+  private onShutdown(): void {
+    gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
+    gameEventBus.off(GameEvent.EXIT_GAME, this.handleEventExit);
+    this.cleanupTweens();
   }
 
   private cleanupTweens(): void {

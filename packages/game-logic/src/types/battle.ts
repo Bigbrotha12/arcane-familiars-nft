@@ -1,5 +1,5 @@
-import type { AbilityEffectType } from '../data/abilities';
-import type { FamiliarData } from '../data/familiars';
+import type { StatName, EffectType } from '@/data/abilities';
+import type { FamiliarData } from '@/data/familiars';
 
 export interface BattleFamiliar {
   familiarData: FamiliarData;
@@ -12,25 +12,40 @@ export interface BattleFamiliar {
 
 export interface StatusEffect {
   abilityId: string;
-  type: 'buff' | 'debuff' | 'dot' | 'hot';
-  stat: string;
+  type: EffectType;
+  stat: StatName;
   value: number;
   turnsRemaining: number;
 }
 
+export enum ActionType {
+  Attack,
+  Ability,
+  Defend,
+  Item,
+  Run
+}
+
 export interface BattleAction {
-  type: 'attack' | 'ability' | 'defend' | 'item' | 'run';
+  type: ActionType;
   abilityId?: string;
   itemId?: string;
   targetId?: string;
 }
 
 export interface ActionResult {
-  effectType: AbilityEffectType;
+  effectType: EffectType;
   targetId: string;
   value: number;
   isCritical: boolean;
   description: string;
+  appliedEffects?: StatusEffect[];
+}
+
+export enum Outcome {
+  Win,
+  Loss,
+  Continue
 }
 
 export interface BattleTurnResult {
@@ -38,7 +53,7 @@ export interface BattleTurnResult {
   enemyAction: ActionResult;
   playerFamiliar: BattleFamiliar;
   enemyFamiliar: BattleFamiliar;
-  battleOutcome: 'win' | 'lose' | 'continue';
+  battleOutcome: Outcome;
   rewards?: BattleRewards;
 }
 
@@ -47,11 +62,17 @@ export interface BattleRewards {
   items: string[];
 }
 
+export enum BattleResult {
+  Won,
+  Lost,
+  Active,
+  Fled
+}
 export interface BattleState {
   id: string;
   playerFamiliar: BattleFamiliar;
   enemyFamiliar: BattleFamiliar;
   isBoss: boolean;
   turnCount: number;
-  status: 'active' | 'won' | 'lost' | 'fled';
+  status: BattleResult;
 }

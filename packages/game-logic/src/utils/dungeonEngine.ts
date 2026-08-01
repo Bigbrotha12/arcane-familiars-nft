@@ -1,8 +1,6 @@
-import type { Area, Room, DungeonState, RoomExit } from '../types/exploration';
-import type { FamiliarData } from '../data/familiars';
-import { getFamiliar } from '../data/familiars';
-import { AREAS } from '../data/areas';
-import { randomInRange, weightedRandom, randomFloat } from './mathUtils';
+import { type Area, type Room, type DungeonState, RoomType } from '@/types/exploration';
+import type { FamiliarData } from '@/data/familiars';
+import { randomInRange, weightedRandom } from '@/utils/mathUtils';
 
 const ROOM_NAMES = [
   'Twilight Path', 'Crystal Alcove', 'Mossy Chamber', 'Stone Corridor',
@@ -22,13 +20,25 @@ const ROOM_DESCRIPTIONS = [
   'Ancient runes line the walls.',
 ];
 
-const DIRECTIONS = ['north', 'south', 'east', 'west', 'northeast', 'northwest', 'southeast', 'southwest'];
+export enum Directions {
+  North,
+  South,
+  East,
+  West,
+  Northeast,
+  Northwest,
+  Southeast,
+  Southwest
+};
 
 /**
  * Generate a dungeon for the given area using a seeded RNG.
  * Creates a valid room graph with start, normal, and boss rooms.
  */
 export function generateDungeon(area: Area, seed: number): DungeonState {
+  if (area.roomCount < 3) {
+    throw new Error(`Area "${area.id}" has insufficient roomCount (${area.roomCount}). Minimum is 3.`);
+  }
   const rng = seededRandom(seed);
   const rooms: Record<string, Room> = {};
   const roomIds: string[] = [];
@@ -38,7 +48,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     id: 'room_0',
     name: 'Entrance',
     description: `The entrance to ${area.name}.`,
-    type: 'start',
+    type: RoomType.Start,
     exits: [],
     encounterChance: 0,
     treasureChance: 0.1,
@@ -58,7 +68,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
       id: `room_${i + 1}`,
       name: ROOM_NAMES[nameIdx],
       description: ROOM_DESCRIPTIONS[descIdx],
-      type: i === normalCount - 1 ? 'normal' : 'normal',
+      type: RoomType.Normal,
       exits: [],
       encounterChance: 0.3 + depth * 0.3,
       treasureChance: 0.15 + depth * 0.1,
@@ -78,7 +88,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     id: `room_${normalCount + 1}`,
     name: 'Boss Chamber',
     description: `The ${area.bossId} awaits in the final chamber.`,
-    type: 'boss',
+    type: RoomType.Boss,
     exits: [],
     encounterChance: 0,
     treasureChance: 0,
@@ -92,8 +102,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   for (let i = 0; i < roomIds.length - 1; i++) {
     const fromRoom = rooms[roomIds[i]];
     const toRoom = rooms[roomIds[i + 1]];
-    const dirIdx = randomInRange(rng, 0, DIRECTIONS.length - 1);
-    const dir = DIRECTIONS[dirIdx];
+    const dir = randomInRange(rng, 0, 7) as Directions;
     fromRoom.exits.push({ direction: dir, roomId: toRoom.id, label: toRoom.name });
     const oppositeDir = getOppositeDirection(dir);
     toRoom.exits.push({ direction: oppositeDir, roomId: fromRoom.id, label: fromRoom.name });
@@ -109,8 +118,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
         const fromRoom = rooms[roomIds[fromIdx]];
         const toRoom = rooms[roomIds[toIdx]];
         if (!fromRoom.exits.some((e) => e.roomId === toRoom.id)) {
-          const dirIdx = randomInRange(rng, 0, DIRECTIONS.length - 1);
-          const dir = DIRECTIONS[dirIdx];
+          const dir = randomInRange(rng, 0, 7) as Directions;
           fromRoom.exits.push({ direction: dir, roomId: toRoom.id, label: toRoom.name });
           const oppositeDir = getOppositeDirection(dir);
           toRoom.exits.push({ direction: oppositeDir, roomId: fromRoom.id, label: fromRoom.name });
@@ -118,9 +126,6 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
       }
     }
   }
-
-  // Boss room exits back to previous room
-  bossRoom.exits.push({ direction: 'south', roomId: roomIds[roomIds.length - 2], label: 'Retreat' });
 
   return {
     areaId: area.id,
@@ -133,18 +138,18 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   };
 }
 
-function getOppositeDirection(dir: string): string {
-  const opposites: Record<string, string> = {
-    north: 'south',
-    south: 'north',
-    east: 'west',
-    west: 'east',
-    northeast: 'southwest',
-    southwest: 'northeast',
-    northwest: 'southeast',
-    southeast: 'northwest',
+function getOppositeDirection(dir: Directions): Directions {
+  const opposites: Record<Directions, Directions> = {
+    [Directions.North]: Directions.South,
+    [Directions.South]: Directions.North,
+    [Directions.East]: Directions.West,
+    [Directions.West]: Directions.East,
+    [Directions.Northeast]: Directions.Southwest,
+    [Directions.Southeast]: Directions.Northwest,
+    [Directions.Northwest]: Directions.Southeast,
+    [Directions.Southwest]: Directions.Northeast,
   };
-  return opposites[dir] || dir;
+  return opposites[dir];
 }
 
 /**
@@ -173,7 +178,8 @@ export function selectTreasure(room: Room, rng: () => number): string | null {
 /**
  * Select a random enemy from the area's encounter pool.
  */
-export function selectEnemy(area: Area, rng: () => number): string {
+export function selectEnemy(area: Area, rng: () => number): string | null {
+  if (area.encounterPool.length === 0) return null;
   const idx = randomInRange(rng, 0, area.encounterPool.length - 1);
   return area.encounterPool[idx];
 }

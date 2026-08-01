@@ -1,4 +1,4 @@
-import type { Area } from '../types/exploration';
+import type { Area } from '@/types/exploration';
 
 export const AREAS: Record<string, Area> = {
   verdantMeadow: {

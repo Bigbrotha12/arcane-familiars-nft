@@ -1,7 +1,7 @@
-import type { BattleAction, BattleState } from '../types/battle';
-import type { DungeonState } from '../types/exploration';
-import { getAbility } from '../data/abilities';
-import { validateMove } from './dungeonEngine';
+import { ActionType, BattleResult, type BattleAction, type BattleState } from '@/types/battle';
+import type { DungeonState } from '@/types/exploration';
+import { getAbility } from '@/data/abilities';
+import { validateMove } from '@/utils/dungeonEngine';
 
 export interface ValidationResult {
   valid: boolean;
@@ -12,15 +12,15 @@ export interface ValidationResult {
  * Validate a battle action against the current battle state.
  */
 export function validateBattleAction(action: BattleAction, battleState: BattleState): ValidationResult {
-  if (battleState.status !== 'active') {
+  if (battleState.status !== BattleResult.Active) {
     return { valid: false, error: 'Battle is not active' };
   }
 
   switch (action.type) {
-    case 'attack':
+    case ActionType.Attack:
       return { valid: true };
 
-    case 'ability': {
+    case ActionType.Ability: {
       if (!action.abilityId) {
         return { valid: false, error: 'Ability ID is required' };
       }
@@ -38,17 +38,17 @@ export function validateBattleAction(action: BattleAction, battleState: BattleSt
       return { valid: true };
     }
 
-    case 'defend':
+    case ActionType.Defend:
       return { valid: true };
 
-    case 'item': {
+    case ActionType.Item: {
       if (!action.itemId) {
         return { valid: false, error: 'Item ID is required' };
       }
       return { valid: true };
     }
 
-    case 'run': {
+    case ActionType.Run: {
       if (battleState.isBoss) {
         return { valid: false, error: 'Cannot run from a boss battle' };
       }
@@ -56,7 +56,7 @@ export function validateBattleAction(action: BattleAction, battleState: BattleSt
     }
 
     default:
-      return { valid: false, error: `Unknown action type: ${(action as BattleAction).type}` };
+      return { valid: false, error: `Unknown action type: ${action.type}` };
   }
 }
 

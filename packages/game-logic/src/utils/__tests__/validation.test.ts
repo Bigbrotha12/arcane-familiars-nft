@@ -4,6 +4,7 @@ import { getFamiliar } from "../../data/familiars";
 import { getAbility } from "../../data/abilities";
 import { generateDungeon } from "../dungeonEngine";
 import { AREAS } from "../../data/areas";
+import { ActionType, BattleResult } from "../../types/battle";
 import type { BattleAction, BattleState } from "../../types/battle";
 import type { DungeonState, Room } from "../../types/exploration";
 
@@ -29,15 +30,15 @@ function createBattleState(overrides: Partial<BattleState> = {}): BattleState {
     },
     isBoss: false,
     turnCount: 1,
-    status: "active",
+    status: BattleResult.Active,
     ...overrides,
   };
 }
 
 describe("validateBattleAction", () => {
   it("returns invalid when battle is not active", () => {
-    const state = createBattleState({ status: "won" });
-    const action: BattleAction = { type: "attack" };
+    const state = createBattleState({ status: BattleResult.Won });
+    const action: BattleAction = { type: ActionType.Attack };
     expect(validateBattleAction(action, state)).toEqual({
       valid: false,
       error: "Battle is not active",
@@ -47,7 +48,7 @@ describe("validateBattleAction", () => {
   describe("attack", () => {
     it("is valid", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "attack" };
+      const action: BattleAction = { type: ActionType.Attack };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
   });
@@ -55,7 +56,7 @@ describe("validateBattleAction", () => {
   describe("ability", () => {
     it("requires abilityId", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "ability" };
+      const action: BattleAction = { type: ActionType.Ability };
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
         error: "Ability ID is required",
@@ -64,7 +65,7 @@ describe("validateBattleAction", () => {
 
     it("rejects unknown ability", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "ability", abilityId: "nonexistent" };
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "nonexistent" };
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
         error: "Unknown ability: nonexistent",
@@ -78,7 +79,7 @@ describe("validateBattleAction", () => {
           currentMp: 5,
         },
       });
-      const action: BattleAction = { type: "ability", abilityId: "fireball" };
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "fireball" };
       const ability = getAbility("fireball")!;
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
@@ -93,7 +94,7 @@ describe("validateBattleAction", () => {
           cooldowns: { brave: 1 },
         },
       });
-      const action: BattleAction = { type: "ability", abilityId: "brave" };
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "brave" };
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
         error: "Ability on cooldown for 1 turns",
@@ -102,7 +103,7 @@ describe("validateBattleAction", () => {
 
     it("is valid when enough MP and no cooldown", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "ability", abilityId: "brave" };
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "brave" };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
   });
@@ -110,7 +111,7 @@ describe("validateBattleAction", () => {
   describe("defend", () => {
     it("is valid", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "defend" };
+      const action: BattleAction = { type: ActionType.Defend };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
   });
@@ -118,7 +119,7 @@ describe("validateBattleAction", () => {
   describe("item", () => {
     it("requires itemId", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "item" };
+      const action: BattleAction = { type: ActionType.Item };
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
         error: "Item ID is required",
@@ -127,7 +128,7 @@ describe("validateBattleAction", () => {
 
     it("is valid with itemId", () => {
       const state = createBattleState();
-      const action: BattleAction = { type: "item", itemId: "potion_small" };
+      const action: BattleAction = { type: ActionType.Item, itemId: "potion_small" };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
   });
@@ -135,13 +136,13 @@ describe("validateBattleAction", () => {
   describe("run", () => {
     it("is valid in non-boss battle", () => {
       const state = createBattleState({ isBoss: false });
-      const action: BattleAction = { type: "run" };
+      const action: BattleAction = { type: ActionType.Run };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
 
     it("is invalid in boss battle", () => {
       const state = createBattleState({ isBoss: true });
-      const action: BattleAction = { type: "run" };
+      const action: BattleAction = { type: ActionType.Run };
       expect(validateBattleAction(action, state)).toEqual({
         valid: false,
         error: "Cannot run from a boss battle",

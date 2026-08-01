@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy } from '@arcane-familiars/game-logic';
+import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, RoomType } from '@arcane-familiars/game-logic';
 
 const explorationRouter = new Hono<{ Bindings: { DB: D1Database } }>();
 
@@ -113,7 +113,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
     let encounter: boolean;
     let enemy: string | null = null;
 
-    if (room.type === 'boss') {
+    if (room.type === RoomType.Boss) {
       encounter = true;
       enemy = area.bossId;
     } else {
@@ -150,6 +150,65 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
   } catch (error: any) {
     console.error('Explore room error:', error.message);
     return c.json({ error: 'Failed to explore room' }, 500);
+  }
+});
+
+explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
+  try {
+    const { anonymousId, roomId, itemId } = await c.req.json<{ anonymousId: string; roomId: string; itemId: string }>();
+
+    if (!anonymousId || !roomId || !itemId) {
+      return c.json({ error: 'Missing required fields: anonymousId, roomId, itemId' }, 400);
+    }
+
+    const row = await c.env.DB
+      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
+      .bind(anonymousId)
+      .first<{ state_json: string }>();
+
+    if (!row) {
+      return c.json({ error: 'Game state not found' }, 404);
+    }
+
+    const state: GameState = JSON.parse(row.state_json);
+
+    if (!state.dungeon) {
+      return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    const room = state.dungeon.rooms[roomId];
+    if (!room) {
+      return c.json({ error: 'Room not found' }, 404);
+    }
+
+    if (!room.cleared) {
+      return c.json({ error: 'Room has not been explored' }, 400);
+    }
+
+    const existingItem = state.inventory.items.find((i) => i.itemId === itemId);
+    if (existingItem) {
+      existingItem.quantity += 1;
+    } else {
+      state.inventory.items.push({ itemId, quantity: 1 });
+    }
+
+    state.lastSaved = Date.now();
+    const stateJson = JSON.stringify(state);
+
+    await c.env.DB
+      .prepare(
+        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
+         VALUES (?, ?, datetime('now'))
+         ON CONFLICT(anonymous_id)
+         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
+      )
+      .bind(anonymousId, stateJson, stateJson)
+      .run();
+
+    return c.json({ success: true, inventory: state.inventory });
+  } catch (error: any) {
+    console.error('Collect treasure error:', error.message);
+    return c.json({ error: 'Failed to collect treasure' }, 500);
   }
 });
 

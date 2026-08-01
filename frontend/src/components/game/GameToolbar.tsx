@@ -1,5 +1,5 @@
-import Button from '../ui/Button'
-import type { GameStateSnapshot } from '@arcane-familiars/game'
+import Button from '@/components/ui/Button'
+import type { GameStateSnapshot } from '@/game'
 
 interface GameToolbarProps {
   gameState: GameStateSnapshot | null
@@ -38,7 +38,7 @@ export default function GameToolbar({ gameState, onSave, onExit, saving }: GameT
       </div>
 
       <Button variant="ghost" size="sm" onClick={onSave} disabled={saving}>
-        {saving ? 'Saving...' : 'Save'}
+        {saving ? 'Saving...' : '💾 Save'}
       </Button>
     </div>
   )

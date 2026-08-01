@@ -15,8 +15,8 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./src/*"],
-      "@arcane-familiars/game": ["../game/src/index.ts"],
-      "@arcane-familiars/game-logic": ["../packages/game-logic/src/index.ts"],
+      "@/game": ["../game/src/index.ts"],
+      "@/logic": ["../packages/game-logic/src/index.ts"],
       "@/types/*": ["../packages/game-logic/src/types/*"],
       "@/data/*": ["../packages/game-logic/src/data/*"],
       "@/utils/*": ["../packages/game-logic/src/utils/*"]

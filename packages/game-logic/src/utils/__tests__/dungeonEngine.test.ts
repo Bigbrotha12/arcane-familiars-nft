@@ -3,6 +3,7 @@ import { generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEne
 import { seededRandom } from "../mathUtils";
 import { AREAS } from "../../data/areas";
 import { getFamiliar } from "../../data/familiars";
+import { RoomType } from "../../types/exploration";
 import type { Room, Area } from "../../types/exploration";
 
 function makeRng(seed = 42): () => number {
@@ -20,14 +21,14 @@ describe("generateDungeon", () => {
   it("first room is 'start' type named 'Entrance'", () => {
     const dungeon = generateDungeon(area, 42);
     const first = dungeon.rooms["room_0"];
-    expect(first.type).toBe("start");
+    expect(first.type).toBe(RoomType.Start);
     expect(first.name).toBe("Entrance");
   });
 
   it("last room is 'boss' type", () => {
     const dungeon = generateDungeon(area, 42);
     const ids = Object.keys(dungeon.rooms);
-    expect(dungeon.rooms[ids[ids.length - 1]].type).toBe("boss");
+    expect(dungeon.rooms[ids[ids.length - 1]].type).toBe(RoomType.Boss);
   });
 
   it("all rooms have at least 1 exit", () => {
@@ -46,6 +47,7 @@ describe("generateDungeon", () => {
       expect(b.rooms[id].name).toBe(a.rooms[id].name);
       expect(b.rooms[id].description).toBe(a.rooms[id].description);
       expect(b.rooms[id].type).toBe(a.rooms[id].type);
+
       expect(b.rooms[id].exits).toEqual(a.rooms[id].exits);
     }
   });
@@ -70,7 +72,7 @@ describe("rollEncounter", () => {
     id: "test",
     name: "Test",
     description: "",
-    type: "normal",
+    type: RoomType.Normal,
     exits: [],
     encounterChance: 0,
     treasureChance: 0,
@@ -99,7 +101,7 @@ describe("rollTreasure", () => {
     id: "test",
     name: "Test",
     description: "",
-    type: "normal",
+    type: RoomType.Normal,
     exits: [],
     encounterChance: 0,
     treasureChance: 0,
@@ -128,7 +130,7 @@ describe("selectTreasure", () => {
     id: "test",
     name: "Test",
     description: "",
-    type: "normal",
+    type: RoomType.Normal,
     exits: [],
     encounterChance: 0,
     treasureChance: 0,

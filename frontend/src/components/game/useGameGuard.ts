@@ -1,4 +1,4 @@
-import { useEffect, useCallback } from 'react'
+import { useEffect, useCallback, useRef } from 'react'
 import { useBlocker } from 'react-router-dom'
 
 interface UseGameGuardOptions {
@@ -11,6 +11,8 @@ export function useGameGuard({ onAutoSave, onShowExitModal }: UseGameGuardOption
     ({ currentLocation, nextLocation }) =>
       currentLocation.pathname !== nextLocation.pathname
   )
+
+  const isBlockerActive = blocker.state === 'blocked'
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
@@ -29,24 +31,28 @@ export function useGameGuard({ onAutoSave, onShowExitModal }: UseGameGuardOption
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
-      e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
   }, [])
 
+  // Ref to hold the latest onAutoSave callback (avoids re-binding the event listener)
+  const autoSaveRef = useRef(onAutoSave)
+  autoSaveRef.current = onAutoSave
+
   useEffect(() => {
     const handler = () => {
       if (document.hidden) {
-        onAutoSave()
+        autoSaveRef.current()
       }
     }
     document.addEventListener('visibilitychange', handler)
     return () => document.removeEventListener('visibilitychange', handler)
-  }, [onAutoSave])
+  }, [])
 
   return {
     handleBlockerProceed,
     handleBlockerReset,
+    isBlockerActive,
   }
 }
