@@ -62,6 +62,7 @@ export class BattleUI {
   private connectingText?: Phaser.GameObjects.Text;
   private owned: Phaser.GameObjects.GameObject[] = [];
   private floatingTweens: Phaser.Tweens.Tween[] = [];
+  private overlayActive = false;
   private readonly ENEMY_CENTER_X = 480;
   private readonly ENEMY_CENTER_Y = 140;
   private readonly PLAYER_CENTER_X = 180;
@@ -309,7 +310,13 @@ export class BattleUI {
     this.owned = this.owned.filter(o => o && o.scene);
   }
 
+  setOverlayActive(active: boolean): void {
+    this.overlayActive = active;
+    this.setVisible(!active);
+  }
+
   enableMainActions(): void {
+    if (this.overlayActive) return;
     this.mainActions.setVisible(true);
   }
 
@@ -374,6 +381,7 @@ export class BattleUI {
   }
 
   showAbilityPanel(familiar: BattleFamiliar): void {
+    if (this.overlayActive) return;
     this.abilityPanel.removeAll(true);
     this.purgeOwned();
     this.abilityPanel.setVisible(true);
@@ -460,6 +468,7 @@ export class BattleUI {
   }
 
   showItemPanel(inventory: { itemId: string; quantity: number }[]): void {
+    if (this.overlayActive) return;
     this.itemPanel.removeAll(true);
     this.purgeOwned();
     this.itemPanel.setVisible(true);
@@ -563,6 +572,7 @@ export class BattleUI {
   }
 
   showMainActions(): void {
+    if (this.overlayActive) return;
     this.abilityPanel.setVisible(false);
     this.itemPanel.setVisible(false);
     this.mainActions.setVisible(true);
@@ -574,6 +584,24 @@ export class BattleUI {
       this.battleLog.splice(0, this.battleLog.length - 12);
     }
     this.logText.setText(this.battleLog.join('\n'));
+  }
+
+  getLog(): string[] {
+    return [...this.battleLog];
+  }
+
+  setVisible(enabled: boolean): void {
+    for (const obj of this.owned) {
+      if (!obj || !obj.scene) continue;
+      (obj as unknown as Phaser.GameObjects.Components.Visible).setVisible(enabled);
+      if (obj instanceof Phaser.GameObjects.Container) {
+        if (enabled) {
+          obj.setInteractive();
+        } else {
+          obj.disableInteractive();
+        }
+      }
+    }
   }
 
   getEnemyDamagePosition(): { x: number; y: number } {
@@ -642,6 +670,7 @@ export class BattleUI {
   }
 
   private showOutcomeMessage(title: string, color: string, lines: string[]): void {
+    if (this.overlayActive) return;
     this.outcomeOverlay.removeAll(true);
     this.purgeOwned();
     this.outcomeOverlay.setVisible(true);
