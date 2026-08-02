@@ -75,6 +75,7 @@ export class ExplorationUI {
 
   private exitBtn!: Phaser.GameObjects.Container;
   private mainContainer!: Phaser.GameObjects.Container;
+  private destroyed = false;
 
   constructor(scene: Phaser.Scene, callbacks: ExplorationUICallbacks) {
     this.scene = scene;
@@ -489,6 +490,34 @@ export class ExplorationUI {
     this.logText.setText(this.logMessages.join('\n'));
   }
 
+  getLog(): string[] {
+    return [...this.logMessages];
+  }
+
+  setVisible(enabled: boolean): void {
+    this.mainContainer.setVisible(enabled);
+    this.setContainerInteractive(this.mainContainer, enabled);
+  }
+
+  private setContainerInteractive(container: Phaser.GameObjects.Container, enabled: boolean): void {
+    if (enabled) {
+      container.setInteractive();
+    } else {
+      container.disableInteractive();
+    }
+    for (const child of container.list) {
+      if (child instanceof Phaser.GameObjects.Container) {
+        this.setContainerInteractive(child, enabled);
+      } else if (child.input) {
+        if (enabled) {
+          child.setInteractive();
+        } else {
+          child.disableInteractive();
+        }
+      }
+    }
+  }
+
   showBossWarning(enemyId: string): void {
     this.bossWarning.removeAll(true);
     this.bossWarning.setVisible(true);
@@ -554,6 +583,10 @@ export class ExplorationUI {
     this.treasurePanel.setVisible(false);
   }
 
+  hideBossWarning(): void {
+    this.bossWarning.setVisible(false);
+  }
+
   hideNavPanel(): void {
     this.navPanel.setVisible(false);
   }
@@ -562,7 +595,12 @@ export class ExplorationUI {
     this.navPanel.setVisible(true);
   }
 
+  isDestroyed(): boolean {
+    return this.destroyed;
+  }
+
   destroy(): void {
+    this.destroyed = true;
     this.exitButtons = [];
     this.partyMemberElements = [];
     this.logMessages = [];
