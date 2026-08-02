@@ -2,10 +2,14 @@ import Phaser from 'phaser';
 import { gameConfig } from './config';
 
 export function createGame(parentId: string): Phaser.Game {
-  return new Phaser.Game({
+  const game = new Phaser.Game({
     ...gameConfig,
     parent: parentId,
   });
+  if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
+    (window as any).__arcaneGame = game;
+  }
+  return game;
 }
 
 export function destroyGame(game: Phaser.Game): void {
