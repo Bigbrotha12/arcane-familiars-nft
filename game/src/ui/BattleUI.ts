@@ -61,7 +61,9 @@ export class BattleUI {
   private battleLog: string[] = [];
   private connectingText?: Phaser.GameObjects.Text;
   private owned: Phaser.GameObjects.GameObject[] = [];
+  private uiOnly: Phaser.GameObjects.GameObject[] = [];
   private floatingTweens: Phaser.Tweens.Tween[] = [];
+  private overlayActive = false;
   private readonly ENEMY_CENTER_X = 480;
   private readonly ENEMY_CENTER_Y = 140;
   private readonly PLAYER_CENTER_X = 180;
@@ -76,6 +78,12 @@ export class BattleUI {
 
   private register<T extends Phaser.GameObjects.GameObject>(obj: T): T {
     this.owned.push(obj);
+    return obj;
+  }
+
+  private registerUI<T extends Phaser.GameObjects.GameObject>(obj: T): T {
+    this.owned.push(obj);
+    this.uiOnly.push(obj);
     return obj;
   }
 
@@ -127,13 +135,13 @@ export class BattleUI {
     this.enemyHpBar = this.register(this.scene.add.graphics());
     this.enemyMpBar = this.register(this.scene.add.graphics());
 
-    this.enemyHpText = this.register(this.scene.add.text(560, 200, '', {
+    this.enemyHpText = this.registerUI(this.scene.add.text(560, 200, '', {
       fontSize: '11px',
       fontFamily: 'JetBrains Mono',
       color: C.text,
     }));
 
-    this.enemyMpText = this.register(this.scene.add.text(560, 218, '', {
+    this.enemyMpText = this.registerUI(this.scene.add.text(560, 218, '', {
       fontSize: '11px',
       fontFamily: 'JetBrains Mono',
       color: C.text,
@@ -164,13 +172,13 @@ export class BattleUI {
     this.playerHpBar = this.register(this.scene.add.graphics());
     this.playerMpBar = this.register(this.scene.add.graphics());
 
-    this.playerHpText = this.register(this.scene.add.text(260, 478, '', {
+    this.playerHpText = this.registerUI(this.scene.add.text(260, 478, '', {
       fontSize: '11px',
       fontFamily: 'JetBrains Mono',
       color: C.text,
     }));
 
-    this.playerMpText = this.register(this.scene.add.text(260, 496, '', {
+    this.playerMpText = this.registerUI(this.scene.add.text(260, 496, '', {
       fontSize: '11px',
       fontFamily: 'JetBrains Mono',
       color: C.text,
@@ -190,7 +198,7 @@ export class BattleUI {
     const pw = 180;
     const ph = 310;
 
-    const logBg = this.register(this.scene.add.rectangle(
+    const logBg = this.registerUI(this.scene.add.rectangle(
       px + pw / 2,
       py + ph / 2,
       pw,
@@ -200,13 +208,13 @@ export class BattleUI {
     ));
     logBg.setStrokeStyle(1, C.border);
 
-    const logTitle = this.register(this.scene.add.text(px + 8, py + 6, 'Battle Log', {
+    const logTitle = this.registerUI(this.scene.add.text(px + 8, py + 6, 'Battle Log', {
       fontSize: '11px',
       fontFamily: 'DM Sans',
       color: '#7C5CFC',
     }));
 
-    this.logText = this.register(this.scene.add.text(px + 8, py + 24, '', {
+    this.logText = this.registerUI(this.scene.add.text(px + 8, py + 24, '', {
       fontSize: '10px',
       fontFamily: 'DM Sans',
       color: C.text,
@@ -216,7 +224,7 @@ export class BattleUI {
   }
 
   private createMainActions(): void {
-    this.mainActions = this.register(this.scene.add.container(0, 0));
+    this.mainActions = this.registerUI(this.scene.add.container(0, 0));
     this.mainActions.setVisible(false);
 
     const buttonDefs = [
@@ -234,17 +242,17 @@ export class BattleUI {
     const by = 565;
 
     buttonDefs.forEach((def, i) => {
-      const bg = this.register(this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg));
+      const bg = this.registerUI(this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg));
       bg.setStrokeStyle(1, C.border);
 
-      const label = this.register(this.scene.add.text(0, 0, def.label, {
+      const label = this.registerUI(this.scene.add.text(0, 0, def.label, {
         fontSize: '13px',
         fontFamily: 'DM Sans',
         color: '#F0EFFF',
       }));
       label.setOrigin(0.5);
 
-      const container = this.register(this.scene.add.container(positions[i], by, [bg, label]));
+      const container = this.registerUI(this.scene.add.container(positions[i], by, [bg, label]));
       container.setSize(bw, bh);
       container.setInteractive({ useHandCursor: true });
 
@@ -258,17 +266,17 @@ export class BattleUI {
   }
 
   private createAbilityPanel(): void {
-    this.abilityPanel = this.register(this.scene.add.container(0, 0));
+    this.abilityPanel = this.registerUI(this.scene.add.container(0, 0));
     this.abilityPanel.setVisible(false);
   }
 
   private createItemPanel(): void {
-    this.itemPanel = this.register(this.scene.add.container(0, 0));
+    this.itemPanel = this.registerUI(this.scene.add.container(0, 0));
     this.itemPanel.setVisible(false);
   }
 
   private createOutcomeOverlay(): void {
-    this.outcomeOverlay = this.register(this.scene.add.container(0, 0));
+    this.outcomeOverlay = this.registerUI(this.scene.add.container(0, 0));
     this.outcomeOverlay.setVisible(false);
   }
 
@@ -279,7 +287,7 @@ export class BattleUI {
       this.removeFromOwned(this.connectingText);
       this.connectingText = undefined;
     }
-    this.connectingText = this.register(this.scene.add.text(
+    this.connectingText = this.registerUI(this.scene.add.text(
       this.gameWidth / 2,
       this.gameHeight / 2,
       'Connecting...',
@@ -303,13 +311,36 @@ export class BattleUI {
   private removeFromOwned(obj: Phaser.GameObjects.GameObject): void {
     const idx = this.owned.indexOf(obj);
     if (idx !== -1) this.owned.splice(idx, 1);
+    const uiIdx = this.uiOnly.indexOf(obj);
+    if (uiIdx !== -1) this.uiOnly.splice(uiIdx, 1);
   }
 
   private purgeOwned(): void {
     this.owned = this.owned.filter(o => o && o.scene);
+    this.uiOnly = this.uiOnly.filter(o => o && o.scene);
+  }
+
+  setOverlayActive(active: boolean): void {
+    this.overlayActive = active;
+    this.setActionUIVisible(!active);
+  }
+
+  private setActionUIVisible(enabled: boolean): void {
+    for (const obj of this.uiOnly) {
+      if (!obj || !obj.scene) continue;
+      (obj as unknown as Phaser.GameObjects.Components.Visible).setVisible(enabled);
+      if (obj instanceof Phaser.GameObjects.Container) {
+        if (enabled) {
+          obj.setInteractive();
+        } else {
+          obj.disableInteractive();
+        }
+      }
+    }
   }
 
   enableMainActions(): void {
+    if (this.overlayActive) return;
     this.mainActions.setVisible(true);
   }
 
@@ -374,6 +405,7 @@ export class BattleUI {
   }
 
   showAbilityPanel(familiar: BattleFamiliar): void {
+    if (this.overlayActive) return;
     this.abilityPanel.removeAll(true);
     this.purgeOwned();
     this.abilityPanel.setVisible(true);
@@ -460,6 +492,7 @@ export class BattleUI {
   }
 
   showItemPanel(inventory: { itemId: string; quantity: number }[]): void {
+    if (this.overlayActive) return;
     this.itemPanel.removeAll(true);
     this.purgeOwned();
     this.itemPanel.setVisible(true);
@@ -563,6 +596,7 @@ export class BattleUI {
   }
 
   showMainActions(): void {
+    if (this.overlayActive) return;
     this.abilityPanel.setVisible(false);
     this.itemPanel.setVisible(false);
     this.mainActions.setVisible(true);
@@ -574,6 +608,24 @@ export class BattleUI {
       this.battleLog.splice(0, this.battleLog.length - 12);
     }
     this.logText.setText(this.battleLog.join('\n'));
+  }
+
+  getLog(): string[] {
+    return [...this.battleLog];
+  }
+
+  setVisible(enabled: boolean): void {
+    for (const obj of this.owned) {
+      if (!obj || !obj.scene) continue;
+      (obj as unknown as Phaser.GameObjects.Components.Visible).setVisible(enabled);
+      if (obj instanceof Phaser.GameObjects.Container) {
+        if (enabled) {
+          obj.setInteractive();
+        } else {
+          obj.disableInteractive();
+        }
+      }
+    }
   }
 
   getEnemyDamagePosition(): { x: number; y: number } {
@@ -642,6 +694,7 @@ export class BattleUI {
   }
 
   private showOutcomeMessage(title: string, color: string, lines: string[]): void {
+    if (this.overlayActive) return;
     this.outcomeOverlay.removeAll(true);
     this.purgeOwned();
     this.outcomeOverlay.setVisible(true);
@@ -717,6 +770,7 @@ export class BattleUI {
       }
     }
     this.owned = [];
+    this.uiOnly = [];
 
     // Null out all references so no dangling pointers
     this.playerSprite = null!;

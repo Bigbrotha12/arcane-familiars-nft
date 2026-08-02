@@ -1,11 +1,11 @@
 import Phaser from 'phaser';
-import type { DungeonState, Area } from '@arcane-familiars/game-logic';
-import { AREAS, RoomType } from '@arcane-familiars/game-logic';
+import type { DungeonState, Area, Room, FamiliarData } from '@arcane-familiars/game-logic';
+import { AREAS, RoomType, getFamiliar, Directions, Affinity } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
-import type { GameStateSnapshot, FamiliarState } from '../events';
+import type { GameStateSnapshot, FamiliarState, OverlayModePayload, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
@@ -25,6 +25,10 @@ export class ExplorationScene extends Phaser.Scene {
   private isProcessing = false;
   private visitedRoomIds: Set<string> = new Set();
   private currentRoomIndex = 0;
+  private encounterActive = false;
+  private treasureActive = false;
+  private pendingEnemyId: string | null = null;
+  private pendingTreasureItemId: string | null = null;
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
@@ -38,6 +42,10 @@ export class ExplorationScene extends Phaser.Scene {
     this.area = null;
     this.visitedRoomIds = new Set();
     this.currentRoomIndex = 0;
+    this.encounterActive = false;
+    this.treasureActive = false;
+    this.pendingEnemyId = null;
+    this.pendingTreasureItemId = null;
   }
 
   async create(): Promise<void> {
@@ -73,6 +81,11 @@ export class ExplorationScene extends Phaser.Scene {
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.on(GameEvent.NAVIGATE_ROOM, this.handleNavigateRoom);
+    gameEventBus.on(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
+    gameEventBus.on(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
+    gameEventBus.on(GameEvent.START_BATTLE, this.handleStartBattle);
+    gameEventBus.on(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
 
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
@@ -157,7 +170,12 @@ export class ExplorationScene extends Phaser.Scene {
   private async navigateToRoom(roomId: string): Promise<void> {
     if (this.isProcessing || !this.dungeon || !this.area) return;
     this.isProcessing = true;
+    this.encounterActive = false;
+    this.treasureActive = false;
+    this.pendingEnemyId = null;
+    this.pendingTreasureItemId = null;
 
+    this.explorationUI.hideBossWarning();
     this.explorationUI.hideNavPanel();
 
     try {
@@ -179,23 +197,29 @@ export class ExplorationScene extends Phaser.Scene {
 
       const isBossRoom = result.room.type === RoomType.Boss;
 
-      this.emitStateUpdate()
-
       if (isBossRoom) {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
+        this.pendingEnemyId = this.area.bossId;
         this.explorationUI.showBossWarning(this.area.bossId);
         this.isProcessing = false;
+        this.emitStateUpdate();
       } else if (result.encounter && result.enemy) {
         this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
         this.timers.push(this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
+          this.encounterActive = true;
+          this.pendingEnemyId = result.enemy!;
           this.explorationUI.showEncounter(result.enemy!);
           this.isProcessing = false;
+          this.emitStateUpdate();
         }));
       } else if (result.treasure) {
         this.explorationUI.addLogMessage(`You find something in ${result.room.name}.`);
         this.timers.push(this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
+          this.treasureActive = true;
+          this.pendingTreasureItemId = result.treasureItem!;
           this.explorationUI.showTreasure(result.treasureItem!);
           this.isProcessing = false;
+          this.emitStateUpdate();
         }));
       } else {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
@@ -216,11 +240,17 @@ export class ExplorationScene extends Phaser.Scene {
 
   private startBattle(enemyId: string): void {
     if (!this.area) return;
+    this.isProcessing = true;
+    this.encounterActive = false;
+    this.pendingEnemyId = null;
     this.explorationUI.destroy();
     this.scene.start('BattleScene', { enemyId, returnScene: 'ExplorationScene', areaId: this.areaId });
   }
 
   private handleFlee(): void {
+    if (this.isProcessing || !this.explorationUI || this.explorationUI.isDestroyed()) return;
+    this.encounterActive = false;
+    this.pendingEnemyId = null;
     this.explorationUI.addLogMessage('You avoided the encounter.');
     this.explorationUI.hideEncounterPanel();
     if (this.dungeon) {
@@ -229,10 +259,12 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.showExits(currentRoom.exits);
       }
     }
+    this.emitStateUpdate();
   }
 
   private async handleTakeTreasure(itemId: string): Promise<void> {
-    if (!this.dungeon) return;
+    if (!this.dungeon || this.isProcessing) return;
+    this.isProcessing = true;
 
     const currentRoomId = this.dungeon.currentRoomId;
 
@@ -245,24 +277,32 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.explorationUI.hideTreasurePanel();
+    this.treasureActive = false;
+    this.pendingTreasureItemId = null;
     const currentRoom = this.dungeon.rooms[currentRoomId];
     if (currentRoom) {
       this.explorationUI.showExits(currentRoom.exits);
     }
+    this.isProcessing = false;
+    this.emitStateUpdate();
   }
 
   private handleLeaveTreasure(): void {
     this.explorationUI.addLogMessage('You left the treasure behind.');
     this.explorationUI.hideTreasurePanel();
+    this.treasureActive = false;
+    this.pendingTreasureItemId = null;
     if (this.dungeon) {
       const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
       if (currentRoom) {
         this.explorationUI.showExits(currentRoom.exits);
       }
     }
+    this.emitStateUpdate();
   }
 
   private handleBossRetreat(): void {
+    this.pendingEnemyId = null;
     this.explorationUI.addLogMessage('You retreat from the boss chamber.');
     if (this.dungeon) {
       const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
@@ -270,6 +310,7 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.showExits(currentRoom.exits);
       }
     }
+    this.emitStateUpdate();
   }
 
   private async exitDungeon(): Promise<void> {
@@ -285,6 +326,7 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.explorationUI.destroy();
+    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
     this.scene.start('WorldMapScene');
   }
 
@@ -296,17 +338,85 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   private emitStateUpdate(): void {
-    const currentRoom = this.dungeon ? this.dungeon.rooms[this.dungeon.currentRoomId] : null
+    const dungeon = this.dungeon;
+    if (!dungeon) return;
+    const currentRoom = dungeon.rooms[dungeon.currentRoomId];
+
+    const party: FamiliarState[] = (dungeon.party ?? [])
+      .map((id) => {
+        const fd = getFamiliar(id);
+        if (!fd) return null;
+        const state = this.toFamiliarStateFromData(fd);
+        const hp = dungeon.partyHp[id];
+        const mp = dungeon.partyMp[id];
+        if (typeof hp === 'number') state.hp = hp;
+        if (typeof mp === 'number') state.mp = mp;
+        return state;
+      })
+      .filter((f): f is FamiliarState => f !== null);
+
+    const roomIds = Object.keys(dungeon.rooms).sort((a, b) => {
+      const numA = parseInt(a, 10);
+      const numB = parseInt(b, 10);
+      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+      return a.localeCompare(b);
+    });
+
+    const rooms: DungeonRoomSnapshot[] = roomIds
+      .map((roomId) => dungeon.rooms[roomId])
+      .filter((room): room is Room => Boolean(room))
+      .map((room) => ({
+        id: room.id,
+        name: room.name,
+        type: RoomType[room.type],
+        cleared: room.cleared,
+        exits: room.exits.map((e) => ({
+          direction: Directions[e.direction].toLowerCase(),
+          roomId: e.roomId,
+          label: e.label,
+        })),
+      }));
+
     const snapshot: GameStateSnapshot = {
-      familiars: [],
+      familiars: party,
       currency: this.fullGameState?.inventory?.currency ?? 0,
       battleCount: this.fullGameState?.battleCount ?? 0,
       wins: this.fullGameState?.winCount ?? 0,
       currentScene: 'exploration',
       areaName: this.area?.name,
       roomName: currentRoom?.name,
-    }
-    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+      roomType: currentRoom ? RoomType[currentRoom.type] : undefined,
+      roomDescription: currentRoom?.description,
+      roomLog: [...this.explorationUI.getLog()],
+      dungeon: {
+        areaId: dungeon.areaId,
+        currentRoomId: dungeon.currentRoomId,
+        currentRoomIndex: this.currentRoomIndex,
+        roomCount: this.area?.roomCount ?? Object.keys(dungeon.rooms).length,
+        visitedRoomIds: [...this.visitedRoomIds],
+        rooms,
+      },
+      encounterActive: this.encounterActive,
+      treasureActive: this.treasureActive,
+      bossRoom: currentRoom?.type === RoomType.Boss,
+    };
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
+  }
+
+  private toFamiliarStateFromData(fd: FamiliarData): FamiliarState {
+    return {
+      id: fd.id,
+      name: fd.name,
+      hp: fd.stats.hp,
+      maxHp: fd.stats.maxHp,
+      mp: fd.stats.mp,
+      maxMp: fd.stats.maxMp,
+      attack: fd.stats.attack,
+      defense: fd.stats.defense,
+      speed: fd.stats.speed,
+      arcane: fd.stats.arcane,
+      affinity: Affinity[fd.affinity] ?? String(fd.affinity),
+    };
   }
 
   private handleSave = async (): Promise<void> => {
@@ -324,13 +434,56 @@ export class ExplorationScene extends Phaser.Scene {
 
   private handleExit = (): void => {
     this.explorationUI.destroy();
+    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
     this.scene.start('WorldMapScene');
+  };
+
+  private handleNavigateRoom = (payload: NavigateRoomPayload): void => {
+    if (this.isProcessing || this.encounterActive || this.treasureActive || this.pendingEnemyId !== null || !this.dungeon) return;
+    const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
+    if (!currentRoom) return;
+    const exit = currentRoom.exits.find((e) => Directions[e.direction].toLowerCase() === payload.direction);
+    if (!exit) {
+      console.warn(`[ExplorationScene] No exit matches direction "${payload.direction}" in room ${currentRoom.id}`);
+      return;
+    }
+    this.navigateToRoom(exit.roomId).catch((err) => {
+      console.error('Navigate error:', err);
+    });
+  };
+
+  private handleCollectTreasure = (): void => {
+    if (this.isProcessing || !this.treasureActive || !this.pendingTreasureItemId) return;
+    this.handleTakeTreasure(this.pendingTreasureItemId).catch((err) => {
+      console.error('Take treasure error:', err);
+    });
+  };
+
+  private handleFleeEncounter = (): void => {
+    if (this.isProcessing || !this.encounterActive) return;
+    this.handleFlee();
+  };
+
+  private handleStartBattle = (): void => {
+    if (this.isProcessing || this.treasureActive || !this.pendingEnemyId) return;
+    if (!this.explorationUI || this.explorationUI.isDestroyed()) return;
+    this.startBattle(this.pendingEnemyId);
+  };
+
+  private handleOverlayModeChanged = (payload: OverlayModePayload): void => {
+    if (payload.mode !== 'exploration') return;
+    this.explorationUI.setVisible(!payload.enabled);
   };
 
   private onShutdown(): void {
     this.cleanupTimers();
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.off(GameEvent.NAVIGATE_ROOM, this.handleNavigateRoom);
+    gameEventBus.off(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
+    gameEventBus.off(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
+    gameEventBus.off(GameEvent.START_BATTLE, this.handleStartBattle);
+    gameEventBus.off(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
   }
 
   private getRoomIndex(roomId: string): number {
