@@ -30,3 +30,4 @@ backend/.wrangler/
 game/node_modules/
 game/dist/
 
+.gstack/

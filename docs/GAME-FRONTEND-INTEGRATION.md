@@ -726,18 +726,39 @@ components/Game/
 
 ### 5d — Disabling Phaser-native UI
 
-When a HUD overlay is active, the corresponding Phaser UI should be hidden to avoid duplication:
+When a HUD overlay is active, the corresponding Phaser UI should be hidden to avoid duplication. However, the room background image (`roomBgImage` + `roomBg` overlay) is the **one** Phaser element that the React HUD does **not** render — it is the visual backdrop unique to the Phaser scene. Hiding it entirely leaves the center of the screen black in embedded mode.
 
-```ts
-// In Phaser scene:
-if (overlaysEnabled) {
-  this.battleUI.setVisible(false) // hide Phaser UI, let React handle it
-} else {
-  this.battleUI.setVisible(true) // fallback: Phaser handles it
-}
+To resolve this, the room backdrop was split into its own `roomBackdrop` container that stays visible whenever the overlay is active. The duplicated panels (MiniMap, PartyPanel, Log, Nav, etc.) are hidden inside `mainContainer` while the room image remains visible behind the React HUD chrome.
+
+```
+private roomBackdrop!: Phaser.GameObjects.Container;
+// In init(): create room image + overlay in roomBackdrop (scene root, not mainContainer)
+// In setVisible(enabled): mainContainer.setVisible(enabled); roomBackdrop stays visible independently
 ```
 
-The Phaser game checks a flag (set via EventBus) to determine whether to render its own UI.
+The `mainContainer` contains all duplicated chrome (navPanel, encounterPanel, treasurePanel, bossWarning, partyContainer, areaProgress, miniMapGfx, logText, exitBtn). The `roomBackdrop` container holds only `roomBgImage` + `roomBg` and is toggled opposite to `mainContainer` visibility — when the overlay is active (`enabled: false`), `mainContainer` hides and `roomBackdrop` shows, revealing the room image while the React HUD renders its corner panels.
+
+**Fix location:** `game/src/ui/ExplorationUI.ts` — split `createBackground()` / `createRoomArea()` outputs into a separate `roomBackdrop` container added to the scene root (not inside `mainContainer`), then `setVisible(enabled)` hides only `mainContainer` while `roomBackdrop` remains visible (and vice versa). This preserves pixel-perfect Phaser rendering while allowing the React HUD to overlay corner chrome without losing the room backdrop.
+
+---
+
+### 5e — Battle scene background images
+
+Battle backgrounds are generated per-dungeon area and per-boss room using ComfyUI text-to-image workflows. Six images were generated matching the three areas and three boss encounters:
+
+- **Area backgrounds** (visible in non-boss battles):
+  - `verdund` — Verdant Meadow (soft sunlight, grassy hills)
+  - `crystal` — Crystal Caves (glowing crystals, bioluminal fungi)
+  - `shadow` — Shadow Forest (twisted trees, moonlight, mist)
+
+- **Boss room backgrounds** (visible in boss battles):
+  - `meadow_guardian` — Meadow Guardian boss chamber (ancient stone ruins, glowing runes)
+  - `cave_warden` — Cave Warden boss chamber (crystal pillars, ethereal blue light)
+  - `shadow_lord` — Shadow Lord boss chamber (obsidian throne, shadow energy, ruby eyes)
+
+These 6 PNG images (800×600) are stored at `game/public/assets/battle_bg/` and loaded in `BattleScene.preload()`. The appropriate background is selected based on `areaId` (for regular battles) or `battleState.enemyFamiliar.familiarData.id` (for boss battles). The background image renders at **depth -2** with a semi-transparent dark rect (`0x000000`, alpha 0.5) at **depth -1** behind it — this darkens the background for readability while staying behind all UI elements (depth 0: hp/mp bars, familiar names, action buttons) and familiar sprites (depth 1), so nothing appears faded. The background is cleaned up when the battle ends or the scene shuts down.
+
+**Fix location:** `game/src/scenes/BattleScene.ts` — added `battleBackground` and `battleBackgroundOverlay` properties; loaded 6 battle background images in `preload()`; selected and displayed the appropriate background in `create()` based on area/boss state, using explicit depths (`bg` = -2, `overlay` = -1, UI = 0, sprites = 1) so the battle UI always renders on top of the background; cleaned up background in `handleContinue()`, `handleExit()`, and `onShutdown()`.
 
 ---
 
