@@ -63,6 +63,19 @@ export class ExplorationScene extends Phaser.Scene {
     this.resumeActiveIndex = data.activeIndex;
   }
 
+  preload(): void {
+    const roomAreas: Record<string, string> = {
+      verdantMeadow: 'verdant-meadow',
+      crystalCaves: 'crystal-caves',
+      shadowForest: 'shadow-forest',
+    };
+    const dir = roomAreas[this.areaId];
+    if (!dir) return;
+    for (let n = 1; n <= 3; n++) {
+      this.load.image(`room_${this.areaId}_${n}`, `/assets/rooms/${dir}/room-0${n}.png`);
+    }
+  }
+
   async create(): Promise<void> {
     const callbacks: ExplorationUICallbacks = {
       onNavigate: (roomId) => this.navigateToRoom(roomId).catch((err) => {

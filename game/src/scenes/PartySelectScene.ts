@@ -100,6 +100,12 @@ export class PartySelectScene extends Phaser.Scene {
     this.areaId = data.areaId;
   }
 
+preload(): void {
+    for (const id of Object.keys(FAMILIARS)) {
+      this.load.image(`familiar_${id}`, `/assets/sprites/familiars/${id}/${id}_portrait.png`);
+    }
+  }
+
   async create(): Promise<void> {
     if (!this.areaId) return;
 
@@ -227,7 +233,11 @@ export class PartySelectScene extends Phaser.Scene {
 
       const container = this.add.container(x, LAYOUT.CARD_Y, [border, bg]);
 
-      const offsetY = -LAYOUT.CARD_HEIGHT / 2 + LAYOUT.NAME_OFFSET_Y;
+      const portrait = this.add.image(0, -LAYOUT.CARD_HEIGHT / 2 + 70, `familiar_${id}`);
+      portrait.setDisplaySize(110, 110);
+      portrait.setDepth(1);
+
+      const offsetY = -LAYOUT.CARD_HEIGHT / 2 + LAYOUT.NAME_OFFSET_Y + 120;
 
       const nameText = this.add.text(0, offsetY, familiar.name, {
         fontSize: '16px',
@@ -278,7 +288,7 @@ export class PartySelectScene extends Phaser.Scene {
         align: 'center',
       }).setOrigin(0.5, 0);
 
-      container.add([nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
+      container.add([portrait, nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
 
       const card: FamiliarCard = { familiarId: id, selected: false, border, bg, container };
       this.cards.push(card);
