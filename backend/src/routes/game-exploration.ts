@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, RoomType } from '@arcane-familiars/game-logic';
+import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, getFamiliar, RoomType } from '@arcane-familiars/game-logic';
 
 const explorationRouter = new Hono<{ Bindings: { DB: D1Database } }>();
 
@@ -42,6 +42,13 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     const dungeon = generateDungeon(area, Date.now());
     dungeon.party = [...state.activeParty];
+    for (const familiarId of dungeon.party) {
+      const familiar = getFamiliar(familiarId);
+      if (familiar) {
+        dungeon.partyHp[familiarId] = familiar.stats.hp;
+        dungeon.partyMp[familiarId] = familiar.stats.mp;
+      }
+    }
 
     state.dungeon = dungeon;
     state.lastSaved = Date.now();

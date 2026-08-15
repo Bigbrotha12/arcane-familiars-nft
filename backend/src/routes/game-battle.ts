@@ -5,6 +5,8 @@ import type {
   BattleAction,
   BattleTurnResult,
   BattleRewards,
+  GameState,
+  DungeonState,
 } from '@arcane-familiars/game-logic';
 import {
   getFamiliar,
@@ -42,12 +44,76 @@ function generateBattleRewards(isBoss: boolean): BattleRewards {
   const items: string[] = [];
 
   if (isBoss) {
-    items.push('rare-fragment');
+    items.push('potion_medium');
   } else if (Math.random() < 0.35) {
-    items.push('health-potion');
+    items.push('potion_small');
   }
 
   return { currency, items };
+}
+
+async function loadGameState(db: D1Database, anonymousId: string): Promise<GameState | null> {
+  const row = await db
+    .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
+    .bind(anonymousId)
+    .first<{ state_json: string }>();
+
+  if (!row) return null;
+  return JSON.parse(row.state_json) as GameState;
+}
+
+async function saveGameState(db: D1Database, anonymousId: string, state: GameState): Promise<void> {
+  state.lastSaved = Date.now();
+  const stateJson = JSON.stringify(state);
+  await db
+    .prepare(
+      `INSERT INTO game_states (anonymous_id, state_json, updated_at)
+       VALUES (?, ?, datetime('now'))
+       ON CONFLICT(anonymous_id)
+       DO UPDATE SET state_json = ?, updated_at = datetime('now')`
+    )
+    .bind(anonymousId, stateJson, stateJson)
+    .run();
+}
+
+function persistPartyResources(
+  dungeon: DungeonState | null | undefined,
+  familiarId: string,
+  currentHp: number,
+  currentMp: number,
+): void {
+  if (!dungeon) return;
+  dungeon.partyHp[familiarId] = Math.max(0, currentHp);
+  dungeon.partyMp[familiarId] = Math.max(0, currentMp);
+}
+
+function getPersistedResources(
+  dungeon: DungeonState | null | undefined,
+  familiarId: string,
+  familiar: BattleFamiliar,
+): { currentHp: number; currentMp: number } {
+  const maxHp = familiar.familiarData.stats.maxHp;
+  const maxMp = familiar.familiarData.stats.maxMp;
+  const hp = dungeon?.partyHp?.[familiarId];
+  const mp = dungeon?.partyMp?.[familiarId];
+
+  return {
+    currentHp: typeof hp === 'number' && hp > 0 ? Math.min(hp, maxHp) : familiar.familiarData.stats.hp,
+    currentMp: typeof mp === 'number' && mp > 0 ? Math.min(mp, maxMp) : familiar.familiarData.stats.mp,
+  };
+}
+
+function applyRewards(state: GameState, rewards: BattleRewards): void {
+  state.inventory = state.inventory ?? { currency: 0, items: [] };
+  state.inventory.currency += rewards.currency;
+  for (const itemId of rewards.items) {
+    const existing = state.inventory.items.find((i) => i.itemId === itemId);
+    if (existing) {
+      existing.quantity += 1;
+    } else {
+      state.inventory.items.push({ itemId, quantity: 1 });
+    }
+  }
 }
 
 gameBattleRouter.post('/game/battle/start', async (c) => {
@@ -62,7 +128,20 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, playerFamiliarId, enemyFamiliarId' }, 400);
     }
 
+    const state = await loadGameState(c.env.DB, anonymousId);
+    if (!state) {
+      return c.json({ error: 'Game state not found' }, 404);
+    }
+
+    const party = state.activeParty ?? [];
+    if (!party.includes(playerFamiliarId)) {
+      return c.json({ error: 'Familiar is not in your active party' }, 400);
+    }
+
     const playerFamiliar = createBattleFamiliar(playerFamiliarId);
+    const resources = getPersistedResources(state.dungeon, playerFamiliarId, playerFamiliar);
+    playerFamiliar.currentHp = resources.currentHp;
+    playerFamiliar.currentMp = resources.currentMp;
     playerFamiliar.isAlly = true;
 
     const enemyFamiliar = createBattleFamiliar(enemyFamiliarId);
@@ -149,24 +228,33 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       rewards = generateBattleRewards(battle.isBoss);
     } else if (outcome === Outcome.Loss) {
       battle.status = BattleResult.Lost;
-      
-      const stateRow = await c.env.DB
-        .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-        .bind(anonymousId)
-        .first<{ state_json: string }>();
-      
-      if (stateRow) {
-        const gameState = JSON.parse(stateRow.state_json);
-        gameState.dungeon = null;
-        gameState.lastSaved = Date.now();
-        
-        await c.env.DB
-          .prepare(
-            `UPDATE game_states SET state_json = ?, updated_at = datetime('now') WHERE anonymous_id = ?`
-          )
-          .bind(JSON.stringify(gameState), anonymousId)
-          .run();
+    }
+
+    const state = await loadGameState(c.env.DB, anonymousId);
+
+    if (state) {
+      if (outcome === Outcome.Win) {
+        state.battleCount = (state.battleCount ?? 0) + 1;
+        state.winCount = (state.winCount ?? 0) + 1;
+        if (rewards) applyRewards(state, rewards);
+        persistPartyResources(
+          state.dungeon,
+          battle.playerFamiliar.familiarData.id,
+          battle.playerFamiliar.currentHp,
+          battle.playerFamiliar.currentMp,
+        );
+      } else if (outcome === Outcome.Loss) {
+        state.battleCount = (state.battleCount ?? 0) + 1;
+        state.dungeon = null;
+      } else {
+        persistPartyResources(
+          state.dungeon,
+          battle.playerFamiliar.familiarData.id,
+          battle.playerFamiliar.currentHp,
+          battle.playerFamiliar.currentMp,
+        );
       }
+      await saveGameState(c.env.DB, anonymousId, state);
     }
 
     const turnResult: BattleTurnResult = {
@@ -196,7 +284,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         .run();
     }
 
-    return c.json({ turnResult });
+    return c.json({ turnResult, state, turnCount: battle.turnCount });
   } catch (error: any) {
     console.error('Battle action error:', error.message);
     return c.json({ error: 'Failed to process battle action' }, 500);
@@ -230,7 +318,30 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
+    if (newFamiliarId === battle.playerFamiliar.familiarData.id) {
+      return c.json({ error: 'Already using this familiar' }, 400);
+    }
+
+    const state = await loadGameState(c.env.DB, anonymousId);
+    const party = state?.activeParty ?? [];
+    if (!state || !party.includes(newFamiliarId)) {
+      return c.json({ error: 'Familiar is not in your active party' }, 400);
+    }
+
+    if (state.dungeon) {
+      persistPartyResources(
+        state.dungeon,
+        battle.playerFamiliar.familiarData.id,
+        battle.playerFamiliar.currentHp,
+        battle.playerFamiliar.currentMp,
+      );
+      await saveGameState(c.env.DB, anonymousId, state);
+    }
+
     const newFamiliar = createBattleFamiliar(newFamiliarId);
+    const resources = getPersistedResources(state.dungeon, newFamiliarId, newFamiliar);
+    newFamiliar.currentHp = resources.currentHp;
+    newFamiliar.currentMp = resources.currentMp;
     newFamiliar.isAlly = true;
 
     battle.playerFamiliar = newFamiliar;
@@ -282,6 +393,17 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
     }
 
     battle.status = BattleResult.Fled;
+
+    const state = await loadGameState(c.env.DB, anonymousId);
+    if (state?.dungeon) {
+      persistPartyResources(
+        state.dungeon,
+        battle.playerFamiliar.familiarData.id,
+        battle.playerFamiliar.currentHp,
+        battle.playerFamiliar.currentMp,
+      );
+      await saveGameState(c.env.DB, anonymousId, state);
+    }
 
     await c.env.DB
       .prepare(

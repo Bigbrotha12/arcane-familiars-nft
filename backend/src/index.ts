@@ -22,9 +22,20 @@ type Bindings = {
 
 const app = new Hono<{ Bindings: Bindings }>();
 
-// CORS — allow frontend origin in dev/prod
+// CORS — allow all origins in development, restrict to known frontends in prod
+const PROD_ORIGINS = [
+  'http://localhost:8080',
+  'http://127.0.0.1:8080',
+  'http://localhost:3000',
+  'https://arcane-familiars.pages.dev',
+];
+
 app.use('/api/*', cors({
-  origin: ['http://localhost:8080', 'http://127.0.0.1:8080', 'http://localhost:3000', 'https://arcane-familiars.pages.dev'],
+  origin: (origin, c) => {
+    if (c.env.ENVIRONMENT === 'development') return origin || '*';
+    if (origin && PROD_ORIGINS.includes(origin)) return origin;
+    return null;
+  },
   allowHeaders: ['Content-Type', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }));

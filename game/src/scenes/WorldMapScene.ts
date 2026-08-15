@@ -26,6 +26,7 @@ export class WorldMapScene extends Phaser.Scene {
   private selectedCardIndex = -1;
   private fullGameState: GameState | null = null;
   private ariaLiveElement: HTMLDivElement | null = null;
+  private keyboardCleanup: (() => void) | null = null;
 
   constructor() {
     super({ key: SCENE_KEYS.WORLD_MAP });
@@ -241,9 +242,10 @@ export class WorldMapScene extends Phaser.Scene {
 
   private handleSave = async (): Promise<void> => {
     try {
-      if (this.fullGameState) {
-        await gameApiClient.saveGameState(this.fullGameState);
+      if (!this.fullGameState) {
+        throw new Error('No game loaded to save');
       }
+      await gameApiClient.saveGameState(this.fullGameState);
       gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -257,6 +259,8 @@ export class WorldMapScene extends Phaser.Scene {
 
   private onShutdown(): void {
     this.cleanupTimers();
+    this.keyboardCleanup?.();
+    this.keyboardCleanup = null;
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
     this.ariaLiveElement?.remove();
@@ -277,7 +281,7 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private setupKeyboardNavigation(): void {
-    this.input.keyboard?.on('keydown-TAB', (event: KeyboardEvent) => {
+    const onTab = (event: KeyboardEvent) => {
       const unlockedIndices = this.cards
         .map((card, i) => ({ card, i }))
         .filter(({ card }) => card.unlocked)
@@ -293,25 +297,35 @@ export class WorldMapScene extends Phaser.Scene {
         const nextPos = (currentPos + 1) % unlockedIndices.length;
         this.focusCard(unlockedIndices[nextPos]);
       }
-    });
+    };
 
-    this.input.keyboard?.on('keydown-ENTER', () => {
+    const onEnter = () => {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
           this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
         }
       }
-    });
+    };
 
-    this.input.keyboard?.on('keydown-SPACE', () => {
+    const onSpace = () => {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
           this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
         }
       }
-    });
+    };
+
+    this.input.keyboard?.on('keydown-TAB', onTab);
+    this.input.keyboard?.on('keydown-ENTER', onEnter);
+    this.input.keyboard?.on('keydown-SPACE', onSpace);
+
+    this.keyboardCleanup = () => {
+      this.input.keyboard?.off('keydown-TAB', onTab);
+      this.input.keyboard?.off('keydown-ENTER', onEnter);
+      this.input.keyboard?.off('keydown-SPACE', onSpace);
+    };
   }
 
   private focusCard(index: number): void {

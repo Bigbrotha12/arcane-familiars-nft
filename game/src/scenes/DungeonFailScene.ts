@@ -31,6 +31,8 @@ export class DungeonFailScene extends Phaser.Scene {
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleEventExit);
+    gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'dungeon_fail' });
+    this.emitStateUpdate();
 
     const { width, height } = this.scale;
 
