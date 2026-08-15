@@ -40,8 +40,8 @@ export class BattleUI {
   private gameWidth: number;
   private gameHeight: number;
 
-  private playerSprite!: Phaser.GameObjects.Rectangle;
-  private enemySprite!: Phaser.GameObjects.Rectangle;
+  private playerSprite!: Phaser.GameObjects.Image;
+  private enemySprite!: Phaser.GameObjects.Image;
   private playerName!: Phaser.GameObjects.Text;
   private enemyName!: Phaser.GameObjects.Text;
   private playerHpBar!: Phaser.GameObjects.Graphics;
@@ -100,13 +100,11 @@ export class BattleUI {
   }
 
   private createBackground(): void {
-    this.register(this.scene.add.rectangle(
-      this.gameWidth / 2,
-      this.gameHeight / 2,
-      this.gameWidth,
-      this.gameHeight,
-      C.bg,
-    ));
+    // NOTE: no full-screen opaque rect here. The scene camera clear color
+    // (#0A0A0F, set in gameConfig) already provides the fallback backdrop, and
+    // an opaque full-screen rect at depth 0 would cover the scene-level battle
+    // background image that BattleScene adds (also depth 0) BEFORE battleUI.init(),
+    // so all UI added afterwards renders on top.
 
     const separatorY = this.gameHeight - 80;
     this.register(this.scene.add.rectangle(
@@ -122,8 +120,9 @@ export class BattleUI {
     const sx = this.ENEMY_CENTER_X;
     const sy = this.ENEMY_CENTER_Y;
 
-    this.enemySprite = this.register(this.scene.add.rectangle(sx, sy, 100, 100, 0x4E2A2A));
-    this.enemySprite.setStrokeStyle(2, 0xEF4444);
+    this.enemySprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.enemySprite.setDisplaySize(120, 120);
+    this.enemySprite.setDepth(1);
 
     this.enemyName = this.register(this.scene.add.text(sx, 70, '', {
       fontSize: '14px',
@@ -159,8 +158,9 @@ export class BattleUI {
     const sx = this.PLAYER_CENTER_X;
     const sy = this.PLAYER_CENTER_Y;
 
-    this.playerSprite = this.register(this.scene.add.rectangle(sx, sy, 100, 100, 0x2A2A4E));
-    this.playerSprite.setStrokeStyle(2, 0x7C5CFC);
+    this.playerSprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.playerSprite.setDisplaySize(120, 120);
+    this.playerSprite.setDepth(1);
 
     this.playerName = this.register(this.scene.add.text(sx, 455, '', {
       fontSize: '14px',
@@ -353,6 +353,11 @@ export class BattleUI {
     if (!stats) return;
 
     this.playerName.setText(familiar.familiarData.name);
+    const textureKey = `familiar_${familiar.familiarData.id}`;
+    if (this.scene.textures.exists(textureKey)) {
+      this.playerSprite.setTexture(textureKey);
+      this.playerSprite.setDisplaySize(120, 120);
+    }
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
@@ -369,6 +374,11 @@ export class BattleUI {
     if (!stats) return;
 
     this.enemyName.setText(familiar.familiarData.name);
+    const textureKey = `familiar_${familiar.familiarData.id}`;
+    if (this.scene.textures.exists(textureKey)) {
+      this.enemySprite.setTexture(textureKey);
+      this.enemySprite.setDisplaySize(120, 120);
+    }
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
