@@ -65,7 +65,7 @@ class GameApiClient {
     return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId, enemyFamiliarId });
   }
 
-  async battleAction(battleId: string, action: BattleAction): Promise<{ turnResult: BattleTurnResult }> {
+  async battleAction(battleId: string, action: BattleAction): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
     return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action });
   }
 

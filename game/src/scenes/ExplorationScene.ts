@@ -10,6 +10,11 @@ import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
   areaId: string;
+  lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
+  pendingTreasureItemId?: string | null;
+  activeIndex?: number;
+  enemiesDefeated?: number;
+  roomsExplored?: number;
 }
 
 export class ExplorationScene extends Phaser.Scene {
@@ -27,8 +32,12 @@ export class ExplorationScene extends Phaser.Scene {
   private currentRoomIndex = 0;
   private encounterActive = false;
   private treasureActive = false;
+  private bossActive = false;
   private pendingEnemyId: string | null = null;
   private pendingTreasureItemId: string | null = null;
+  private enemiesDefeated = 0;
+  private lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
+  private resumeActiveIndex?: number;
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
@@ -44,8 +53,14 @@ export class ExplorationScene extends Phaser.Scene {
     this.currentRoomIndex = 0;
     this.encounterActive = false;
     this.treasureActive = false;
+    this.bossActive = false;
     this.pendingEnemyId = null;
-    this.pendingTreasureItemId = null;
+    this.pendingTreasureItemId = data.pendingTreasureItemId ?? null;
+    this.lastBattleOutcome = data.lastBattleOutcome;
+    this.enemiesDefeated = data.lastBattleOutcome === 'victory'
+      ? (data.enemiesDefeated ?? 0) + 1
+      : (data.enemiesDefeated ?? 0);
+    this.resumeActiveIndex = data.activeIndex;
   }
 
   async create(): Promise<void> {
@@ -107,6 +122,10 @@ export class ExplorationScene extends Phaser.Scene {
           return;
         }
 
+        if (typeof this.resumeActiveIndex === 'number') {
+          this.dungeon.activeIndex = this.resumeActiveIndex;
+        }
+
         const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
         if (!currentRoom) {
           console.error(`Room ${this.dungeon.currentRoomId} not found in dungeon`);
@@ -123,10 +142,21 @@ export class ExplorationScene extends Phaser.Scene {
           this.dungeon.partyMp,
           this.dungeon.party,
         );
-      this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
-      this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
-      this.explorationUI.showExits(currentRoom.exits);
-      this.emitStateUpdate();
+        this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
+        this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
+
+        if (currentRoom.type === RoomType.Boss) {
+          this.pendingEnemyId = this.area.bossId;
+          this.bossActive = true;
+          this.explorationUI.hideNavPanel();
+          this.explorationUI.showBossWarning(this.area.bossId);
+        } else if (this.pendingTreasureItemId) {
+          this.treasureActive = true;
+          this.explorationUI.showTreasure(this.pendingTreasureItemId);
+        } else {
+          this.explorationUI.showExits(currentRoom.exits);
+        }
+        this.emitStateUpdate();
       } else {
         await this.enterDungeon();
       }
@@ -138,6 +168,8 @@ export class ExplorationScene extends Phaser.Scene {
 
   private async enterDungeon(): Promise<void> {
     try {
+      this.pendingTreasureItemId = null;
+      this.enemiesDefeated = 0;
       const result = await this.gameApi.enterDungeon(this.areaId);
       this.dungeon = result.dungeon;
 
@@ -172,6 +204,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.isProcessing = true;
     this.encounterActive = false;
     this.treasureActive = false;
+    this.bossActive = false;
     this.pendingEnemyId = null;
     this.pendingTreasureItemId = null;
 
@@ -181,6 +214,7 @@ export class ExplorationScene extends Phaser.Scene {
     try {
       const result = await this.gameApi.exploreRoom(roomId);
       this.dungeon.currentRoomId = roomId;
+      this.dungeon.rooms[roomId] = { ...this.dungeon.rooms[roomId], ...result.room };
       this.visitedRoomIds.add(roomId);
 
       const roomIndex = this.getRoomIndex(roomId);
@@ -200,10 +234,14 @@ export class ExplorationScene extends Phaser.Scene {
       if (isBossRoom) {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
         this.pendingEnemyId = this.area.bossId;
+        this.bossActive = true;
         this.explorationUI.showBossWarning(this.area.bossId);
         this.isProcessing = false;
         this.emitStateUpdate();
       } else if (result.encounter && result.enemy) {
+        if (result.treasure && result.treasureItem) {
+          this.pendingTreasureItemId = result.treasureItem;
+        }
         this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
         this.timers.push(this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
           this.encounterActive = true;
@@ -212,11 +250,11 @@ export class ExplorationScene extends Phaser.Scene {
           this.isProcessing = false;
           this.emitStateUpdate();
         }));
-      } else if (result.treasure) {
+      } else if (result.treasure && result.treasureItem) {
+        this.pendingTreasureItemId = result.treasureItem;
         this.explorationUI.addLogMessage(`You find something in ${result.room.name}.`);
         this.timers.push(this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
           this.treasureActive = true;
-          this.pendingTreasureItemId = result.treasureItem!;
           this.explorationUI.showTreasure(result.treasureItem!);
           this.isProcessing = false;
           this.emitStateUpdate();
@@ -242,9 +280,18 @@ export class ExplorationScene extends Phaser.Scene {
     if (!this.area) return;
     this.isProcessing = true;
     this.encounterActive = false;
+    this.bossActive = false;
     this.pendingEnemyId = null;
     this.explorationUI.destroy();
-    this.scene.start('BattleScene', { enemyId, returnScene: 'ExplorationScene', areaId: this.areaId });
+    this.scene.start('BattleScene', {
+      enemyId,
+      returnScene: 'ExplorationScene',
+      areaId: this.areaId,
+      pendingTreasureItemId: this.pendingTreasureItemId,
+      activeIndex: this.dungeon?.activeIndex ?? 0,
+      roomsExplored: this.visitedRoomIds.size,
+      enemiesDefeated: this.enemiesDefeated,
+    });
   }
 
   private handleFlee(): void {
@@ -253,6 +300,12 @@ export class ExplorationScene extends Phaser.Scene {
     this.pendingEnemyId = null;
     this.explorationUI.addLogMessage('You avoided the encounter.');
     this.explorationUI.hideEncounterPanel();
+    if (this.pendingTreasureItemId) {
+      this.treasureActive = true;
+      this.explorationUI.showTreasure(this.pendingTreasureItemId);
+      this.emitStateUpdate();
+      return;
+    }
     if (this.dungeon) {
       const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
       if (currentRoom) {
@@ -303,6 +356,7 @@ export class ExplorationScene extends Phaser.Scene {
 
   private handleBossRetreat(): void {
     this.pendingEnemyId = null;
+    this.bossActive = false;
     this.explorationUI.addLogMessage('You retreat from the boss chamber.');
     if (this.dungeon) {
       const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
@@ -398,7 +452,7 @@ export class ExplorationScene extends Phaser.Scene {
       },
       encounterActive: this.encounterActive,
       treasureActive: this.treasureActive,
-      bossRoom: currentRoom?.type === RoomType.Boss,
+      bossRoom: this.bossActive,
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }
@@ -421,10 +475,11 @@ export class ExplorationScene extends Phaser.Scene {
 
   private handleSave = async (): Promise<void> => {
     try {
-      if (this.fullGameState && this.dungeon) {
-        this.fullGameState.dungeon = this.dungeon
-        await this.gameApi.saveGameState(this.fullGameState);
+      if (!this.fullGameState || !this.dungeon) {
+        throw new Error('No game loaded to save');
       }
+      this.fullGameState.dungeon = this.dungeon
+      await this.gameApi.saveGameState(this.fullGameState);
       gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -460,8 +515,15 @@ export class ExplorationScene extends Phaser.Scene {
   };
 
   private handleFleeEncounter = (): void => {
-    if (this.isProcessing || !this.encounterActive) return;
-    this.handleFlee();
+    if (this.isProcessing || !this.dungeon) return;
+    const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
+    if (this.encounterActive) {
+      this.handleFlee();
+    } else if (this.treasureActive) {
+      this.handleLeaveTreasure();
+    } else if (currentRoom?.type === RoomType.Boss && this.pendingEnemyId !== null) {
+      this.handleBossRetreat();
+    }
   };
 
   private handleStartBattle = (): void => {
