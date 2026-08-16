@@ -56,4 +56,5 @@ export interface DungeonState {
   partyMp: Record<string, number>;
   inventory: Inventory;
   rooms: Record<string, Room>;
+  activeIndex?: number;
 }

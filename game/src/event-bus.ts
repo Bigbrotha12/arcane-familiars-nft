@@ -15,7 +15,13 @@ class EventBus {
   }
 
   emit(event: string, ...args: any[]): void {
-    this.listeners.get(event)?.forEach((fn) => fn(...args))
+    this.listeners.get(event)?.forEach((fn) => {
+      try {
+        fn(...args)
+      } catch (err) {
+        console.error(`[EventBus] Listener error for "${event}":`, err)
+      }
+    })
   }
 
   clear(): void {

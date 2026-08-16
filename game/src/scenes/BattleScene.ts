@@ -10,6 +10,10 @@ interface BattleSceneData {
   enemyId: string;
   returnScene?: string;
   areaId?: string;
+  activeIndex?: number;
+  pendingTreasureItemId?: string | null;
+  roomsExplored?: number;
+  enemiesDefeated?: number;
 }
 
 export class BattleScene extends Phaser.Scene {
@@ -41,6 +45,10 @@ export class BattleScene extends Phaser.Scene {
   private phase: BattlePhase = 'connecting';
   private battleOutcome: BattleEndedPayload | null = null;
   private overlayActive = false;
+  private isLeavingBattle = false;
+  private pendingTreasureItemId: string | null = null;
+  private roomsExplored = 0;
+  private enemiesDefeated = 0;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -52,7 +60,11 @@ export class BattleScene extends Phaser.Scene {
     this.areaId = data.areaId;
     this.isProcessingAction = false;
     this.battleState = null;
-    this.activeFamiliarIndex = 0;
+    this.activeFamiliarIndex = data.activeIndex ?? 0;
+    this.isLeavingBattle = false;
+    this.pendingTreasureItemId = data.pendingTreasureItemId ?? null;
+    this.roomsExplored = data.roomsExplored ?? 0;
+    this.enemiesDefeated = data.enemiesDefeated ?? 0;
   }
 
   async create(): Promise<void> {
@@ -100,14 +112,25 @@ export class BattleScene extends Phaser.Scene {
       await this.startBattle();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load game';
-      this.battleUI.hideConnecting();
-      this.battleUI.addLogMessage(message);
+      this.handleBattleSetupError(message);
     }
+  }
+
+  private handleBattleSetupError(message: string): void {
+    this.battleUI.hideConnecting();
+    this.battleUI.addLogMessage(message);
+    this.battleUI.addLogMessage('Returning to the world map...');
+    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
+    this.timers.push(this.time.delayedCall(1800, () => {
+      this.battleUI.destroy();
+      this.scene.start('WorldMapScene');
+    }));
   }
 
   private async startBattle(): Promise<void> {
     try {
-      const playerFamiliarId = this.gameState!.activeParty[0];
+      const party = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+      const playerFamiliarId = party[this.activeFamiliarIndex] ?? party[0];
       if (!playerFamiliarId) throw new Error('No active party member');
       const result = await gameApiClient.startBattle(playerFamiliarId, this.enemyId);
       this.battleState = result.battle;
@@ -141,10 +164,7 @@ export class BattleScene extends Phaser.Scene {
       this.emitStateUpdate()
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start battle';
-      this.battleUI.hideConnecting();
-      this.battleUI.addLogMessage(message);
-      this.battleUI.showMainActions();
-      this.isProcessingAction = false;
+      this.handleBattleSetupError(message);
     }
   }
 
@@ -152,6 +172,7 @@ export class BattleScene extends Phaser.Scene {
     if (this.isProcessingAction || !this.battleState) return;
     this.isProcessingAction = true;
     this.phase = 'acting';
+    this.emitStateUpdate();
 
     this.battleUI.hideActionPanels();
 
@@ -164,13 +185,14 @@ export class BattleScene extends Phaser.Scene {
         this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
       }
 
-      const { turnResult } = result;
+      const { turnResult, state, turnCount } = result;
       const rewards = turnResult.rewards;
+      if (state) this.gameState = state;
       this.battleState = {
         ...this.battleState!,
         playerFamiliar: turnResult.playerFamiliar,
         enemyFamiliar: turnResult.enemyFamiliar,
-        turnCount: this.battleState!.turnCount + 1,
+        turnCount: turnCount ?? this.battleState!.turnCount + 1,
         status: BattleScene.OUTCOME_TO_STATUS[turnResult.battleOutcome],
       };
       this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
@@ -197,6 +219,7 @@ export class BattleScene extends Phaser.Scene {
           this.battleUI.showMainActions();
         }
         this.isProcessingAction = false;
+        this.emitStateUpdate();
       }));
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Action failed';
@@ -204,12 +227,15 @@ export class BattleScene extends Phaser.Scene {
       this.battleUI.showMainActions();
       this.phase = 'menu';
       this.isProcessingAction = false;
+      this.emitStateUpdate();
     }
   }
 
   private async handleFlee(): Promise<void> {
     if (this.isProcessingAction || !this.battleState) return;
     this.isProcessingAction = true;
+    this.phase = 'acting';
+    this.emitStateUpdate();
 
     this.battleUI.hideActionPanels();
     this.battleUI.addLogMessage('Attempting to flee...');
@@ -230,6 +256,8 @@ export class BattleScene extends Phaser.Scene {
       this.battleUI.addLogMessage(message);
       this.battleUI.showMainActions();
       this.isProcessingAction = false;
+      this.phase = 'menu';
+      this.emitStateUpdate();
     }
   }
 
@@ -243,6 +271,8 @@ export class BattleScene extends Phaser.Scene {
     }
 
     this.isProcessingAction = true;
+    this.phase = 'acting';
+    this.emitStateUpdate();
     this.battleUI.hideActionPanels();
 
     const nextIndex = (this.activeFamiliarIndex + 1) % party.length;
@@ -258,11 +288,15 @@ export class BattleScene extends Phaser.Scene {
 
       this.battleUI.showMainActions();
       this.isProcessingAction = false;
+      this.phase = 'menu';
+      this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to swap familiar';
       this.battleUI.addLogMessage(message);
       this.battleUI.showMainActions();
       this.isProcessingAction = false;
+      this.phase = 'menu';
+      this.emitStateUpdate();
     }
   }
 
@@ -358,10 +392,31 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleContinue = (): void => {
+    if (this.isLeavingBattle) return;
+    this.isLeavingBattle = true;
     this.phase = 'connecting';
+    // Emit a final state update so the React HUD drops the stale battle snapshot
+    // (phase 'connecting' renders no HUD) before the return scene takes over.
+    this.emitStateUpdate();
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.battleUI.destroy();
-    this.scene.start(this.returnScene, { areaId: this.areaId });
+
+    if (this.battleOutcome?.outcome === 'defeat') {
+      this.scene.start('DungeonFailScene', {
+        roomsExplored: this.roomsExplored,
+        enemiesDefeated: this.enemiesDefeated,
+      });
+      return;
+    }
+
+    this.scene.start(this.returnScene, {
+      areaId: this.areaId,
+      lastBattleOutcome: this.battleOutcome?.outcome,
+      pendingTreasureItemId: this.pendingTreasureItemId,
+      activeIndex: this.activeFamiliarIndex,
+      enemiesDefeated: this.enemiesDefeated,
+      roomsExplored: this.roomsExplored,
+    });
   }
 
   private toFamiliarState(f: BattleFamiliar): FamiliarState {
@@ -447,9 +502,10 @@ export class BattleScene extends Phaser.Scene {
 
   private handleSave = async (): Promise<void> => {
     try {
-      if (this.gameState) {
-        await gameApiClient.saveGameState(this.gameState);
+      if (!this.gameState) {
+        throw new Error('No game loaded to save');
       }
+      await gameApiClient.saveGameState(this.gameState);
       gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Save failed';
@@ -458,6 +514,8 @@ export class BattleScene extends Phaser.Scene {
   };
 
   private handleExit = (): void => {
+    if (this.isLeavingBattle) return;
+    this.isLeavingBattle = true;
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.battleUI.destroy();
     this.scene.start('WorldMapScene');
