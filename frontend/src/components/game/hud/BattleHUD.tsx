@@ -62,11 +62,11 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
           <EnemyPanel enemy={enemy} isBoss={snapshot.isBoss} />
         </div>
 
-        <div className="absolute right-4 top-4">
+        <div className="absolute right-4 bottom-24">
           <BattleLog entries={snapshot.battleLog ?? []} />
         </div>
 
-        <div className="absolute bottom-4 left-4">
+        <div className="absolute left-4 top-28">
           <PartyPanel party={party} activeId={activeId} />
         </div>
 
