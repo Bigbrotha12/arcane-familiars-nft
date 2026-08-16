@@ -13,6 +13,7 @@ import GameToolbar from '@/components/game/GameToolbar'
 import ExitModal from '@/components/game/ExitModal'
 import ToastContainer, { toast } from '@/components/game/Toast'
 import { useGameGuard } from '@/components/game/useGameGuard'
+import Button from '@/components/ui/Button'
 import BattleHUD from '@/components/game/hud/BattleHUD'
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD'
 
@@ -31,6 +32,7 @@ export default function GamePage() {
   const [battleOutcome, setBattleOutcome] = useState<BattleEndedPayload | null>(null)
   const [showExitModal, setShowExitModal] = useState(false)
   const [saving, setSaving] = useState(false)
+  const [initError, setInitError] = useState<string | null>(null)
   const eventBusCleanupRef = useRef<(() => void) | null>(null)
 
   const handleSave = useCallback(() => {
@@ -169,42 +171,48 @@ export default function GamePage() {
     let cancelled = false
 
     async function init() {
-      const mod = await import('@arcane-familiars/game')
-      if (cancelled) return
+      try {
+        const mod = await import('@arcane-familiars/game')
+        if (cancelled) return
 
-      gameModuleRef.current = mod as unknown as GameModule
+        gameModuleRef.current = mod as unknown as GameModule
 
-      // Mount Phaser (guarded against StrictMode double-mount by gameRef check)
-      if (containerRef.current && !gameRef.current) {
-        gameRef.current = mod.createGame('game-container')
-      }
-
-      const onStateUpdate = (state: GameStateSnapshot) => setGameState(state)
-      const onSaveComplete = (result: { success: boolean }) => {
-        setSaving(false)
-        if (result.success) {
-          toast.success('Game saved!')
-        } else {
-          toast.error('Save failed. Please try again.')
+        // Mount Phaser (guarded against StrictMode double-mount by gameRef check)
+        if (containerRef.current && !gameRef.current) {
+          gameRef.current = mod.createGame('game-container')
         }
-      }
-      const onBattleEnded = (outcome: BattleEndedPayload) => setBattleOutcome(outcome)
-      const onSceneChanged = (payload: { scene: string; areaId?: string }) => {
-        if (payload.scene !== 'battle') {
-          setBattleOutcome(null)
+
+        const onStateUpdate = (state: GameStateSnapshot) => setGameState(state)
+        const onSaveComplete = (result: { success: boolean }) => {
+          setSaving(false)
+          if (result.success) {
+            toast.success('Game saved!')
+          } else {
+            toast.error('Save failed. Please try again.')
+          }
         }
-      }
+        const onBattleEnded = (outcome: BattleEndedPayload) => setBattleOutcome(outcome)
+        const onSceneChanged = (payload: { scene: string; areaId?: string }) => {
+          if (payload.scene !== 'battle') {
+            setBattleOutcome(null)
+          }
+        }
 
-      mod.gameEventBus.on(mod.GameEvent.STATE_UPDATED, onStateUpdate)
-      mod.gameEventBus.on(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
-      mod.gameEventBus.on(mod.GameEvent.BATTLE_ENDED, onBattleEnded)
-      mod.gameEventBus.on(mod.GameEvent.SCENE_CHANGED, onSceneChanged)
+        mod.gameEventBus.on(mod.GameEvent.STATE_UPDATED, onStateUpdate)
+        mod.gameEventBus.on(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+        mod.gameEventBus.on(mod.GameEvent.BATTLE_ENDED, onBattleEnded)
+        mod.gameEventBus.on(mod.GameEvent.SCENE_CHANGED, onSceneChanged)
 
-      eventBusCleanupRef.current = () => {
-        mod.gameEventBus.off(mod.GameEvent.STATE_UPDATED, onStateUpdate)
-        mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
-        mod.gameEventBus.off(mod.GameEvent.BATTLE_ENDED, onBattleEnded)
-        mod.gameEventBus.off(mod.GameEvent.SCENE_CHANGED, onSceneChanged)
+        eventBusCleanupRef.current = () => {
+          mod.gameEventBus.off(mod.GameEvent.STATE_UPDATED, onStateUpdate)
+          mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+          mod.gameEventBus.off(mod.GameEvent.BATTLE_ENDED, onBattleEnded)
+          mod.gameEventBus.off(mod.GameEvent.SCENE_CHANGED, onSceneChanged)
+        }
+      } catch (error) {
+        if (cancelled) return
+        console.error('Failed to load game module:', error)
+        setInitError('Failed to load the game. Please refresh the page to try again.')
       }
     }
 
@@ -256,6 +264,23 @@ export default function GamePage() {
       />
 
       <div ref={containerRef} id="game-container" className="flex-1 relative" />
+
+      {initError && (
+        <div className="absolute inset-0 z-50 flex items-center justify-center">
+          <div className="mx-md rounded-md bg-surface-card p-lg text-center shadow-card-hover">
+            <p className="font-display text-lg font-semibold text-text-primary">Game failed to load</p>
+            <p className="mt-sm text-sm text-text-muted">{initError}</p>
+            <Button
+              onClick={() => navigate('/play')}
+              variant="primary"
+              size="md"
+              className="mt-md"
+            >
+              Back to Home
+            </Button>
+          </div>
+        </div>
+      )}
 
       {gameState && (
         <>
