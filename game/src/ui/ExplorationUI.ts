@@ -48,6 +48,9 @@ export class ExplorationUI {
   private gh: number;
 
   private roomBg!: Phaser.GameObjects.Rectangle;
+  private roomBgImage!: Phaser.GameObjects.Image;
+  private roomBackdrop!: Phaser.GameObjects.Container;
+  private currentAreaId = '';
   private roomName!: Phaser.GameObjects.Text;
   private roomTypeIndicator!: Phaser.GameObjects.Text;
   private roomDesc!: Phaser.GameObjects.Text;
@@ -85,7 +88,10 @@ export class ExplorationUI {
   }
 
   init(area: Area): void {
+    this.currentAreaId = area.id;
     this.mainContainer = this.scene.add.container(0, 0);
+    this.roomBackdrop = this.scene.add.container(0, 0);
+    this.scene.add.existing(this.roomBackdrop);
     this.createBackground();
     this.createRoomArea();
     this.createPartyStatus();
@@ -101,18 +107,25 @@ export class ExplorationUI {
 
   private createBackground(): void {
     const bg = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, C.bg);
-    this.mainContainer.add(bg);
+    this.roomBackdrop.add(bg);
 
     const line1 = this.scene.add.rectangle(165, this.gh / 2, 2, this.gh - 20, C.border);
-    this.mainContainer.add(line1);
+    this.roomBackdrop.add(line1);
     const line2 = this.scene.add.rectangle(this.gw - 165, this.gh / 2, 2, this.gh - 20, C.border);
-    this.mainContainer.add(line2);
+    this.roomBackdrop.add(line2);
   }
 
   private createRoomArea(): void {
-    this.roomBg = this.scene.add.rectangle(ROOM_CX, ROOM_CY, ROOM_W, ROOM_H, C.panelBg, 0.6);
+    this.roomBgImage = this.scene.add.image(ROOM_CX, ROOM_CY, `room_${this.currentAreaId}_1`);
+    this.roomBgImage.setDisplaySize(ROOM_W, ROOM_H);
+    this.roomBgImage.setOrigin(0.5);
+    this.roomBgImage.setDepth(-1);
+    this.roomBackdrop.add(this.roomBgImage);
+
+    this.roomBg = this.scene.add.rectangle(ROOM_CX, ROOM_CY, ROOM_W, ROOM_H, C.panelBg, 0.45);
     this.roomBg.setStrokeStyle(1, C.border);
-    this.mainContainer.add(this.roomBg);
+    this.roomBg.setDepth(0);
+    this.roomBackdrop.add(this.roomBg);
 
     this.roomName = this.scene.add.text(ROOM_CX, ROOM_CY - ROOM_H / 2 + 20, '', {
       fontSize: '18px',
@@ -233,7 +246,13 @@ export class ExplorationUI {
     const darkG = Math.floor(g * (0.3 + depthRatio * 0.3));
     const darkB = Math.floor(b * (0.3 + depthRatio * 0.3));
     const color = (Math.min(darkR, 255) << 16) | (Math.min(darkG, 255) << 8) | Math.min(darkB, 255);
-    this.roomBg.setFillStyle(color, 0.8);
+    this.roomBg.setFillStyle(color, 0.45);
+
+    const bgKey = `room_${area.id}_${(roomIndex % 3) + 1}`;
+    if (this.scene.textures.exists(bgKey)) {
+      this.roomBgImage.setTexture(bgKey);
+      this.roomBgImage.setDisplaySize(ROOM_W, ROOM_H);
+    }
 
     this.roomName.setText(room.name);
     this.roomDesc.setText(room.description);
@@ -499,6 +518,11 @@ export class ExplorationUI {
     this.setContainerInteractive(this.mainContainer, enabled);
   }
 
+  setBackdropVisible(enabled: boolean): void {
+    this.roomBackdrop.setVisible(enabled);
+    this.setContainerInteractive(this.roomBackdrop, enabled);
+  }
+
   private setContainerInteractive(container: Phaser.GameObjects.Container, enabled: boolean): void {
     if (enabled) {
       container.setInteractive();
@@ -605,6 +629,9 @@ export class ExplorationUI {
     this.partyMemberElements = [];
     this.logMessages = [];
     this.mainContainer.destroy(true);
+    if (this.roomBackdrop) {
+      this.roomBackdrop.destroy(true);
+    }
   }
 
   private makeButton(
