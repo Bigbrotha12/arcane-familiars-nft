@@ -18,11 +18,12 @@
    - Request review (human or agent) before merging
    - Merge with squash to keep history clean
 
-4. **Pushing requires user intervention.** `git push` to `origin` prompts for
-   credentials (SSH publickey auth is not configured for this machine), so the
-   agent must NOT push. Commit locally, then hand the exact push command to the
-   user and let them run it. Only open the PR via `gh` after the user confirms
-   the push succeeded.
+4. **Authenticated commands require user intervention.** SSH publickey auth is
+   not configured for this machine, so any command that needs credentials
+   (`git push`, `gh` API/PR commands, etc.) must be run by the user. The agent
+   must NOT run them. Commit locally, then hand the exact command(s) to the
+   user and let them run them. Wait for confirmation before proceeding — e.g.
+   only open the PR via `gh` after the user confirms the push succeeded.
 
 ## Project Structure
 
