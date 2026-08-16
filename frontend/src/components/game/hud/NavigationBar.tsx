@@ -13,7 +13,7 @@ function NavigationBar({ room, onNavigate }: NavigationBarProps) {
   if (!room || room.exits.length === 0) return null
 
   return (
-    <div className="pointer-events-auto flex gap-2 rounded-md bg-[#1E1B4B]/85 p-md shadow-card backdrop-blur-sm">
+    <div className="pointer-events-auto flex justify-center gap-2 rounded-md bg-[#1E1B4B]/85 p-md shadow-card backdrop-blur-sm">
       {room.exits.map((exit) => {
         const direction = exit.direction as ExploreDirection
         const label = exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1)

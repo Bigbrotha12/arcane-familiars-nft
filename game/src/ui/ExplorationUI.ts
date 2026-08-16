@@ -33,7 +33,7 @@ const C = {
 };
 
 const ROOM_CX = 400;
-const ROOM_CY = 200;
+const ROOM_CY = 224;
 const ROOM_W = 460;
 const ROOM_H = 290;
 const LEFT_CX = 82;

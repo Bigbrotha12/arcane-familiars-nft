@@ -47,19 +47,14 @@ function ExplorationHUD({
         <RoomInfo snapshot={snapshot} />
       </div>
 
-      <div className="absolute right-4 top-4">
-        <RoomLog entries={snapshot.roomLog ?? []} />
-      </div>
-
-      <div className="absolute bottom-4 left-4">
+      <div className="absolute right-4 bottom-4">
         <PartyPanel party={snapshot.familiars} />
       </div>
 
-      {!overlayActive && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-          <NavigationBar room={currentRoom} onNavigate={onNavigate} />
-        </div>
-      )}
+      <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
+        {!overlayActive && <NavigationBar room={currentRoom} onNavigate={onNavigate} />}
+        <RoomLog entries={snapshot.roomLog ?? []} />
+      </div>
 
       {snapshot.encounterActive ? (
         <EncounterOverlay onFight={onStartBattle} onFlee={onFleeEncounter} />

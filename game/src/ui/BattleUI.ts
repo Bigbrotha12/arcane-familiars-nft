@@ -67,7 +67,7 @@ export class BattleUI {
   private readonly ENEMY_CENTER_X = 640;
   private readonly ENEMY_CENTER_Y = 105;
   private readonly PLAYER_CENTER_X = 180;
-  private readonly PLAYER_CENTER_Y = 400;
+  private readonly PLAYER_CENTER_Y = 280;
 
   constructor(scene: Phaser.Scene, callbacks: BattleUICallbacks) {
     this.scene = scene;
