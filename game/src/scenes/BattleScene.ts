@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, FAMILIARS, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '../ui/BattleUI';
+import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, OverlayModePayload, BattlePhase, AbilityOption, ItemOption } from '../events';
@@ -20,6 +21,7 @@ export class BattleScene extends Phaser.Scene {
   private readonly ENEMY_ACTION_DELAY_MS = 400;
   private readonly OUTCOME_DELAY_MS = 800;
   private readonly FLEE_DELAY_MS = 600;
+  private layout!: Layout;
   private static readonly ACTION_TYPE_LABELS: Record<ActionType, string> = {
     [ActionType.Attack]: 'attack',
     [ActionType.Ability]: 'use an ability',
@@ -83,6 +85,7 @@ preload(): void {
   }
 
   async create(): Promise<void> {
+    this.layout = new Layout(this);
     const callbacks: BattleUICallbacks = {
       onAction: (action) => this.handleAction(action).catch((err) => {
         console.error('Action handler error:', err);
@@ -129,10 +132,10 @@ preload(): void {
     }
 
     if (bgKey) {
-      const bg = this.add.image(400, 300, bgKey);
-      bg.setDisplaySize(800, 600);
+      const bg = this.add.image(this.layout.x(400), this.layout.y(300), bgKey);
+      bg.setDisplaySize(this.layout.s(800), this.layout.s(600));
       bg.setOrigin(0.5);
-      const overlay = this.add.rectangle(400, 300, 800, 600, 0x000000, 0.4);
+      const overlay = this.add.rectangle(this.layout.x(400), this.layout.y(300), this.layout.s(800), this.layout.s(600), 0x000000, 0.4);
       overlay.setOrigin(0.5);
       this.battleBackground = bg;
       this.battleBackgroundOverlay = overlay;
