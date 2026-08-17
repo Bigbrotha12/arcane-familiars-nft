@@ -335,7 +335,10 @@ export class ExplorationScene extends Phaser.Scene {
     const currentRoomId = this.dungeon.currentRoomId;
 
     try {
-      await this.gameApi.collectTreasure(currentRoomId, itemId);
+      const result = await this.gameApi.collectTreasure(currentRoomId, itemId);
+      if (this.fullGameState) {
+        this.fullGameState.inventory = result.inventory;
+      }
       this.explorationUI.addLogMessage(`You took ${itemId}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to collect treasure';
@@ -487,17 +490,9 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   private handleSave = async (): Promise<void> => {
-    try {
-      if (!this.fullGameState || !this.dungeon) {
-        throw new Error('No game loaded to save');
-      }
-      this.fullGameState.dungeon = this.dungeon
-      await this.gameApi.saveGameState(this.fullGameState);
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
-    }
+    // The server owns game state; exploration state is persisted server-side
+    // on every navigation. Nothing to write here.
+    gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
   };
 
   private handleExit = (): void => {

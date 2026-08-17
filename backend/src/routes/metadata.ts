@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
+import { getErrorMessage } from '../utils/http';
 
-const metadataRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const metadataRouter = new Hono<{ Bindings: Bindings }>();
 
 /**
  * GET /api/metadata/:id
@@ -25,8 +27,8 @@ metadataRouter.get('/metadata/:id', async (c) => {
     }
     
     return c.json(result);
-  } catch (error: any) {
-    console.error('Metadata query error:', error.message);
+  } catch (error: unknown) {
+    console.error('Metadata query error:', getErrorMessage(error));
     return c.json({ error: 'Failed to fetch metadata' }, 500);
   }
 });

@@ -13,7 +13,6 @@
   },
   "dependencies": {
     "@arcane-familiars/game-logic": "*",
-    "axios": "^1.18.1",
     "hono": "^4.12.32"
   },
   "devDependencies": {

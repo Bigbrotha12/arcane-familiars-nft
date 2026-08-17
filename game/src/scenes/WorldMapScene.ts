@@ -241,16 +241,8 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private handleSave = async (): Promise<void> => {
-    try {
-      if (!this.fullGameState) {
-        throw new Error('No game loaded to save');
-      }
-      await gameApiClient.saveGameState(this.fullGameState);
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
-    }
+    // The server owns game state; nothing client-side to persist here.
+    gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
   };
 
   private handleExit = (): void => {
