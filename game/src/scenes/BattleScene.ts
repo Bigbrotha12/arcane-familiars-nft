@@ -180,7 +180,7 @@ preload(): void {
       const party = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
       const playerFamiliarId = party[this.activeFamiliarIndex] ?? party[0];
       if (!playerFamiliarId) throw new Error('No active party member');
-      const result = await gameApiClient.startBattle(playerFamiliarId, this.enemyId);
+      const result = await gameApiClient.startBattle(playerFamiliarId);
       this.battleState = result.battle;
 
       this.battleUI.hideConnecting();
@@ -225,8 +225,7 @@ preload(): void {
     this.battleUI.hideActionPanels();
 
     try {
-      const result = await gameApiClient.battleAction(this.battleState.id, action);
-
+      const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
       if (action.type === ActionType.Ability) {
         this.battleUI.addLogMessage(`You use ${action.abilityId}!`);
       } else {
@@ -270,6 +269,8 @@ preload(): void {
         this.emitStateUpdate();
       }));
     } catch (err) {
+      const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
+      if (recovered) return;
       const message = err instanceof Error ? err.message : 'Action failed';
       this.battleUI.addLogMessage(message);
       this.battleUI.showMainActions();
@@ -289,7 +290,7 @@ preload(): void {
     this.battleUI.addLogMessage('Attempting to flee...');
 
     try {
-      const result = await gameApiClient.fleeBattle(this.battleState.id);
+      const result = await gameApiClient.fleeBattle(this.battleState.id, this.battleState.turnCount);
       this.battleState = result.battle;
 
       this.timers.push(this.time.delayedCall(this.FLEE_DELAY_MS, () => {
@@ -300,6 +301,8 @@ preload(): void {
         this.isProcessingAction = false;
       }));
     } catch (err) {
+      const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
+      if (recovered) return;
       const message = err instanceof Error ? err.message : 'Failed to flee';
       this.battleUI.addLogMessage(message);
       this.battleUI.showMainActions();
@@ -327,7 +330,7 @@ preload(): void {
     const newFamiliarId = party[nextIndex];
 
     try {
-      const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId);
+      const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId, this.battleState.turnCount);
       this.battleState = result.battle;
       this.activeFamiliarIndex = nextIndex;
 
@@ -339,12 +342,70 @@ preload(): void {
       this.phase = 'menu';
       this.emitStateUpdate();
     } catch (err) {
+      const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
+      if (recovered) return;
       const message = err instanceof Error ? err.message : 'Failed to swap familiar';
       this.battleUI.addLogMessage(message);
       this.battleUI.showMainActions();
       this.isProcessingAction = false;
       this.phase = 'menu';
       this.emitStateUpdate();
+    }
+  }
+
+  private recoverFromStaleBattle = async (err: Error & { status?: number }): Promise<boolean> => {
+    if (err.status !== 409 && err.status !== 404) return false;
+
+    let state: GameState;
+    try {
+      ({ state } = await gameApiClient.loadGameState());
+    } catch {
+      return false;
+    }
+    this.gameState = state;
+
+    const dungeon = state.dungeon;
+    const room = dungeon?.rooms[dungeon.currentRoomId];
+    const pending = room?.pendingEncounter;
+
+    if (!dungeon) {
+      // The battle already ended on the server (win or loss cleared the dungeon).
+      this.battleUI.addLogMessage('The battle has ended on the server.');
+      this.leaveBattle(true);
+      return true;
+    }
+    if (!room || !pending || pending.resolved) {
+      this.battleUI.addLogMessage('No active encounter remains in this room.');
+      this.leaveBattle(false);
+      return true;
+    }
+    this.battleUI.addLogMessage('Battle state changed; restarting the battle.');
+    this.isProcessingAction = false;
+    this.phase = 'connecting';
+    await this.startBattle();
+    return true;
+  };
+
+  private leaveBattle(toWorldMap: boolean): void {
+    if (this.isLeavingBattle) return;
+    this.isLeavingBattle = true;
+    this.phase = 'connecting';
+    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
+    this.battleUI.destroy();
+    this.battleBackground?.destroy();
+    this.battleBackgroundOverlay?.destroy();
+    this.battleBackground = undefined;
+    this.battleBackgroundOverlay = undefined;
+    if (toWorldMap) {
+      this.scene.start('WorldMapScene');
+    } else {
+      this.scene.start(this.returnScene, {
+        areaId: this.areaId,
+        pendingTreasureItemId: this.pendingTreasureItemId,
+        activeIndex: this.activeFamiliarIndex,
+        enemiesDefeated: this.enemiesDefeated,
+        roomsExplored: this.roomsExplored,
+      });
     }
   }
 
@@ -462,6 +523,13 @@ preload(): void {
       return;
     }
 
+    // Boss victory clears the dungeon server-side; return to the world map
+    // instead of re-entering exploration (which would start a fresh dungeon).
+    if (this.battleOutcome?.outcome === 'victory' && this.battleState?.isBoss) {
+      this.scene.start('WorldMapScene');
+      return;
+    }
+
     this.scene.start(this.returnScene, {
       areaId: this.areaId,
       lastBattleOutcome: this.battleOutcome?.outcome,
@@ -554,16 +622,10 @@ preload(): void {
   }
 
   private handleSave = async (): Promise<void> => {
-    try {
-      if (!this.gameState) {
-        throw new Error('No game loaded to save');
-      }
-      await gameApiClient.saveGameState(this.gameState);
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
-    }
+    // The server owns game state; every action is persisted atomically by the
+    // backend, so there is nothing to write here. Emit success to keep the HUD
+    // in sync.
+    gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
   };
 
   private handleExit = (): void => {

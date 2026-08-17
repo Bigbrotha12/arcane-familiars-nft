@@ -1,3 +1,5 @@
+import type { GameState } from '@arcane-familiars/game-logic';
+
 export interface Bindings {
   DB: D1Database;
   ENVIRONMENT: string;
@@ -5,5 +7,4 @@ export interface Bindings {
   IMX_API_MAINNET: string;
   COLLECTION_CONTRACT_SANDBOX: string;
   COLLECTION_CONTRACT_MAINNET: string;
-  INFURA_API_KEY: string;
 }

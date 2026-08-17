@@ -367,12 +367,7 @@ preload(): void {
         throw new Error(validation.error);
       }
 
-      const result = await gameApiClient.loadGameState();
-      if (this._sceneGeneration !== gen) return;
-
-      const state = result.state;
-      state.activeParty = [...this.selectedIds];
-      await gameApiClient.saveGameState(state);
+      await gameApiClient.setParty(this.selectedIds);
       if (this._sceneGeneration !== gen) return;
 
       this.scene.start(SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
@@ -432,15 +427,8 @@ preload(): void {
   }
 
   private handleSave = async (): Promise<void> => {
-    try {
-      if (this.fullGameState) {
-        await gameApiClient.saveGameState(this.fullGameState);
-      }
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
-    }
+    // The server owns game state; nothing client-side to persist here.
+    gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
   };
 
   private handleExit = (): void => {
