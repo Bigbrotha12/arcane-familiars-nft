@@ -13,6 +13,7 @@ import GameToolbar from '@/components/game/GameToolbar'
 import ExitModal from '@/components/game/ExitModal'
 import ToastContainer, { toast } from '@/components/game/Toast'
 import { useGameGuard } from '@/components/game/useGameGuard'
+import { useCanvasRect } from '@/components/game/useCanvasRect'
 import Button from '@/components/ui/Button'
 import BattleHUD from '@/components/game/hud/BattleHUD'
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD'
@@ -142,6 +143,8 @@ export default function GamePage() {
     onShowExitModal: () => setShowExitModal(true),
   })
 
+  const canvasRect = useCanvasRect(containerRef, gameState)
+
   const handleCancelExit = useCallback(() => {
     setShowExitModal(false)
     handleBlockerReset()
@@ -263,7 +266,37 @@ export default function GamePage() {
         saving={saving}
       />
 
-      <div ref={containerRef} id="game-container" className="flex-1 relative" />
+      <div ref={containerRef} id="game-container" className="flex-1 relative">
+        {gameState && (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={
+              canvasRect
+                ? {
+                    left: canvasRect.left,
+                    top: canvasRect.top,
+                    width: canvasRect.width,
+                    height: canvasRect.height,
+                  }
+                : { inset: 0 }
+            }
+          >
+            <BattleHUD
+              snapshot={gameState}
+              outcome={battleOutcome}
+              onAction={handlePlayerAction}
+              onContinue={handleBattleContinue}
+            />
+            <ExplorationHUD
+              snapshot={gameState}
+              onNavigate={handleNavigate}
+              onCollectTreasure={handleCollectTreasure}
+              onFleeEncounter={handleFleeEncounter}
+              onStartBattle={handleStartBattle}
+            />
+          </div>
+        )}
+      </div>
 
       {initError && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
@@ -280,24 +313,6 @@ export default function GamePage() {
             </Button>
           </div>
         </div>
-      )}
-
-      {gameState && (
-        <>
-          <BattleHUD
-            snapshot={gameState}
-            outcome={battleOutcome}
-            onAction={handlePlayerAction}
-            onContinue={handleBattleContinue}
-          />
-          <ExplorationHUD
-            snapshot={gameState}
-            onNavigate={handleNavigate}
-            onCollectTreasure={handleCollectTreasure}
-            onFleeEncounter={handleFleeEncounter}
-            onStartBattle={handleStartBattle}
-          />
-        </>
       )}
 
       <ExitModal

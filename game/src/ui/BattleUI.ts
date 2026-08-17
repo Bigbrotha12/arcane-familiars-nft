@@ -64,8 +64,8 @@ export class BattleUI {
   private uiOnly: Phaser.GameObjects.GameObject[] = [];
   private floatingTweens: Phaser.Tweens.Tween[] = [];
   private overlayActive = false;
-  private readonly ENEMY_CENTER_X = 480;
-  private readonly ENEMY_CENTER_Y = 140;
+  private readonly ENEMY_CENTER_X = 640;
+  private readonly ENEMY_CENTER_Y = 105;
   private readonly PLAYER_CENTER_X = 180;
   private readonly PLAYER_CENTER_Y = 400;
 
@@ -124,34 +124,12 @@ export class BattleUI {
     this.enemySprite.setDisplaySize(120, 120);
     this.enemySprite.setDepth(1);
 
-    this.enemyName = this.register(this.scene.add.text(sx, 70, '', {
-      fontSize: '14px',
-      fontFamily: 'DM Sans',
-      color: '#EF4444',
-    }));
-    this.enemyName.setOrigin(0.5);
-
-    this.enemyHpBar = this.register(this.scene.add.graphics());
-    this.enemyMpBar = this.register(this.scene.add.graphics());
-
-    this.enemyHpText = this.registerUI(this.scene.add.text(560, 200, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    this.enemyMpText = this.registerUI(this.scene.add.text(560, 218, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    const enemyLabel = this.register(this.scene.add.text(sx, sy + 60, 'ENEMY', {
-      fontSize: '9px',
-      fontFamily: 'DM Sans',
-      color: '#EF4444',
-    }));
-    enemyLabel.setOrigin(0.5);
+    const card = this.createStatCard(sx, sy + 60 + 40, C.textLight, '#EF4444');
+    this.enemyName = card.name;
+    this.enemyHpBar = card.hpBar;
+    this.enemyMpBar = card.mpBar;
+    this.enemyHpText = card.hpText;
+    this.enemyMpText = card.mpText;
   }
 
   private createPlayerArea(): void {
@@ -162,34 +140,71 @@ export class BattleUI {
     this.playerSprite.setDisplaySize(120, 120);
     this.playerSprite.setDepth(1);
 
-    this.playerName = this.register(this.scene.add.text(sx, 455, '', {
+    const card = this.createStatCard(sx, sy + 60 + 40, C.textLight, '#7C5CFC');
+    this.playerName = card.name;
+    this.playerHpBar = card.hpBar;
+    this.playerMpBar = card.mpBar;
+    this.playerHpText = card.hpText;
+    this.playerMpText = card.mpText;
+  }
+
+  private createStatCard(
+    x: number,
+    y: number,
+    textColor: string,
+    nameColor: string,
+  ): {
+    container: Phaser.GameObjects.Container;
+    name: Phaser.GameObjects.Text;
+    hpBar: Phaser.GameObjects.Graphics;
+    mpBar: Phaser.GameObjects.Graphics;
+    hpText: Phaser.GameObjects.Text;
+    mpText: Phaser.GameObjects.Text;
+  } {
+    const w = 200;
+    const h = 68;
+
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(C.panelBg, 0.95);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, 8);
+    bg.lineStyle(1, C.border, 1);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, 8);
+
+    const name = this.scene.add.text(0, -24, '', {
       fontSize: '14px',
       fontFamily: 'DM Sans',
-      color: '#7C5CFC',
-    }));
-    this.playerName.setOrigin(0.5);
+      fontStyle: '600',
+      color: nameColor,
+    });
+    name.setOrigin(0.5);
 
-    this.playerHpBar = this.register(this.scene.add.graphics());
-    this.playerMpBar = this.register(this.scene.add.graphics());
+    const hpBar = this.scene.add.graphics();
+    const mpBar = this.scene.add.graphics();
 
-    this.playerHpText = this.registerUI(this.scene.add.text(260, 478, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    this.playerMpText = this.registerUI(this.scene.add.text(260, 496, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    const playerLabel = this.register(this.scene.add.text(sx, sy + 60, 'PLAYER', {
+    const hpText = this.scene.add.text(0, -2, '', {
       fontSize: '9px',
-      fontFamily: 'DM Sans',
-      color: '#7C5CFC',
-    }));
-    playerLabel.setOrigin(0.5);
+      fontFamily: 'JetBrains Mono',
+      color: textColor,
+    });
+    hpText.setOrigin(0.5);
+
+    const mpText = this.scene.add.text(0, 18, '', {
+      fontSize: '9px',
+      fontFamily: 'JetBrains Mono',
+      color: textColor,
+    });
+    mpText.setOrigin(0.5);
+
+    const container = this.scene.add.container(x, y, [bg, name, hpBar, mpBar, hpText, mpText]);
+    this.register(container);
+    this.register(bg);
+    this.register(name);
+    this.register(hpBar);
+    this.register(mpBar);
+    this.register(hpText);
+    this.register(mpText);
+
+    return { container, name, hpBar, mpBar, hpText, mpText };
   }
 
   private createLogPanel(): void {
@@ -362,8 +377,8 @@ export class BattleUI {
     const mp = Math.max(0, familiar.currentMp);
 
     const hpColor = this.getHpColor(hp, stats.maxHp);
-    this.drawBar(this.playerHpBar, 105, 478, 150, 12, hp, stats.maxHp, hpColor);
-    this.drawBar(this.playerMpBar, 105, 496, 150, 8, mp, stats.maxMp, C.mpBar);
+    this.drawBar(this.playerHpBar, -92, -14, 184, 10, hp, stats.maxHp, hpColor);
+    this.drawBar(this.playerMpBar, -92, 6, 184, 8, mp, stats.maxMp, C.mpBar);
 
     this.playerHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.playerMpText.setText(`MP: ${mp}/${stats.maxMp}`);
@@ -383,8 +398,8 @@ export class BattleUI {
     const mp = Math.max(0, familiar.currentMp);
 
     const hpColor = this.getHpColor(hp, stats.maxHp);
-    this.drawBar(this.enemyHpBar, 405, 200, 150, 12, hp, stats.maxHp, hpColor);
-    this.drawBar(this.enemyMpBar, 405, 218, 150, 8, mp, stats.maxMp, C.mpBar);
+    this.drawBar(this.enemyHpBar, -92, -14, 184, 10, hp, stats.maxHp, hpColor);
+    this.drawBar(this.enemyMpBar, -92, 6, 184, 8, mp, stats.maxMp, C.mpBar);
 
     this.enemyHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.enemyMpText.setText(`MP: ${mp}/${stats.maxMp}`);
