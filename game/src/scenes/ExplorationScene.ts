@@ -438,17 +438,26 @@ export class ExplorationScene extends Phaser.Scene {
     const rooms: DungeonRoomSnapshot[] = roomIds
       .map((roomId) => dungeon.rooms[roomId])
       .filter((room): room is Room => Boolean(room))
-      .map((room) => ({
-        id: room.id,
-        name: room.name,
-        type: RoomType[room.type],
-        cleared: room.cleared,
-        exits: room.exits.map((e) => ({
-          direction: Directions[e.direction].toLowerCase(),
-          roomId: e.roomId,
-          label: e.label,
-        })),
-      }));
+      .map((room) => {
+        const seen = new Set<string>();
+        return {
+          id: room.id,
+          name: room.name,
+          type: RoomType[room.type],
+          cleared: room.cleared,
+          exits: room.exits
+            .filter((e) => {
+              if (seen.has(e.roomId)) return false;
+              seen.add(e.roomId);
+              return true;
+            })
+            .map((e) => ({
+              direction: Directions[e.direction].toLowerCase(),
+              roomId: e.roomId,
+              label: e.label,
+            })),
+        };
+      });
 
     const snapshot: GameStateSnapshot = {
       familiars: party,
@@ -508,12 +517,11 @@ export class ExplorationScene extends Phaser.Scene {
     if (this.isProcessing || this.encounterActive || this.treasureActive || this.pendingEnemyId !== null || !this.dungeon) return;
     const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
     if (!currentRoom) return;
-    const exit = currentRoom.exits.find((e) => Directions[e.direction].toLowerCase() === payload.direction);
-    if (!exit) {
-      console.warn(`[ExplorationScene] No exit matches direction "${payload.direction}" in room ${currentRoom.id}`);
+    if (!currentRoom.exits.some((e) => e.roomId === payload.roomId)) {
+      console.warn(`[ExplorationScene] No exit matches room "${payload.roomId}" from room ${currentRoom.id}`);
       return;
     }
-    this.navigateToRoom(exit.roomId).catch((err) => {
+    this.navigateToRoom(payload.roomId).catch((err) => {
       console.error('Navigate error:', err);
     });
   };

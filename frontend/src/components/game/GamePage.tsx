@@ -6,7 +6,6 @@ import type {
   BattleEndedPayload,
   BattleActionName,
   PlayerActionPayload,
-  ExploreDirection,
 } from '@/game'
 import type { gameEventBus, GameEvent } from '@/game'
 import GameToolbar from '@/components/game/GameToolbar'
@@ -61,10 +60,10 @@ export default function GamePage() {
     setBattleOutcome(null)
   }, [])
 
-  const handleNavigate = useCallback((direction: ExploreDirection) => {
+  const handleNavigate = useCallback((roomId: string) => {
     gameModuleRef.current?.gameEventBus.emit(
       gameModuleRef.current.GameEvent.NAVIGATE_ROOM,
-      { direction }
+      { roomId }
     )
   }, [])
 

@@ -81,7 +81,7 @@ export interface PlayerActionPayload {
 }
 
 export interface NavigateRoomPayload {
-  direction: ExploreDirection
+  roomId: string
 }
 
 export interface OverlayModePayload {
