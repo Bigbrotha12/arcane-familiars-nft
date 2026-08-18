@@ -138,6 +138,37 @@ export default function GamePage() {
     })
   }, [cleanupGame])
 
+  const saveGame = useCallback((): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      const mod = gameModuleRef.current
+      if (!mod) {
+        resolve(false)
+        return
+      }
+
+      let finished = false
+
+      const onSaveComplete = (result: { success: boolean }) => {
+        if (finished) return
+        finished = true
+        clearTimeout(timeoutId)
+        mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+        resolve(result.success)
+      }
+
+      mod.gameEventBus.on(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+
+      const timeoutId = setTimeout(() => {
+        if (finished) return
+        finished = true
+        mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+        resolve(false)
+      }, 5000)
+
+      mod.gameEventBus.emit(mod.GameEvent.SAVE_GAME)
+    })
+  }, [])
+
   const { handleBlockerProceed, handleBlockerReset, isBlockerActive } = useGameGuard({
     onAutoSave: autoSave,
     onShowExitModal: () => setShowExitModal(true),
@@ -150,24 +181,38 @@ export default function GamePage() {
     handleBlockerReset()
   }, [handleBlockerReset])
 
-  // Modal handlers — check isBlockerActive to decide navigation method
+  // Modal handlers — check isBlockerActive to decide between resuming a blocked
+  // navigation and exiting to the in-game world map.
   const handleSaveAndExitFromModal = useCallback(async () => {
-    await handleSaveAndExit()
     if (isBlockerActive) {
+      await handleSaveAndExit()
       handleBlockerProceed()
+      return
+    }
+
+    setSaving(true)
+    await saveGame()
+    setSaving(false)
+    setShowExitModal(false)
+    if (gameModuleRef.current) {
+      gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.EXIT_GAME)
     } else {
       navigate('/play')
     }
-  }, [handleSaveAndExit, isBlockerActive, handleBlockerProceed, navigate])
+  }, [isBlockerActive, handleSaveAndExit, handleBlockerProceed, saveGame, navigate])
 
   const handleExitWithoutSaveFromModal = useCallback(() => {
-    cleanupGame()
     if (isBlockerActive) {
       handleBlockerProceed()
+      return
+    }
+    setShowExitModal(false)
+    if (gameModuleRef.current) {
+      gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.EXIT_GAME)
     } else {
       navigate('/play')
     }
-  }, [cleanupGame, isBlockerActive, handleBlockerProceed, navigate])
+  }, [isBlockerActive, handleBlockerProceed, navigate])
 
   // Mount Phaser game and subscribe to EventBus events
   useEffect(() => {

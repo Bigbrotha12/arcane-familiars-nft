@@ -33,6 +33,15 @@ const C = {
   bossRed: 0xEF4444,
 };
 
+const ROOM_CX = 400;
+const ROOM_CY = 224;
+const ROOM_W = 460;
+const ROOM_H = 290;
+const LEFT_CX = 82;
+const RIGHT_X = 635;
+const RIGHT_W = 155;
+const NAV_Y = 530;
+
 export class ExplorationUI {
   private scene: Phaser.Scene;
   private callbacks: ExplorationUICallbacks;

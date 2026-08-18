@@ -199,7 +199,14 @@ preload(): void {
       const playerFamiliars: FamiliarState[] = partyIds
         .map((id) => getFamiliar(id))
         .filter((fd): fd is FamiliarData => Boolean(fd))
-        .map((fd) => this.toFamiliarStateFromData(fd))
+        .map((fd) => {
+          const state = this.toFamiliarStateFromData(fd);
+          const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
+          const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
+          if (typeof hp === 'number') state.hp = hp;
+          if (typeof mp === 'number') state.mp = mp;
+          return state;
+        })
       if (playerFamiliars.length > 0) {
         playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar)
       }
@@ -579,10 +586,25 @@ preload(): void {
     if (!this.battleState) return;
     const player = this.battleState.playerFamiliar;
     const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
-    const party: FamiliarState[] = partyIds
+    // Rotate the party so the active familiar is first. activeFamiliarIndex tracks
+    // the active slot and drifts on swap while activeParty order stays unchanged;
+    // without this rotation the active familiar gets duplicated (shown twice).
+    let orderedIds = partyIds;
+    if (partyIds.length > 0) {
+      const activeIndex = Math.min(Math.max(this.activeFamiliarIndex, 0), partyIds.length - 1);
+      orderedIds = [...partyIds.slice(activeIndex), ...partyIds.slice(0, activeIndex)];
+    }
+    const party: FamiliarState[] = orderedIds
       .map((id) => getFamiliar(id))
       .filter((fd): fd is FamiliarData => Boolean(fd))
-      .map((fd) => this.toFamiliarStateFromData(fd));
+      .map((fd) => {
+        const state = this.toFamiliarStateFromData(fd);
+        const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
+        const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
+        if (typeof hp === 'number') state.hp = hp;
+        if (typeof mp === 'number') state.mp = mp;
+        return state;
+      });
     if (party.length > 0) {
       party[0] = this.toFamiliarState(player);
     }
