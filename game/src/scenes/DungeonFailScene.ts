@@ -3,6 +3,7 @@ import { gameApiClient } from '../api/client';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
+import { Layout } from '../ui/layout';
 
 interface DungeonFailData {
   roomsExplored?: number;
@@ -35,6 +36,7 @@ export class DungeonFailScene extends Phaser.Scene {
     this.emitStateUpdate();
 
     const { width, height } = this.scale;
+    const layout = new Layout(this);
 
     const SKULL_Y_RATIO = 0.25;
     const TITLE_Y_RATIO = 0.38;
@@ -44,14 +46,14 @@ export class DungeonFailScene extends Phaser.Scene {
     const ENEMIES_STAT_Y_RATIO = 0.62;
     const BUTTON_Y_RATIO = 0.75;
     const ERROR_Y_OFFSET = 48;
-    const BUTTON_WIDTH = 240;
-    const BUTTON_HEIGHT = 40;
-    const DIVIDER_WIDTH = 200;
+    const BUTTON_WIDTH = layout.s(240);
+    const BUTTON_HEIGHT = layout.s(40);
+    const DIVIDER_WIDTH = layout.s(200);
 
     this.add.rectangle(width / 2, height / 2, width, height, 0x0A0A0F);
 
     const skull = this.add.text(width / 2, height * SKULL_Y_RATIO, '☠', {
-      fontSize: '64px',
+      fontSize: layout.font(64),
       fontFamily: 'Fredoka',
       fontStyle: '600',
       color: '#EF4444',
@@ -70,30 +72,30 @@ export class DungeonFailScene extends Phaser.Scene {
     this.events.on('destroy', this.cleanupTweens, this);
 
     this.add.text(width / 2, height * TITLE_Y_RATIO, 'Defeated', {
-      fontSize: '36px',
+      fontSize: layout.font(36),
       fontFamily: 'Fredoka',
       fontStyle: '600',
       color: '#EF4444',
     }).setOrigin(0.5);
 
     this.add.text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen...', {
-      fontSize: '16px',
+      fontSize: layout.font(16),
       fontFamily: 'DM Sans',
       fontStyle: '400',
       color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, 1, 0x3B3870);
+    this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, layout.s(1), 0x3B3870);
 
     this.add.text(width / 2, height * ROOMS_STAT_Y_RATIO, `Rooms Explored: ${this.roomsExplored}`, {
-      fontSize: '14px',
+      fontSize: layout.font(14),
       fontFamily: 'JetBrains Mono',
       fontStyle: '500',
       color: '#A5A3C4',
     }).setOrigin(0.5);
 
     this.add.text(width / 2, height * ENEMIES_STAT_Y_RATIO, `Enemies Defeated: ${this.enemiesDefeated}`, {
-      fontSize: '14px',
+      fontSize: layout.font(14),
       fontFamily: 'JetBrains Mono',
       fontStyle: '500',
       color: '#A5A3C4',
@@ -102,7 +104,7 @@ export class DungeonFailScene extends Phaser.Scene {
     const btnBg = this.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x7C5CFC);
 
     const btnText = this.add.text(0, 0, 'Return to World Map', {
-      fontSize: '14px',
+      fontSize: layout.font(14),
       fontFamily: 'DM Sans',
       fontStyle: '600',
       color: '#F0EFFF',
@@ -112,8 +114,8 @@ export class DungeonFailScene extends Phaser.Scene {
     button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
     button.setInteractive({ useHandCursor: true });
 
-    const errorText = this.add.text(width / 2, height * BUTTON_Y_RATIO + ERROR_Y_OFFSET, '', {
-      fontSize: '12px',
+    const errorText = this.add.text(width / 2, height * BUTTON_Y_RATIO + layout.s(ERROR_Y_OFFSET), '', {
+      fontSize: layout.font(12),
       fontFamily: 'DM Sans',
       fontStyle: '400',
       color: '#EF4444',

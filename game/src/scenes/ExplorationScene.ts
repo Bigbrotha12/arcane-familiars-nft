@@ -3,6 +3,7 @@ import type { DungeonState, Area, Room, FamiliarData } from '@arcane-familiars/g
 import { AREAS, RoomType, getFamiliar, Directions, Affinity } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
+import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot, FamiliarState, OverlayModePayload, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
@@ -27,6 +28,7 @@ export class ExplorationScene extends Phaser.Scene {
   private fullGameState: GameState | null = null;
   private area: Area | null = null;
   private areaId!: string;
+  private layout!: Layout;
   private isProcessing = false;
   private visitedRoomIds: Set<string> = new Set();
   private currentRoomIndex = 0;
@@ -77,6 +79,7 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    this.layout = new Layout(this);
     const callbacks: ExplorationUICallbacks = {
       onNavigate: (roomId) => this.navigateToRoom(roomId).catch((err) => {
         console.error('Navigate error:', err);
@@ -93,8 +96,8 @@ export class ExplorationScene extends Phaser.Scene {
 
     const area = AREAS[this.areaId];
     if (!area) {
-      this.add.text(400, 300, `Unknown area: ${this.areaId}`, {
-        fontSize: '16px',
+      this.add.text(this.layout.x(400), this.layout.y(300), `Unknown area: ${this.areaId}`, {
+        fontSize: this.layout.font(16),
         fontFamily: 'DM Sans',
         color: '#EF4444',
       }).setOrigin(0.5);
@@ -496,9 +499,9 @@ export class ExplorationScene extends Phaser.Scene {
   };
 
   private handleExit = (): void => {
-    this.explorationUI.destroy();
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
-    this.scene.start('WorldMapScene');
+    // Ending the session from exploration ends the dungeon run so a stale
+    // active dungeon cannot block the next session.
+    this.exitDungeon();
   };
 
   private handleNavigateRoom = (payload: NavigateRoomPayload): void => {
