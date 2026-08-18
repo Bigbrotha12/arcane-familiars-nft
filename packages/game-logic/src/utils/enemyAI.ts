@@ -1,6 +1,10 @@
 import { ActionType, type BattleAction, type BattleFamiliar } from '@/types/battle';
 import { getAbility, Target, EffectType } from '@/data/abilities';
 
+function isOnCooldown(enemy: BattleFamiliar, abilityId: string): boolean {
+  return (enemy.cooldowns?.[abilityId] ?? 0) > 0;
+}
+
 /**
  * Select an enemy action using a priority-based decision tree:
  * 1. If HP < 30% AND has heal ability AND MP >= heal cost → use heal
@@ -19,14 +23,14 @@ export function selectEnemyAction(
   if (hpPercent < 0.3) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === EffectType.Heal && ability.target === Target.Ally && enemy.currentMp >= ability.mpCost) {
+      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Ally && enemy.currentMp >= ability.mpCost) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
     // Also check self-heal abilities
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === EffectType.Heal && ability.target === Target.Self && enemy.currentMp >= ability.mpCost) {
+      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Self && enemy.currentMp >= ability.mpCost) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
@@ -37,7 +41,7 @@ export function selectEnemyAction(
   if (!hasBuffs && rng() < 0.5) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && ability.effectType === EffectType.Buff && enemy.currentMp >= ability.mpCost) {
+      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Buff && enemy.currentMp >= ability.mpCost) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
       }
     }
@@ -50,6 +54,7 @@ export function selectEnemyAction(
       const ability = getAbility(abilityId);
       if (
         ability &&
+        !isOnCooldown(enemy, abilityId) &&
         (ability.effectType === EffectType.Damage || ability.effectType === EffectType.Dot) &&
         enemy.currentMp >= ability.mpCost
       ) {

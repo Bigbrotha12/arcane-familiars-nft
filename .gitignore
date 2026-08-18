@@ -1,9 +1,11 @@
 # system files
+.gstack
 .DS_Store
 .terraform
 bin
 .vscode
 .awcache
+docs/*
 
 # environment
 .env
@@ -17,16 +19,17 @@ blockchain/cache/*
 blockchain/artifacts/*
 build
 dist
+game/dist/*
 
 # dependencies
 node_modules
+backend/node_modules/*
+game/node_modules/*
 
 # Backend local secrets
 backend/.dev.vars
-backend/node_modules/
 backend/.wrangler/
 
 # Game
-game/node_modules/
-game/dist/
 
+.gstack/

@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { Layout } from '../ui/layout';
 
 export class BootScene extends Phaser.Scene {
   private readonly TRANSITION_DELAY_MS = 800;
@@ -13,9 +14,10 @@ export class BootScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
+    const layout = new Layout(this);
 
     const title = this.add.text(width / 2, height / 3, 'Arcane Familiars', {
-      fontSize: '48px',
+      fontSize: layout.font(48),
       fontFamily: 'Fredoka',
       fontStyle: '600',
       color: '#7C5CFC',
@@ -23,7 +25,7 @@ export class BootScene extends Phaser.Scene {
     title.setOrigin(0.5);
 
     const loading = this.add.text(width / 2, height / 2, 'Loading...', {
-      fontSize: '18px',
+      fontSize: layout.font(18),
       fontFamily: 'DM Sans',
       color: '#A5A3C4',
     });

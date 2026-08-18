@@ -5,19 +5,18 @@ import { ExplorationScene } from './scenes/ExplorationScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { PartySelectScene } from './scenes/PartySelectScene';
 import { DungeonFailScene } from './scenes/DungeonFailScene';
-
-export const GAME_WIDTH = 800;
-export const GAME_HEIGHT = 600;
+import { DESIGN_WIDTH, DESIGN_HEIGHT } from './ui/layout';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: GAME_WIDTH,
-  height: GAME_HEIGHT,
+  width: typeof window !== 'undefined' ? Math.floor(window.innerWidth * window.devicePixelRatio) : DESIGN_WIDTH,
+  height: typeof window !== 'undefined' ? Math.floor(window.innerHeight * window.devicePixelRatio) : DESIGN_HEIGHT,
   parent: 'game-container',
   backgroundColor: '#0A0A0F',
   scale: {
     mode: Phaser.Scale.FIT,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    autoRound: true,
   },
   scene: [BootScene, BattleScene, ExplorationScene, WorldMapScene, PartySelectScene, DungeonFailScene],
 };

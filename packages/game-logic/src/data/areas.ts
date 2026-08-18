@@ -11,6 +11,8 @@ export const AREAS: Record<string, Area> = {
     bossId: 'meadowGuardian',
     bossReward: { currency: 50, items: ['potion_medium'] },
     bgColor: 0x2d5a27,
+    baseFamiliar: 'whiteDog',
+    unlocks: 'crystalCaves',
   },
   crystalCaves: {
     id: 'crystalCaves',
@@ -22,6 +24,8 @@ export const AREAS: Record<string, Area> = {
     bossId: 'caveWarden',
     bossReward: { currency: 100, items: ['potion_medium', 'ether_small'] },
     bgColor: 0x3a3a6e,
+    baseFamiliar: 'tideTurtle',
+    unlocks: 'shadowForest',
   },
   shadowForest: {
     id: 'shadowForest',
@@ -33,5 +37,7 @@ export const AREAS: Record<string, Area> = {
     bossId: 'shadowLord',
     bossReward: { currency: 200, items: ['potion_medium', 'ether_small'] },
     bgColor: 0x1a1a2e,
+    baseFamiliar: 'shadowCat',
+    unlocks: null,
   },
 };
