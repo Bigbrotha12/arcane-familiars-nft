@@ -11,11 +11,11 @@ import NavigationBar from './NavigationBar'
 import EncounterOverlay from './EncounterOverlay'
 import TreasureOverlay from './TreasureOverlay'
 import BossOverlay from './BossOverlay'
-import type { GameStateSnapshot, ExploreDirection } from '@/game'
+import type { GameStateSnapshot } from '@/game'
 
 interface ExplorationHUDProps {
   snapshot: GameStateSnapshot
-  onNavigate: (direction: ExploreDirection) => void
+  onNavigate: (roomId: string) => void
   onCollectTreasure: () => void
   onFleeEncounter: () => void
   onStartBattle: () => void
