@@ -22,7 +22,7 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
   const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal
 
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-2 rounded-md bg-[#1E1B4B]/85 px-lg py-md shadow-card backdrop-blur-sm">
+    <div className="hud-frame pointer-events-none flex flex-col items-center gap-2 rounded-md px-lg py-md">
       <div className="flex items-center gap-2">
         <h2 className="font-display text-lg font-bold text-[#F0EFFF]">
           {snapshot.roomName ?? 'Unknown Room'}

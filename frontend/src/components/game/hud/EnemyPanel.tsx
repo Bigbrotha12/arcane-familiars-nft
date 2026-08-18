@@ -12,7 +12,7 @@ interface EnemyPanelProps {
 
 function EnemyPanel({ enemy, isBoss = false }: EnemyPanelProps) {
   return (
-    <div className="pointer-events-none w-52 rounded-md bg-[#1E1B4B]/80 p-md shadow-card backdrop-blur-sm">
+    <div className="hud-frame pointer-events-none w-52 rounded-md p-md">
       <div className="mb-2 flex items-center gap-2">
         <h2 className="truncate font-display text-lg font-semibold text-[#F0EFFF]">{enemy.name}</h2>
         {isBoss && <Badge variant="epic">BOSS</Badge>}

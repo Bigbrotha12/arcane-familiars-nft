@@ -5,9 +5,13 @@ interface ModalProps {
   onClose: () => void
   title?: string
   children: ReactNode
+  /** Dark, solid, double-outlined frame — used for in-game HUD modals that
+      render over the Phaser canvas (ability/item/exit). Default is the light
+      surface-card style used by the landing page. */
+  hud?: boolean
 }
 
-function Modal({ open, onClose, title, children }: ModalProps) {
+function Modal({ open, onClose, title, children, hud = false }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -30,13 +34,29 @@ function Modal({ open, onClose, title, children }: ModalProps) {
         onClick={onClose}
         aria-hidden="true"
       />
-      <div className="relative bg-surface-card rounded-lg shadow-card-hover w-full max-w-md p-lg animate-in fade-in zoom-in-95 duration-200">
+      <div
+        className={`relative w-full max-w-md rounded-lg p-lg animate-in fade-in zoom-in-95 duration-200 ${
+          hud
+            ? 'hud-frame rounded-lg'
+            : 'bg-surface-card shadow-card-hover'
+        }`}
+      >
         {title && (
           <div className="flex items-center justify-between mb-md">
-            <h2 className="text-xl font-display font-semibold text-text-primary">{title}</h2>
+            <h2
+              className={`text-xl font-display font-semibold ${
+                hud ? 'text-[#F0EFFF]' : 'text-text-primary'
+              }`}
+            >
+              {title}
+            </h2>
             <button
               onClick={onClose}
-              className="text-text-muted hover:text-text-primary transition-colors p-1"
+              className={`p-1 transition-colors ${
+                hud
+                  ? 'text-[#A5A3C4] hover:text-[#F0EFFF]'
+                  : 'text-text-muted hover:text-text-primary'
+              }`}
               aria-label="Close"
             >
               <svg width="20" height="20" viewBox="0 0 20 20" fill="none">

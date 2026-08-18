@@ -38,6 +38,18 @@
     animation: float 3s ease-in-out infinite;
   }
 
+  /* Solid HUD panel with a double solid border (inner light line + outer accent
+     ring separated by a dark gap), so panels are clearly outlined over the game
+     canvas without relying on translucency. */
+  .hud-frame {
+    background-color: #1E1B4B;
+    border: 2px solid #A78BFA;
+    box-shadow:
+      0 0 0 4px #1E1B4B,
+      0 0 0 6px #7C5CFC,
+      0 6px 20px rgba(0, 0, 0, 0.55);
+  }
+
   @keyframes float {
 
     0%,

@@ -20,12 +20,12 @@ export default function ExitModal({ open, onSaveAndExit, onExitWithoutSave, onCa
 
   if (confirmDangerous) {
     return (
-      <Modal open={open} onClose={() => { setConfirmDangerous(false); onCancel() }}>
+      <Modal open={open} onClose={() => { setConfirmDangerous(false); onCancel() }} hud>
         <div className="text-center">
-          <p className="font-display text-lg font-semibold text-text-primary mb-2">
+          <p className="font-display text-lg font-semibold text-[#F0EFFF] mb-2">
             Unsaved Progress
           </p>
-          <p className="font-body text-sm text-text-secondary mb-6">
+          <p className="font-body text-sm text-[#B8B5E0] mb-6">
             Any unsaved progress will be lost. Are you sure you want to leave without saving?
           </p>
           <div className="flex justify-center gap-3">
@@ -42,7 +42,7 @@ export default function ExitModal({ open, onSaveAndExit, onExitWithoutSave, onCa
   }
 
   return (
-    <Modal open={open} onClose={onCancel} title="Leave Game?">
+    <Modal open={open} onClose={onCancel} title="Leave Game?" hud>
       <div className="flex flex-col gap-3">
         <Button
           className="w-full"

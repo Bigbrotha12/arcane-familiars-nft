@@ -18,7 +18,7 @@ function ScrollableLog({ title, entries, emptyText }: ScrollableLogProps) {
   }, [entries])
 
   return (
-    <div className="pointer-events-auto flex max-h-40 w-60 flex-col overflow-hidden rounded-md bg-[#1E1B4B]/85 shadow-card backdrop-blur-sm">
+    <div className="hud-frame pointer-events-auto flex max-h-40 w-60 flex-col overflow-hidden rounded-md">
       <div className="border-b border-[#2A2A45] px-sm py-1.5">
         <h3 className="font-display text-xs font-semibold uppercase tracking-wider text-[#B8B5E0]">
           {title}
