@@ -75,4 +75,6 @@ export interface BattleState {
   isBoss: boolean;
   turnCount: number;
   status: BattleResult;
+  swapsThisTurn?: number;
+  seed?: number;
 }

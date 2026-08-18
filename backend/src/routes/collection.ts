@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
+import { getErrorMessage } from '../utils/http';
 
-const collectionRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const collectionRouter = new Hono<{ Bindings: Bindings }>();
 
 /**
  * GET /api/collection
@@ -14,8 +16,8 @@ collectionRouter.get('/collection', async (c) => {
       .all();
     
     return c.json(results);
-  } catch (error: any) {
-    console.error('Collection query error:', error.message);
+  } catch (error: unknown) {
+    console.error('Collection query error:', getErrorMessage(error));
     return c.json({ error: 'Failed to fetch collection' }, 500);
   }
 });

@@ -1,27 +1,60 @@
 import { Hono } from 'hono';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, getFamiliar, RoomType } from '@arcane-familiars/game-logic';
+import {
+  AREAS,
+  generateDungeon,
+  rollEncounter,
+  rollTreasure,
+  selectTreasure,
+  selectEnemy,
+  getFamiliar,
+  seededRandom,
+  randomInRange,
+  RoomType,
+  validateDungeonExplore,
+  validateParty,
+} from '@arcane-familiars/game-logic';
+import type { Bindings } from '../types';
+import { loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { getErrorMessage, readBody } from '../utils/http';
 
-const explorationRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const explorationRouter = new Hono<{ Bindings: Bindings }>();
+
+function cryptoSeed(): number {
+  return crypto.getRandomValues(new Uint32Array(1))[0];
+}
+
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (Math.imul(hash, 31) + value.charCodeAt(i)) | 0;
+  }
+  return hash >>> 0;
+}
 
 explorationRouter.post('/game/dungeon/enter', async (c) => {
   try {
-    const { anonymousId, areaId } = await c.req.json<{ anonymousId: string; areaId: string }>();
+    const body = await readBody<{ anonymousId: string; areaId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
 
+    const { anonymousId, areaId } = body;
     if (!anonymousId || !areaId) {
       return c.json({ error: 'Missing required fields: anonymousId, areaId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
+    const area = AREAS[areaId];
+    if (!area) {
+      return c.json({ error: 'Invalid area id' }, 400);
+    }
 
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.unlockedAreas.includes(areaId)) {
       return c.json({ error: 'Area is not unlocked' }, 403);
@@ -31,16 +64,12 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Already in a dungeon' }, 409);
     }
 
-    if (state.activeParty.length !== 2) {
-      return c.json({ error: 'Party must have exactly 2 members' }, 400);
+    const partyValidation = validateParty(state.activeParty, state.playerFamiliars);
+    if (!partyValidation.valid) {
+      return c.json({ error: partyValidation.error ?? 'Party is invalid' }, 400);
     }
 
-    const area = AREAS[areaId];
-    if (!area) {
-      return c.json({ error: 'Invalid area id' }, 400);
-    }
-
-    const dungeon = generateDungeon(area, Date.now());
+    const dungeon = generateDungeon(area, cryptoSeed());
     dungeon.party = [...state.activeParty];
     for (const familiarId of dungeon.party) {
       const familiar = getFamiliar(familiarId);
@@ -51,133 +80,138 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
     }
 
     state.dungeon = dungeon;
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO dungeon_runs (id, anonymous_id, area_id, started_at)
-         VALUES (?, ?, ?, datetime('now'))`
-      )
-      .bind(crypto.randomUUID(), anonymousId, areaId)
-      .run();
+    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
 
     return c.json({ dungeon, area });
-  } catch (error: any) {
-    console.error('Enter dungeon error:', error.message);
+  } catch (error: unknown) {
+    console.error('Enter dungeon error:', getErrorMessage(error));
     return c.json({ error: 'Failed to enter dungeon' }, 500);
   }
 });
 
 explorationRouter.post('/game/dungeon/explore', async (c) => {
   try {
-    const { anonymousId, roomId } = await c.req.json<{ anonymousId: string; roomId: string }>();
+    const body = await readBody<{ anonymousId: string; roomId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
 
+    const { anonymousId, roomId } = body;
     if (!anonymousId || !roomId) {
       return c.json({ error: 'Missing required fields: anonymousId, roomId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    const moveValidation = validateDungeonExplore(roomId, state.dungeon);
+    if (!moveValidation.valid) {
+      return c.json({ error: moveValidation.error ?? 'Cannot explore that room' }, 400);
     }
 
     const room = state.dungeon.rooms[roomId];
     if (!room) {
       return c.json({ error: 'Room not found' }, 404);
     }
-
-    room.cleared = true;
-    state.dungeon.currentRoomId = roomId;
-
-    const rng = () => Math.random();
 
     const area = AREAS[state.dungeon.areaId];
     if (!area) {
       return c.json({ error: 'Invalid area' }, 500);
     }
 
-    let encounter: boolean;
+    state.dungeon.currentRoomId = roomId;
+
+    let encounter = false;
     let enemy: string | null = null;
-
-    if (room.type === RoomType.Boss) {
-      encounter = true;
-      enemy = area.bossId;
-    } else {
-      encounter = rollEncounter(room, rng);
-      if (encounter) {
-        enemy = selectEnemy(area, rng);
-      }
-    }
-
     let treasure = false;
     let treasureItem: string | null = null;
 
-    if (room.treasurePool.length > 0) {
-      treasure = rollTreasure(room, rng);
-      if (treasure) {
-        treasureItem = selectTreasure(room, rng);
+    if (room.cleared) {
+      // Re-entering a cleared room: replay the persisted outcome, never re-roll.
+      if (room.pendingEncounter && !room.pendingEncounter.resolved) {
+        encounter = true;
+        enemy = room.pendingEncounter.enemyId;
+      }
+      if (room.pendingTreasure && !room.pendingTreasure.looted) {
+        treasure = true;
+        treasureItem = room.pendingTreasure.itemId;
+      }
+    } else {
+      room.cleared = true;
+
+      const rng = seededRandom((state.dungeon.seed ?? 0) ^ hashString(roomId));
+
+      if (room.type === RoomType.Boss) {
+        encounter = true;
+        enemy = area.bossId;
+        room.pendingEncounter = { enemyId: area.bossId, resolved: false };
+      } else {
+        if (rollEncounter(room, rng)) {
+          const selectedEnemy = selectEnemy(area, rng);
+          if (selectedEnemy) {
+            encounter = true;
+            enemy = selectedEnemy;
+            // Persist the scaled level so fleeing and re-entering cannot reroll
+            // enemy strength for the same encounter.
+            const level = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+            room.pendingEncounter = { enemyId: selectedEnemy, resolved: false, level };
+          }
+        }
+      }
+
+      // Treasure only when the room has no encounter (spec: "if no encounter").
+      if (!encounter && room.treasurePool.length > 0 && rollTreasure(room, rng)) {
+        const selectedTreasure = selectTreasure(room, rng);
+        if (selectedTreasure) {
+          treasure = true;
+          treasureItem = selectedTreasure;
+          room.pendingTreasure = { itemId: selectedTreasure, looted: false };
+        }
       }
     }
 
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
 
     return c.json({ room, encounter, enemy, treasure, treasureItem });
-  } catch (error: any) {
-    console.error('Explore room error:', error.message);
+  } catch (error: unknown) {
+    console.error('Explore room error:', getErrorMessage(error));
     return c.json({ error: 'Failed to explore room' }, 500);
   }
 });
 
 explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
   try {
-    const { anonymousId, roomId, itemId } = await c.req.json<{ anonymousId: string; roomId: string; itemId: string }>();
+    const body = await readBody<{ anonymousId: string; roomId: string; itemId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
 
+    const { anonymousId, roomId, itemId } = body;
     if (!anonymousId || !roomId || !itemId) {
       return c.json({ error: 'Missing required fields: anonymousId, roomId, itemId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
@@ -188,9 +222,21 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Room not found' }, 404);
     }
 
-    if (!room.cleared) {
-      return c.json({ error: 'Room has not been explored' }, 400);
+    const pending = room.pendingTreasure;
+    if (!pending) {
+      return c.json({ error: 'This room holds no treasure' }, 400);
     }
+    if (pending.looted) {
+      return c.json({ error: 'Treasure has already been collected' }, 400);
+    }
+    if (pending.itemId !== itemId) {
+      return c.json({ error: 'Treasure does not match the requested item' }, 400);
+    }
+    if (room.pendingEncounter && !room.pendingEncounter.resolved) {
+      return c.json({ error: 'Clear the encounter before collecting treasure' }, 400);
+    }
+
+    pending.looted = true;
 
     const existingItem = state.inventory.items.find((i) => i.itemId === itemId);
     if (existingItem) {
@@ -199,61 +245,53 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       state.inventory.items.push({ itemId, quantity: 1 });
     }
 
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
 
     return c.json({ success: true, inventory: state.inventory });
-  } catch (error: any) {
-    console.error('Collect treasure error:', error.message);
+  } catch (error: unknown) {
+    console.error('Collect treasure error:', getErrorMessage(error));
     return c.json({ error: 'Failed to collect treasure' }, 500);
   }
 });
 
 explorationRouter.post('/game/dungeon/exit', async (c) => {
   try {
-    const { anonymousId } = await c.req.json<{ anonymousId: string }>();
+    const body = await readBody<{ anonymousId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
 
+    const anonymousId = body.anonymousId;
     if (!anonymousId) {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
-    const state: GameState = JSON.parse(row.state_json);
-    state.dungeon = null;
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
+    const state: GameState = loaded.state;
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    // Idempotent exit: no active dungeon is a successful no-op (the dungeon is
+    // already cleared by a loss or boss victory).
+    if (!state.dungeon) {
+      return c.json({ success: true });
+    }
+
+    state.dungeon = null;
+
+    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
 
     return c.json({ success: true });
-  } catch (error: any) {
-    console.error('Exit dungeon error:', error.message);
+  } catch (error: unknown) {
+    console.error('Exit dungeon error:', getErrorMessage(error));
     return c.json({ error: 'Failed to exit dungeon' }, 500);
   }
 });

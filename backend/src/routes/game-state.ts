@@ -1,93 +1,69 @@
 import { Hono } from 'hono';
-import type { GameState } from '@arcane-familiars/game-logic';
+import { validateParty } from '@arcane-familiars/game-logic';
+import type { Bindings } from '../types';
+import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { getErrorMessage, readBody } from '../utils/http';
 
-const gameStateRouter = new Hono<{ Bindings: { DB: D1Database } }>();
-
-function createDefaultGameState(anonymousId: string): GameState {
-  const id = crypto.randomUUID();
-  const now = Date.now();
-
-  return {
-    version: 1,
-    id,
-    anonymousId,
-    playerFamiliars: ['yellowFighter', 'aquaSprite'],
-    activeParty: [],
-    inventory: {
-      currency: 100,
-      items: [
-        { itemId: 'health-potion', quantity: 3 },
-      ],
-    },
-    dungeon: null,
-    unlockedAreas: ['verdantMeadow'],
-    defeatedBosses: [],
-    battleCount: 0,
-    winCount: 0,
-    lastSaved: now,
-  };
-}
+const gameStateRouter = new Hono<{ Bindings: Bindings }>();
 
 gameStateRouter.post('/game/state/load', async (c) => {
   try {
-    const { anonymousId } = await c.req.json();
-
+    const body = await readBody<{ anonymousId: string }>(c);
+    const anonymousId = body?.anonymousId;
     if (!anonymousId) {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (row) {
-      const state: GameState = JSON.parse(row.state_json);
-      return c.json({ state });
-    }
-
-    const state = createDefaultGameState(anonymousId);
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))`
-      )
-      .bind(anonymousId, JSON.stringify(state))
-      .run();
-
+    const { state } = await getOrCreateGameState(c.env.DB, anonymousId);
     return c.json({ state });
-  } catch (error: any) {
-    console.error('Load state error:', error.message);
+  } catch (error: unknown) {
+    console.error('Load state error:', getErrorMessage(error));
     return c.json({ error: 'Failed to load game state' }, 500);
   }
 });
 
-gameStateRouter.post('/game/state/save', async (c) => {
+/**
+ * Party selection is the only client-writable part of the save. The server
+ * owns inventory, unlocks, dungeon, and battle results.
+ */
+gameStateRouter.post('/game/state/party', async (c) => {
   try {
-    const { anonymousId, state } = await c.req.json<{ anonymousId: string; state: GameState }>();
-
-    if (!anonymousId || !state) {
-      return c.json({ error: 'Missing required fields: anonymousId, state' }, 400);
+    const body = await readBody<{ anonymousId: string; activeParty: string[] }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
     }
 
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
+    const { anonymousId, activeParty } = body;
+    if (!anonymousId) {
+      return c.json({ error: 'Missing required field: anonymousId' }, 400);
+    }
+    if (!Array.isArray(activeParty)) {
+      return c.json({ error: 'Missing required field: activeParty' }, 400);
+    }
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
+    const state = loaded.state;
 
-    return c.json({ success: true });
-  } catch (error: any) {
-    console.error('Save state error:', error.message);
-    return c.json({ error: 'Failed to save game state' }, 500);
+    const validation = validateParty(activeParty, state.playerFamiliars);
+    if (!validation.valid) {
+      return c.json({ error: validation.error ?? 'Invalid party' }, 400);
+    }
+
+    if (state.dungeon) {
+      return c.json({ error: 'Cannot change party while in a dungeon' }, 409);
+    }
+
+    state.activeParty = [...activeParty];
+
+    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({ success: true, state });
+  } catch (error: unknown) {
+    console.error('Set party error:', getErrorMessage(error));
+    return c.json({ error: 'Failed to set party' }, 500);
   }
 });
 

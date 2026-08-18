@@ -6,6 +6,7 @@ import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
+import { Layout } from '../ui/layout';
 
 interface AreaCard {
   areaId: string;
@@ -17,6 +18,7 @@ interface AreaCard {
 
 export class WorldMapScene extends Phaser.Scene {
   private readonly MESSAGE_DISPLAY_MS = 2000;
+  private layout!: Layout;
   private cards: AreaCard[] = [];
   private loadingText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
@@ -57,41 +59,41 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
-    const { width, height } = this.scale;
+    this.layout = new Layout(this);
 
-    this.add.text(width / 2, 35, 'Arcane Familiars', {
-      fontSize: '32px',
+    this.add.text(this.layout.x(400), this.layout.y(35), 'Arcane Familiars', {
+      fontSize: this.layout.font(32),
       fontFamily: 'Fredoka',
       fontStyle: '600',
       color: '#7C5CFC',
     }).setOrigin(0.5);
 
-    this.add.text(width / 2, 70, 'Choose a Dungeon', {
-      fontSize: '15px',
+    this.add.text(this.layout.x(400), this.layout.y(70), 'Choose a Dungeon', {
+      fontSize: this.layout.font(15),
       fontFamily: 'DM Sans',
       fontStyle: '500',
       color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    this.loadingText = this.add.text(width / 2, height / 2, 'Loading...', {
-      fontSize: '18px',
+    this.loadingText = this.add.text(this.layout.x(400), this.layout.y(300), 'Loading...', {
+      fontSize: this.layout.font(18),
       fontFamily: 'DM Sans',
       fontStyle: '400',
       color: '#A5A3C4',
     }).setOrigin(0.5);
 
-    this.messageText = this.add.text(width / 2, height - 55, '', {
-      fontSize: '14px',
+    this.messageText = this.add.text(this.layout.x(400), this.layout.y(545), '', {
+      fontSize: this.layout.font(14),
       fontFamily: 'DM Sans',
       fontStyle: '400',
       color: '#EF4444',
     }).setOrigin(0.5).setAlpha(0);
 
-    const statsBg = this.add.rectangle(width / 2, height - 18, width - 40, 36, 0x1E1B4B);
+    const statsBg = this.add.rectangle(this.layout.x(400), this.layout.y(582), this.layout.s(760), this.layout.s(36), 0x1E1B4B);
     statsBg.setStrokeStyle(1, 0x3B3870);
 
-    this.statsText = this.add.text(width / 2, height - 18, '', {
-      fontSize: '12px',
+    this.statsText = this.add.text(this.layout.x(400), this.layout.y(582), '', {
+      fontSize: this.layout.font(12),
       fontFamily: 'JetBrains Mono',
       fontStyle: '500',
       color: '#A5A3C4',
@@ -125,14 +127,13 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private createAreaCards(unlockedAreas: string[]): void {
-    const { width, height } = this.scale;
     const areaList = Object.values(AREAS);
     const startY = 100;
     const cardHeight = 125;
     const gap = 12;
-    const cardWidth = width - 100;
+    const cardWidth = this.layout.s(700);
 
-    const availableHeight = height - 60 - startY;
+    const availableHeight = 600 - 60 - startY;
     const maxCards = Math.max(1, Math.floor(availableHeight / (cardHeight + gap)));
     const displayAreas = areaList.length > maxCards ? areaList.slice(0, maxCards) : areaList;
 
@@ -142,20 +143,20 @@ export class WorldMapScene extends Phaser.Scene {
 
     displayAreas.forEach((area, index) => {
       const unlocked = unlockedAreas.includes(area.id);
-      const y = startY + index * (cardHeight + gap);
-      const cx = width / 2;
+      const y = this.layout.y(startY + index * (cardHeight + gap));
+      const cx = this.layout.x(400);
 
       const bossData = FAMILIARS[area.bossId];
 
-      const border = this.add.rectangle(cx, y + cardHeight / 2, cardWidth, cardHeight, unlocked ? 0x1E1B4B : 0x15133A);
-      border.setStrokeStyle(2, unlocked ? 0x7C5CFC : 0x3B3870);
+      const border = this.add.rectangle(cx, y + this.layout.s(cardHeight / 2), cardWidth, this.layout.s(cardHeight), unlocked ? 0x1E1B4B : 0x15133A);
+      border.setStrokeStyle(this.layout.s(2), unlocked ? 0x7C5CFC : 0x3B3870);
 
       const texts: Phaser.GameObjects.Text[] = [];
-      const left = cx - cardWidth / 2 + 15;
+      const left = cx - cardWidth / 2 + this.layout.s(15);
 
       texts.push(
-        this.add.text(left, y + 8, area.name, {
-          fontSize: '19px',
+        this.add.text(left, y + this.layout.s(8), area.name, {
+          fontSize: this.layout.font(19),
           fontFamily: 'Fredoka',
           fontStyle: '600',
           color: unlocked ? '#7C5CFC' : '#6366A1',
@@ -163,8 +164,8 @@ export class WorldMapScene extends Phaser.Scene {
       );
 
       texts.push(
-        this.add.text(left, y + 32, area.description, {
-          fontSize: '12px',
+        this.add.text(left, y + this.layout.s(32), area.description, {
+          fontSize: this.layout.font(12),
           fontFamily: 'DM Sans',
           fontStyle: '400',
           color: unlocked ? '#A5A3C4' : '#6366A1',
@@ -173,8 +174,8 @@ export class WorldMapScene extends Phaser.Scene {
 
       const bossName = bossData?.name || area.bossId;
       texts.push(
-        this.add.text(left, y + 54, `Level ${area.levelRange[0]}-${area.levelRange[1]}  |  Boss: ${bossName}`, {
-          fontSize: '11px',
+        this.add.text(left, y + this.layout.s(54), `Level ${area.levelRange[0]}-${area.levelRange[1]}  |  Boss: ${bossName}`, {
+          fontSize: this.layout.font(11),
           fontFamily: 'DM Sans',
           fontStyle: '400',
           color: unlocked ? '#6366A1' : '#3B3870',
@@ -182,8 +183,8 @@ export class WorldMapScene extends Phaser.Scene {
       );
 
       texts.push(
-        this.add.text(left, y + 74, `Recommended Level: ${area.levelRange[0]}+`, {
-          fontSize: '11px',
+        this.add.text(left, y + this.layout.s(74), `Recommended Level: ${area.levelRange[0]}+`, {
+          fontSize: this.layout.font(11),
           fontFamily: 'DM Sans',
           fontStyle: '400',
           color: unlocked ? '#6366A1' : '#3B3870',
@@ -193,8 +194,8 @@ export class WorldMapScene extends Phaser.Scene {
       const statusColor = unlocked ? '#10B981' : '#EF4444';
       const statusText = unlocked ? '● AVAILABLE' : '● LOCKED';
       texts.push(
-        this.add.text(cx + cardWidth / 2 - 15, y + 8, statusText, {
-          fontSize: '11px',
+        this.add.text(cx + cardWidth / 2 - this.layout.s(15), y + this.layout.s(8), statusText, {
+          fontSize: this.layout.font(11),
           fontFamily: 'DM Sans',
           fontStyle: '500',
           color: statusColor,
@@ -206,7 +207,7 @@ export class WorldMapScene extends Phaser.Scene {
         border.on('pointerover', () => border.setFillStyle(0x2D2A5E));
         border.on('pointerout', () => border.setFillStyle(0x1E1B4B));
         border.on('pointerdown', () => {
-          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: area.id });
+          this.openArea(area.id);
         });
       } else {
         border.setInteractive();
@@ -241,17 +242,23 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private handleSave = async (): Promise<void> => {
-    try {
-      if (!this.fullGameState) {
-        throw new Error('No game loaded to save');
-      }
-      await gameApiClient.saveGameState(this.fullGameState);
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Save failed';
-      gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: false, error: message });
-    }
+    // The server owns game state; nothing client-side to persist here.
+    gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
   };
+
+  /**
+   * Open an area card. If a dungeon run is already active (e.g. resumed after a
+   * refresh), continue that run instead of opening party selection — an active
+   * dungeon rejects party changes with a 409.
+   */
+  private openArea(areaId: string): void {
+    const dungeon = this.fullGameState?.dungeon;
+    if (dungeon) {
+      this.scene.start(SCENE_KEYS.EXPLORATION, { areaId: dungeon.areaId });
+      return;
+    }
+    this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId });
+  }
 
   private handleExit = (): void => {
     this.cleanupTimers();
@@ -303,7 +310,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
-          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
+          this.openArea(card.areaId);
         }
       }
     };
@@ -312,7 +319,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
-          this.scene.start(SCENE_KEYS.PARTY_SELECT, { areaId: card.areaId });
+          this.openArea(card.areaId);
         }
       }
     };
@@ -331,7 +338,7 @@ export class WorldMapScene extends Phaser.Scene {
   private focusCard(index: number): void {
     if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
       const prevCard = this.cards[this.selectedCardIndex];
-      prevCard.border.setStrokeStyle(2, prevCard.unlocked ? 0x7C5CFC : 0x3B3870);
+      prevCard.border.setStrokeStyle(this.layout.s(2), prevCard.unlocked ? 0x7C5CFC : 0x3B3870);
       prevCard.border.setFillStyle(0x1E1B4B);
     }
 
@@ -339,7 +346,7 @@ export class WorldMapScene extends Phaser.Scene {
 
     if (index >= 0 && index < this.cards.length) {
       const card = this.cards[index];
-      card.border.setStrokeStyle(3, 0xA78BFA);
+      card.border.setStrokeStyle(this.layout.s(3), 0xA78BFA);
 
       const status = card.unlocked ? 'Available' : 'Locked';
       this.announceForScreenReader(`${card.areaName} — ${status}`);
