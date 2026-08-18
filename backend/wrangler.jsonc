@@ -11,8 +11,7 @@
 			"binding": "DB",
 			"database_name": "arcane-familiars",
 			"database_id": "8e8bce41-464a-42ba-97cc-bfd95b269e36",
-      "migrations_dir": "./migrations",
-			"remote": true
+			"migrations_dir": "./migrations"
 		}
 	],
 	"vars": {
@@ -21,5 +20,21 @@
 		"IMX_API_MAINNET": "https://api.x.immutable.com",
 		"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
 		"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c"
+	},
+	"env": {
+		"production": {
+			"vars": {
+				"ENVIRONMENT": "production"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "arcane-familiars",
+					"database_id": "8e8bce41-464a-42ba-97cc-bfd95b269e36",
+					"migrations_dir": "./migrations",
+					"remote": true
+				}
+			]
+		}
 	}
 }

@@ -1,4 +1,4 @@
-export type { LoadStateRequest, LoadStateResponse, SaveStateRequest, SaveStateResponse, EnterDungeonRequest, EnterDungeonResponse, ExploreRequest, ExploreResponse, ExitDungeonRequest, ExitDungeonResponse, BattleActionRequest, BattleActionResponse } from '@/types/api';
+export type { LoadStateRequest, LoadStateResponse, SetPartyRequest, SetPartyResponse, EnterDungeonRequest, EnterDungeonResponse, ExploreRequest, ExploreResponse, CollectTreasureRequest, CollectTreasureResponse, ExitDungeonRequest, ExitDungeonResponse, StartBattleRequest, StartBattleResponse, BattleActionRequest, BattleActionResponse, SwapFamiliarRequest, SwapFamiliarResponse, FleeBattleRequest, FleeBattleResponse } from '@/types/api';
 export { ActionType, Outcome, BattleResult } from '@/types/battle';
 export type { BattleFamiliar, StatusEffect, BattleAction, ActionResult, BattleTurnResult, BattleRewards, BattleState } from '@/types/battle';
 export { RoomType } from '@/types/exploration';

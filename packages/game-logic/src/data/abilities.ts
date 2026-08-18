@@ -4,7 +4,8 @@ export enum EffectType {
   Buff,
   Debuff,
   Dot,
-  Hot
+  Hot,
+  MpHeal
 }
 
 export enum StatName {

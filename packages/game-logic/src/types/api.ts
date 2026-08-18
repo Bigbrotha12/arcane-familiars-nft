@@ -1,60 +1,108 @@
-import type { BattleAction, BattleTurnResult } from '@/types/battle';
-import type { Directions } from '@/utils/dungeonEngine';
-import type { DungeonState, Room } from '@/types/exploration';
-import type { GameState } from '@/types/gameState';
+import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
+import type { Area, DungeonState, Room } from '@/types/exploration';
+import type { GameState, Inventory } from '@/types/gameState';
 
 export interface LoadStateRequest {
   anonymousId: string;
 }
 
 export interface LoadStateResponse {
-  state: GameState | null;
-}
-
-export interface SaveStateRequest {
   state: GameState;
 }
 
-export interface SaveStateResponse {
+export interface SetPartyRequest {
+  anonymousId: string;
+  activeParty: string[];
+}
+
+export interface SetPartyResponse {
   success: boolean;
-  lastSaved: number;
+  state: GameState;
 }
 
 export interface EnterDungeonRequest {
+  anonymousId: string;
   areaId: string;
-  party: string[];
 }
 
 export interface EnterDungeonResponse {
   dungeon: DungeonState;
+  area: Area;
 }
 
 export interface ExploreRequest {
-  dungeonId: string;
-  direction?: Directions;
+  anonymousId: string;
+  roomId: string;
 }
 
 export interface ExploreResponse {
   room: Room;
-  encounter?: string;
-  treasure?: string;
-  dungeon: DungeonState;
+  encounter: boolean;
+  enemy: string | null;
+  treasure: boolean;
+  treasureItem: string | null;
+}
+
+export interface CollectTreasureRequest {
+  anonymousId: string;
+  roomId: string;
+  itemId: string;
+}
+
+export interface CollectTreasureResponse {
+  success: boolean;
+  inventory: Inventory;
 }
 
 export interface ExitDungeonRequest {
-  dungeonId: string;
+  anonymousId: string;
 }
 
 export interface ExitDungeonResponse {
-  state: GameState;
+  success: boolean;
+}
+
+export interface StartBattleRequest {
+  anonymousId: string;
+  playerFamiliarId: string;
+}
+
+export interface StartBattleResponse {
+  battle: BattleState;
 }
 
 export interface BattleActionRequest {
+  anonymousId: string;
   battleId: string;
   action: BattleAction;
+  expectedTurnCount?: number;
 }
 
 export interface BattleActionResponse {
-  result: BattleTurnResult;
-  state: GameState;
+  turnResult: BattleTurnResult;
+  state?: GameState;
+  turnCount: number;
+}
+
+export interface SwapFamiliarRequest {
+  anonymousId: string;
+  battleId: string;
+  newFamiliarId: string;
+  expectedTurnCount?: number;
+}
+
+export interface SwapFamiliarResponse {
+  battle: BattleState;
+}
+
+export interface FleeBattleRequest {
+  anonymousId: string;
+  battleId: string;
+  expectedTurnCount?: number;
+}
+
+export interface FleeBattleResponse {
+  success: boolean;
+  message: string;
+  battle: BattleState;
 }

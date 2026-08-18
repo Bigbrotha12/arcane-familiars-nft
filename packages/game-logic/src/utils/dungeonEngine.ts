@@ -51,8 +51,8 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     type: RoomType.Start,
     exits: [],
     encounterChance: 0,
-    treasureChance: 0.1,
-    treasurePool: [{ itemId: 'potion_small', weight: 10 }],
+    treasureChance: 0,
+    treasurePool: [],
     cleared: true,
   };
   rooms['room_0'] = startRoom;
@@ -133,8 +133,8 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     party: [],
     partyHp: {},
     partyMp: {},
-    inventory: { currency: 0, items: [] },
     rooms,
+    seed,
   };
 }
 
