@@ -1,4 +1,4 @@
-import { useEffect, useRef, ReactNode } from 'react'
+import { useEffect, ReactNode } from 'react'
 
 interface ModalProps {
   open: boolean
@@ -8,8 +8,6 @@ interface ModalProps {
 }
 
 function Modal({ open, onClose, title, children }: ModalProps) {
-  const overlayRef = useRef<HTMLDivElement>(null)
-
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -26,12 +24,12 @@ function Modal({ open, onClose, title, children }: ModalProps) {
   if (!open) return null
 
   return (
-    <div
-      ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-md"
-      onClick={(e) => { if (e.target === overlayRef.current) onClose() }}
-    >
-      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" />
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-md">
+      <div
+        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+        onClick={onClose}
+        aria-hidden="true"
+      />
       <div className="relative bg-surface-card rounded-lg shadow-card-hover w-full max-w-md p-lg animate-in fade-in zoom-in-95 duration-200">
         {title && (
           <div className="flex items-center justify-between mb-md">
