@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import Nav from '@/components/layout/Nav'
 import Footer from '@/components/layout/Footer'
 import Modal from '@/components/ui/Modal'
@@ -25,6 +26,14 @@ export default function LandingPage(): JSX.Element {
       </main>
 
       <Footer />
+
+      {/* Dev-only preview link */}
+      <Link
+        to="/preview"
+        className="fixed bottom-4 right-4 rounded-md bg-[#7C5CFC]/80 px-3 py-1.5 text-xs font-medium text-white shadow-lg backdrop-blur-sm transition-all hover:bg-[#7C5CFC] hover:shadow-xl"
+      >
+        Preview UI
+      </Link>
 
       <Modal open={walletOpen} onClose={() => setWalletOpen(false)} title="Connect Wallet">
         <div className="flex flex-col gap-3">
