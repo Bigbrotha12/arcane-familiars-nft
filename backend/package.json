@@ -5,11 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy",
+    "deploy": "wrangler deploy --env production",
     "types": "wrangler types",
-    "build": "wrangler deploy --dry-run",
+    "build": "wrangler deploy --env production --dry-run",
     "cf-typegen": "wrangler types",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:migrate": "wrangler d1 migrations apply arcane-familiars-dev --local",
+    "db:seed": "wrangler d1 execute arcane-familiars-dev --local --file ./seeds/0001_seed_familiars.sql",
+    "db:setup": "npm run db:migrate && npm run db:seed"
   },
   "dependencies": {
     "@arcane-familiars/game-logic": "*",

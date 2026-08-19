@@ -6,11 +6,14 @@
 	"compatibility_flags": [
 		"nodejs_compat"
 	],
+	// Local development uses its own D1 database (dev only, never remote).
+	// Production uses [env.production] below, so `wrangler dev` and
+	// `wrangler d1 ... --local` can never touch the production database.
 	"d1_databases": [
 		{
 			"binding": "DB",
-			"database_name": "arcane-familiars",
-			"database_id": "8e8bce41-464a-42ba-97cc-bfd95b269e36",
+			"database_name": "arcane-familiars-dev",
+			"database_id": "65ee5652-56ec-42c9-b4a1-4953fc30d4d8",
 			"migrations_dir": "./migrations"
 		}
 	],

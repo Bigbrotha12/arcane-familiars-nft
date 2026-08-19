@@ -1,7 +1,14 @@
 {
   "private": true,
-  "workspaces": ["backend", "frontend", "game", "packages/*"],
+  "workspaces": [
+    "backend",
+    "frontend",
+    "game",
+    "packages/*"
+  ],
   "scripts": {
+    "dev": "concurrently -k -n backend,frontend -c blue,green \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "db:setup": "npm run db:setup --prefix backend",
     "game:dev": "npm run dev --prefix game",
     "game:build": "npm run build --prefix game",
     "game:type-check": "npm run type-check --prefix game",
@@ -14,5 +21,8 @@
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.2"
+  },
+  "devDependencies": {
+    "concurrently": "^10.0.5"
   }
 }

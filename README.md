@@ -40,18 +40,27 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 ### Prerequisites
 - Node.js 22+ (see `.nvmrc`)
 
-### Frontend
+### Install
 ```bash
-cd frontend
 npm install
-npm run dev        # http://localhost:8080
 ```
 
-### Backend
+### Run backend + frontend together (development)
 ```bash
-cd backend
-npm install
-npm run dev        # wrangler dev
+npm run dev        # backend http://localhost:8787, frontend http://localhost:8080
+```
+
+The backend runs `wrangler dev` against a **local** D1 database — it never
+touches production. To (re)create the local database with schema + seed data:
+
+```bash
+npm run db:setup  # applies migrations + seed to the local D1 (idempotent)
+```
+
+### Run individually
+```bash
+npm run backend:dev    # wrangler dev
+npm run frontend:dev   # http://localhost:8080
 ```
 
 ### Blockchain
