@@ -45,7 +45,7 @@ const mockStatusEffects = [
   { id: 'rage', icon: '💢', duration: 1 },
 ]
 
-function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80) {
+function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80, nameOnTop: boolean = false) {
   const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
 
@@ -64,8 +64,18 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
   const hpOffset = circumference * (1 - hpRatio * 0.75)
   const mpOffset = circumference * (1 - mpRatio * 0.75)
 
+  const nameLabel = (
+    <span
+      className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md"
+      style={{ color: textColor }}
+    >
+      {familiar.name}
+    </span>
+  )
+
   return (
     <div className="flex flex-col items-center gap-1">
+      {nameOnTop && nameLabel}
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           <circle
@@ -120,13 +130,7 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
           </span>
         </div>
       </div>
-
-      <span
-        className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md"
-        style={{ color: textColor }}
-      >
-        {familiar.name}
-      </span>
+      {!nameOnTop && nameLabel}
     </div>
   )
 }
@@ -277,17 +281,18 @@ export function ArcVariationD() {
 
 export function ArcVariationE1() {
   // Very close to overlapping, horizontal status below inactive, 10 effects
+  // Active familiar has name on top to bring arcs closer
   return (
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
-        <div className="flex flex-col items-center gap-3">
-          {/* Active familiar - larger, offset left and up */}
+        <div className="flex flex-col items-center gap-2">
+          {/* Active familiar - larger, offset left, name on top */}
           <div className="relative -ml-12">
-            {renderArc(mockParty[0], true, 92)}
+            {renderArc(mockParty[0], true, 92, true)}
           </div>
 
-          {/* Inactive familiar - smaller, grayscale, offset right and down, almost touching */}
-          <div className="relative -mr-12 -mt-2">
+          {/* Inactive familiar - smaller, grayscale, offset right, almost touching */}
+          <div className="relative -mr-12 -mt-1">
             {renderArc(mockParty[1], false, 72)}
           </div>
 
@@ -380,7 +385,7 @@ function CircularArcVariations() {
 
       <div>
         <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">
-          E1. Very Close, Horizontal Status Below Inactive, 10 Effects
+          E1. Very Close, Active Name on Top, Status Below Inactive, 10 Effects
         </h3>
         <ArcVariationE1 />
       </div>

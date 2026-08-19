@@ -1,29 +1,30 @@
-// Compact floating card with name, HP/MP bars, and status effect icons.
-// Solid background with double-lined border.
+// Compact combatant card with name, HP/MP bars, and status effect icons.
+// Solid background with double-lined border. Same layout for enemy and player.
 
 import type { FamiliarState } from '@/game'
 
 interface FamiliarStatusCompactProps {
   familiar: FamiliarState
-  position: 'above' | 'below'
+  isBoss?: boolean
   statusEffects?: Array<{ id: string; icon: string; duration?: number }>
 }
 
-function FamiliarStatusCompact({ familiar, position, statusEffects = [] }: FamiliarStatusCompactProps) {
+function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }: FamiliarStatusCompactProps) {
   const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
   const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
 
   return (
-    <div
-      className={`pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg ${
-        position === 'above' ? 'flex-col' : 'flex-col-reverse'
-      }`}
-    >
+    <div className="pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
       <div className="flex items-center justify-between gap-1">
         <span className="truncate font-body text-xs font-semibold text-[#F0EFFF]">
           {familiar.name}
         </span>
+        {isBoss && (
+          <span className="shrink-0 rounded-sm bg-error/20 px-1.5 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wider text-error">
+            Boss
+          </span>
+        )}
       </div>
 
       <div className="flex items-center gap-1">

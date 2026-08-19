@@ -1,11 +1,12 @@
-// Battle HUD overlay for the embedded Phaser game. Composes the enemy/party
-// panels, battle log, action bar, ability/item modals, and outcome screen.
-// Fully presentational: receives a GameStateSnapshot + BattleEndedPayload and
-// emits callbacks — GamePage owns event-bus wiring (Step 6).
+// Battle HUD overlay for the embedded Phaser game. Composes combatant status
+// cards (near the sprites), the arc party panel, battle log, action bar,
+// ability/item modals, and outcome screen. Fully presentational: receives a
+// GameStateSnapshot + BattleEndedPayload and emits callbacks — GamePage owns
+// event-bus wiring (Step 6).
 
 import { useState } from 'react'
-import EnemyPanel from './EnemyPanel'
-import PartyPanel from './PartyPanel'
+import FamiliarStatusCompact from './FamiliarStatusCompact'
+import CircularArcPartyPanel from './CircularArcPartyPanel'
 import ActionBar, { type ActionBarItem } from './ActionBar'
 import AbilityPanel from './AbilityPanel'
 import ItemPanel from './ItemPanel'
@@ -37,7 +38,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
   const enemy = snapshot.enemy
   const disabled = snapshot.phase === 'acting' || outcome !== null
   const party = snapshot.party ?? snapshot.familiars
-  const activeId = snapshot.familiars[0]?.id
+  const activeFamiliar = party[0] ?? snapshot.familiars[0]
 
   const handleAction = (action: BattleActionName) => {
     if (action === 'ability') setActivePanel('ability')
@@ -67,9 +68,29 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="absolute right-4 bottom-4 flex flex-col gap-2">
-          <EnemyPanel enemy={enemy} isBoss={snapshot.isBoss} />
-          <PartyPanel party={party} activeId={activeId} />
+        {/* Enemy status card - left of enemy sprite (~80%/17.5% canvas) */}
+        {enemy && (
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{ left: '55%', top: '17.5%' }}
+          >
+            <FamiliarStatusCompact familiar={enemy} isBoss={snapshot.isBoss} />
+          </div>
+        )}
+
+        {/* Player status card - right of player sprite (~22.5%/66.7% canvas) */}
+        {activeFamiliar && (
+          <div
+            className="absolute -translate-x-1/2 -translate-y-1/2"
+            style={{ left: '48%', top: '66.7%' }}
+          >
+            <FamiliarStatusCompact familiar={activeFamiliar} />
+          </div>
+        )}
+
+        {/* Arc party panel - bottom right */}
+        <div className="absolute right-4 bottom-4">
+          <CircularArcPartyPanel party={party} activeId={activeFamiliar?.id} />
         </div>
 
         <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
