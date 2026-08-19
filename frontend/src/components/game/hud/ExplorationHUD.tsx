@@ -7,7 +7,7 @@ import MiniMap from './MiniMap'
 import RoomInfo from './RoomInfo'
 import RoomLog from './RoomLog'
 import PartyPanel from './PartyPanel'
-import NavigationBar from './NavigationBar'
+import ActionBar, { type ActionBarItem } from './ActionBar'
 import EncounterOverlay from './EncounterOverlay'
 import TreasureOverlay from './TreasureOverlay'
 import BossOverlay from './BossOverlay'
@@ -37,6 +37,14 @@ function ExplorationHUD({
   const overlayActive =
     snapshot.encounterActive || snapshot.treasureActive || snapshot.bossRoom
 
+  const exitActions: ActionBarItem[] = (currentRoom?.exits ?? [])
+    .filter((exit, index, all) => all.findIndex((e) => e.roomId === exit.roomId) === index)
+    .map((exit) => ({
+      key: exit.roomId,
+      label: exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1),
+      onClick: () => onNavigate(exit.roomId),
+    }))
+
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
       <div className="absolute left-4 top-4">
@@ -52,7 +60,7 @@ function ExplorationHUD({
       </div>
 
       <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
-        {!overlayActive && <NavigationBar room={currentRoom} onNavigate={onNavigate} />}
+        {!overlayActive && <ActionBar items={exitActions} />}
         <RoomLog entries={snapshot.roomLog ?? []} />
       </div>
 

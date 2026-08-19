@@ -39,6 +39,10 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
           {snapshot.roomDescription}
         </p>
       )}
+
+      <p className="font-mono text-[11px] tracking-wider text-[#A5A3C4]">
+        Room {dungeon.currentRoomIndex + 1}/{dungeon.roomCount}
+      </p>
     </div>
   )
 }

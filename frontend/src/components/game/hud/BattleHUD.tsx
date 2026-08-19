@@ -6,7 +6,7 @@
 import { useState } from 'react'
 import EnemyPanel from './EnemyPanel'
 import PartyPanel from './PartyPanel'
-import ActionBar from './ActionBar'
+import ActionBar, { type ActionBarItem } from './ActionBar'
 import AbilityPanel from './AbilityPanel'
 import ItemPanel from './ItemPanel'
 import BattleLog from './BattleLog'
@@ -55,6 +55,15 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
     onAction('item', { itemId })
   }
 
+  const actions: ActionBarItem[] = [
+    { key: 'attack', label: 'Attack', primary: true, onClick: () => handleAction('attack') },
+    { key: 'defend', label: 'Defend', onClick: () => handleAction('defend') },
+    { key: 'ability', label: 'Ability', onClick: () => handleAction('ability') },
+    { key: 'item', label: 'Item', onClick: () => handleAction('item') },
+    { key: 'swap', label: 'Swap', disabled: !snapshot.canSwap, onClick: () => handleAction('swap') },
+    { key: 'run', label: 'Run', onClick: () => handleAction('run') },
+  ].map((action) => ({ ...action, disabled: disabled || action.disabled }))
+
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-10">
@@ -64,7 +73,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         </div>
 
         <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
-          <ActionBar disabled={disabled} canSwap={snapshot.canSwap} onAction={handleAction} />
+          <ActionBar items={actions} />
           <BattleLog entries={snapshot.battleLog ?? []} />
         </div>
 

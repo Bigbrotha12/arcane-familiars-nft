@@ -1,11 +1,12 @@
 import Phaser from 'phaser';
 import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, FAMILIARS, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
-import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '../ui/BattleUI';
+import { BattleUI } from '../ui/BattleUI';
+import { SceneBackground } from '../ui/SceneBackground';
 import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
-import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, OverlayModePayload, BattlePhase, AbilityOption, ItemOption } from '../events';
+import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, BattlePhase, AbilityOption, ItemOption } from '../events';
 
 interface BattleSceneData {
   enemyId: string;
@@ -46,13 +47,11 @@ export class BattleScene extends Phaser.Scene {
   private battleLog: string[] = [];
   private phase: BattlePhase = 'connecting';
   private battleOutcome: BattleEndedPayload | null = null;
-  private overlayActive = false;
   private isLeavingBattle = false;
   private pendingTreasureItemId: string | null = null;
   private roomsExplored = 0;
   private enemiesDefeated = 0;
-  private battleBackground?: Phaser.GameObjects.Image;
-  private battleBackgroundOverlay?: Phaser.GameObjects.Rectangle;
+  private sceneBackground?: SceneBackground;
 
   constructor() {
     super({ key: 'BattleScene' });
@@ -86,31 +85,12 @@ preload(): void {
 
   async create(): Promise<void> {
     this.layout = new Layout(this);
-    const callbacks: BattleUICallbacks = {
-      onAction: (action) => this.handleAction(action).catch((err) => {
-        console.error('Action handler error:', err);
-      }),
-      onFlee: () => this.handleFlee().catch((err) => {
-        console.error('Flee handler error:', err);
-      }),
-      onShowAbility: () => {
-        if (this.battleState) {
-          this.battleUI.showAbilityPanel(this.battleState.playerFamiliar);
-        }
-      },
-      onShowItem: () => {
-        if (this.battleState && this.gameState) {
-          this.battleUI.showItemPanel(this.gameState.inventory.items);
-        }
-      },
-      onSwap: () => this.handleSwap().catch((err) => {
-        console.error('Swap handler error:', err);
-      }),
-    };
 
-    // Add the battle background BEFORE battleUI.init() so the UI (added later at
-    // the same depth) renders on top of it via insertion order. The camera clear
-    // color (#0A0A0F) is the fallback backdrop when no area/boss bg matches.
+    // Shared design-space background (fallback backdrop + optional art + tint).
+    this.sceneBackground = new SceneBackground(this, this.layout);
+
+    // Boss battles are identified by the enemy familiar id passed in scene data
+    // (battleState is not yet resolved at create() time).
     const areaBgMap: Record<string, string> = {
       verdantMeadow: 'battle_bg_verdund',
       crystalCaves: 'battle_bg_crystal',
@@ -122,8 +102,6 @@ preload(): void {
       shadowLord: 'battle_bg_shadow_lord',
     };
 
-    // Boss battles are identified by the enemy familiar id passed in scene data
-    // (battleState is not yet resolved at create() time).
     let bgKey: string | undefined;
     if (this.enemyId in bossBgMap) {
       bgKey = bossBgMap[this.enemyId];
@@ -132,26 +110,19 @@ preload(): void {
     }
 
     if (bgKey) {
-      const bg = this.add.image(this.layout.x(400), this.layout.y(300), bgKey);
-      bg.setDisplaySize(this.layout.s(800), this.layout.s(600));
-      bg.setOrigin(0.5);
-      const overlay = this.add.rectangle(this.layout.x(400), this.layout.y(300), this.layout.s(800), this.layout.s(600), 0x000000, 0.4);
-      overlay.setOrigin(0.5);
-      this.battleBackground = bg;
-      this.battleBackgroundOverlay = overlay;
+      this.sceneBackground.setImage(bgKey);
+      this.sceneBackground.setOverlay(0x000000, 0.4);
     }
 
-    this.battleUI = new BattleUI(this, callbacks);
+    this.battleUI = new BattleUI(this);
     this.battleUI.init();
 
-    this.events.on(BATTLE_CONTINUE_EVENT, () => this.handleContinue());
     this.events.on('shutdown', this.onShutdown, this);
 
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
     gameEventBus.on(GameEvent.PLAYER_ACTION, this.handlePlayerAction);
-    gameEventBus.on(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
     gameEventBus.on(GameEvent.BATTLE_CONTINUE, this.handleContinue);
 
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'battle' });
@@ -171,7 +142,6 @@ preload(): void {
     this.battleUI.hideConnecting();
     this.battleUI.addLogMessage(message);
     this.battleUI.addLogMessage('Returning to the world map...');
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.timers.push(this.time.delayedCall(1800, () => {
       this.battleUI.destroy();
       this.scene.start('WorldMapScene');
@@ -191,7 +161,6 @@ preload(): void {
       this.battleUI.updateEnemyDisplay(result.battle.enemyFamiliar);
       this.battleUI.addLogMessage(`Battle begins against ${result.battle.enemyFamiliar.familiarData.name}!`);
       this.battleUI.addLogMessage('Choose your action.');
-      this.battleUI.enableMainActions();
 
       // NEW: full battle-start contract for React HUD
       const enemy = result.battle.enemyFamiliar
@@ -232,8 +201,6 @@ preload(): void {
     this.phase = 'acting';
     this.emitStateUpdate();
 
-    this.battleUI.hideActionPanels();
-
     try {
       const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
       if (action.type === ActionType.Ability) {
@@ -273,7 +240,6 @@ preload(): void {
           this.handleDefeat();
         } else {
           this.phase = 'menu';
-          this.battleUI.showMainActions();
         }
         this.isProcessingAction = false;
         this.emitStateUpdate();
@@ -283,7 +249,6 @@ preload(): void {
       if (recovered) return;
       const message = err instanceof Error ? err.message : 'Action failed';
       this.battleUI.addLogMessage(message);
-      this.battleUI.showMainActions();
       this.phase = 'menu';
       this.isProcessingAction = false;
       this.emitStateUpdate();
@@ -296,7 +261,6 @@ preload(): void {
     this.phase = 'acting';
     this.emitStateUpdate();
 
-    this.battleUI.hideActionPanels();
     this.battleUI.addLogMessage('Attempting to flee...');
 
     try {
@@ -307,7 +271,6 @@ preload(): void {
         this.battleOutcome = { outcome: 'fled' };
         this.phase = 'outcome';
         gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
-        this.battleUI.showFled();
         this.isProcessingAction = false;
       }));
     } catch (err) {
@@ -315,7 +278,6 @@ preload(): void {
       if (recovered) return;
       const message = err instanceof Error ? err.message : 'Failed to flee';
       this.battleUI.addLogMessage(message);
-      this.battleUI.showMainActions();
       this.isProcessingAction = false;
       this.phase = 'menu';
       this.emitStateUpdate();
@@ -334,7 +296,6 @@ preload(): void {
     this.isProcessingAction = true;
     this.phase = 'acting';
     this.emitStateUpdate();
-    this.battleUI.hideActionPanels();
 
     const nextIndex = (this.activeFamiliarIndex + 1) % party.length;
     const newFamiliarId = party[nextIndex];
@@ -347,7 +308,6 @@ preload(): void {
       this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
       this.battleUI.addLogMessage(`Switched to ${result.battle.playerFamiliar.familiarData.name}!`);
 
-      this.battleUI.showMainActions();
       this.isProcessingAction = false;
       this.phase = 'menu';
       this.emitStateUpdate();
@@ -356,7 +316,6 @@ preload(): void {
       if (recovered) return;
       const message = err instanceof Error ? err.message : 'Failed to swap familiar';
       this.battleUI.addLogMessage(message);
-      this.battleUI.showMainActions();
       this.isProcessingAction = false;
       this.phase = 'menu';
       this.emitStateUpdate();
@@ -400,12 +359,9 @@ preload(): void {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
     this.phase = 'connecting';
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.battleUI.destroy();
-    this.battleBackground?.destroy();
-    this.battleBackgroundOverlay?.destroy();
-    this.battleBackground = undefined;
-    this.battleBackgroundOverlay = undefined;
+    this.sceneBackground?.destroy();
+    this.sceneBackground = undefined;
     if (toWorldMap) {
       this.scene.start('WorldMapScene');
     } else {
@@ -459,12 +415,6 @@ preload(): void {
     }
   };
 
-  private handleOverlayModeChanged = (payload: OverlayModePayload): void => {
-    if (payload.mode !== 'battle') return;
-    this.overlayActive = payload.enabled;
-    this.battleUI.setOverlayActive(payload.enabled);
-  };
-
   private showActionResultVisual(result: ActionResult): void {
     const isDamage = result.effectType === EffectType.Damage
       || result.effectType === EffectType.Debuff
@@ -499,7 +449,6 @@ preload(): void {
     };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
-    this.battleUI.showVictory(rewards);
   }
 
   private handleDefeat(): void {
@@ -507,7 +456,6 @@ preload(): void {
     this.battleOutcome = { outcome: 'defeat' };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
-    this.battleUI.showDefeat();
   }
 
   private handleContinue = (): void => {
@@ -517,13 +465,10 @@ preload(): void {
     // Emit a final state update so the React HUD drops the stale battle snapshot
     // (phase 'connecting' renders no HUD) before the return scene takes over.
     this.emitStateUpdate();
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.battleUI.destroy();
     // Clean up battle background
-    this.battleBackground?.destroy();
-    this.battleBackgroundOverlay?.destroy();
-    this.battleBackground = undefined;
-    this.battleBackgroundOverlay = undefined;
+    this.sceneBackground?.destroy();
+    this.sceneBackground = undefined;
 
     if (this.battleOutcome?.outcome === 'defeat') {
       this.scene.start('DungeonFailScene', {
@@ -656,26 +601,20 @@ preload(): void {
   private handleExit = (): void => {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'battle', enabled: false });
     this.battleUI.destroy();
     // Clean up battle background
-    this.battleBackground?.destroy();
-    this.battleBackgroundOverlay?.destroy();
-    this.battleBackground = undefined;
-    this.battleBackgroundOverlay = undefined;
+    this.sceneBackground?.destroy();
+    this.sceneBackground = undefined;
     this.scene.start('WorldMapScene');
   };
 
   private onShutdown(): void {
     this.cleanupTimers();
-    this.battleBackground?.destroy();
-    this.battleBackgroundOverlay?.destroy();
-    this.battleBackground = undefined;
-    this.battleBackgroundOverlay = undefined;
+    this.sceneBackground?.destroy();
+    this.sceneBackground = undefined;
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
     gameEventBus.off(GameEvent.PLAYER_ACTION, this.handlePlayerAction);
-    gameEventBus.off(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
     gameEventBus.off(GameEvent.BATTLE_CONTINUE, this.handleContinue);
   }
 
