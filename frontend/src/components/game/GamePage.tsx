@@ -6,13 +6,13 @@ import type {
   BattleEndedPayload,
   BattleActionName,
   PlayerActionPayload,
-  ExploreDirection,
 } from '@/game'
 import type { gameEventBus, GameEvent } from '@/game'
 import GameToolbar from '@/components/game/GameToolbar'
 import ExitModal from '@/components/game/ExitModal'
 import ToastContainer, { toast } from '@/components/game/Toast'
 import { useGameGuard } from '@/components/game/useGameGuard'
+import { useCanvasRect } from '@/components/game/useCanvasRect'
 import Button from '@/components/ui/Button'
 import BattleHUD from '@/components/game/hud/BattleHUD'
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD'
@@ -60,10 +60,10 @@ export default function GamePage() {
     setBattleOutcome(null)
   }, [])
 
-  const handleNavigate = useCallback((direction: ExploreDirection) => {
+  const handleNavigate = useCallback((roomId: string) => {
     gameModuleRef.current?.gameEventBus.emit(
       gameModuleRef.current.GameEvent.NAVIGATE_ROOM,
-      { direction }
+      { roomId }
     )
   }, [])
 
@@ -137,34 +137,81 @@ export default function GamePage() {
     })
   }, [cleanupGame])
 
+  const saveGame = useCallback((): Promise<boolean> => {
+    return new Promise<boolean>((resolve) => {
+      const mod = gameModuleRef.current
+      if (!mod) {
+        resolve(false)
+        return
+      }
+
+      let finished = false
+
+      const onSaveComplete = (result: { success: boolean }) => {
+        if (finished) return
+        finished = true
+        clearTimeout(timeoutId)
+        mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+        resolve(result.success)
+      }
+
+      mod.gameEventBus.on(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+
+      const timeoutId = setTimeout(() => {
+        if (finished) return
+        finished = true
+        mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete)
+        resolve(false)
+      }, 5000)
+
+      mod.gameEventBus.emit(mod.GameEvent.SAVE_GAME)
+    })
+  }, [])
+
   const { handleBlockerProceed, handleBlockerReset, isBlockerActive } = useGameGuard({
     onAutoSave: autoSave,
     onShowExitModal: () => setShowExitModal(true),
   })
+
+  const canvasRect = useCanvasRect(containerRef, gameState)
 
   const handleCancelExit = useCallback(() => {
     setShowExitModal(false)
     handleBlockerReset()
   }, [handleBlockerReset])
 
-  // Modal handlers — check isBlockerActive to decide navigation method
+  // Modal handlers — check isBlockerActive to decide between resuming a blocked
+  // navigation and exiting to the in-game world map.
   const handleSaveAndExitFromModal = useCallback(async () => {
-    await handleSaveAndExit()
     if (isBlockerActive) {
+      await handleSaveAndExit()
       handleBlockerProceed()
+      return
+    }
+
+    setSaving(true)
+    await saveGame()
+    setSaving(false)
+    setShowExitModal(false)
+    if (gameModuleRef.current) {
+      gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.EXIT_GAME)
     } else {
       navigate('/play')
     }
-  }, [handleSaveAndExit, isBlockerActive, handleBlockerProceed, navigate])
+  }, [isBlockerActive, handleSaveAndExit, handleBlockerProceed, saveGame, navigate])
 
   const handleExitWithoutSaveFromModal = useCallback(() => {
-    cleanupGame()
     if (isBlockerActive) {
       handleBlockerProceed()
+      return
+    }
+    setShowExitModal(false)
+    if (gameModuleRef.current) {
+      gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.EXIT_GAME)
     } else {
       navigate('/play')
     }
-  }, [cleanupGame, isBlockerActive, handleBlockerProceed, navigate])
+  }, [isBlockerActive, handleBlockerProceed, navigate])
 
   // Mount Phaser game and subscribe to EventBus events
   useEffect(() => {
@@ -263,7 +310,37 @@ export default function GamePage() {
         saving={saving}
       />
 
-      <div ref={containerRef} id="game-container" className="flex-1 relative" />
+      <div ref={containerRef} id="game-container" className="flex-1 relative">
+        {gameState && (
+          <div
+            className="pointer-events-none absolute z-10"
+            style={
+              canvasRect
+                ? {
+                    left: canvasRect.left,
+                    top: canvasRect.top,
+                    width: canvasRect.width,
+                    height: canvasRect.height,
+                  }
+                : { inset: 0 }
+            }
+          >
+            <BattleHUD
+              snapshot={gameState}
+              outcome={battleOutcome}
+              onAction={handlePlayerAction}
+              onContinue={handleBattleContinue}
+            />
+            <ExplorationHUD
+              snapshot={gameState}
+              onNavigate={handleNavigate}
+              onCollectTreasure={handleCollectTreasure}
+              onFleeEncounter={handleFleeEncounter}
+              onStartBattle={handleStartBattle}
+            />
+          </div>
+        )}
+      </div>
 
       {initError && (
         <div className="absolute inset-0 z-50 flex items-center justify-center">
@@ -280,24 +357,6 @@ export default function GamePage() {
             </Button>
           </div>
         </div>
-      )}
-
-      {gameState && (
-        <>
-          <BattleHUD
-            snapshot={gameState}
-            outcome={battleOutcome}
-            onAction={handlePlayerAction}
-            onContinue={handleBattleContinue}
-          />
-          <ExplorationHUD
-            snapshot={gameState}
-            onNavigate={handleNavigate}
-            onCollectTreasure={handleCollectTreasure}
-            onFleeEncounter={handleFleeEncounter}
-            onStartBattle={handleStartBattle}
-          />
-        </>
       )}
 
       <ExitModal

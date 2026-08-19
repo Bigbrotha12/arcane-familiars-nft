@@ -58,20 +58,14 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div className="absolute left-4 top-4">
+        <div className="absolute right-4 bottom-4 flex flex-col gap-2">
           <EnemyPanel enemy={enemy} isBoss={snapshot.isBoss} />
-        </div>
-
-        <div className="absolute right-4 top-4">
-          <BattleLog entries={snapshot.battleLog ?? []} />
-        </div>
-
-        <div className="absolute bottom-4 left-4">
           <PartyPanel party={party} activeId={activeId} />
         </div>
 
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+        <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
           <ActionBar disabled={disabled} canSwap={snapshot.canSwap} onAction={handleAction} />
+          <BattleLog entries={snapshot.battleLog ?? []} />
         </div>
 
         {outcome && <BattleOutcome outcome={outcome} onContinue={onContinue} />}

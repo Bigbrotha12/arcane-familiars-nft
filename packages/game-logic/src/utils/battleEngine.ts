@@ -1,6 +1,7 @@
 import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
+import { getItem, ItemEffect } from '@/data/items';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -132,6 +133,8 @@ function applyActionResult(
     updated.currentHp = Math.max(0, updated.currentHp - result.value);
   } else if (result.effectType === EffectType.Heal || result.effectType === EffectType.Hot) {
     updated.currentHp = Math.min(updated.familiarData.stats.maxHp, updated.currentHp + result.value);
+  } else if (result.effectType === EffectType.MpHeal) {
+    updated.currentMp = Math.min(updated.familiarData.stats.maxMp, updated.currentMp + result.value);
   }
 
   // Apply status effects
@@ -150,7 +153,9 @@ function executeAction(
 ): ActionResult {
   let actualTarget: BattleFamiliar;
 
-  if (action.type === ActionType.Ability && action.abilityId) {
+  if (action.type === ActionType.Item) {
+    actualTarget = source;
+  } else if (action.type === ActionType.Ability && action.abilityId) {
     const ability = getAbility(action.abilityId);
     if (ability) {
       actualTarget = (ability.target === Target.Self || ability.target === Target.Ally) ? source : target;
@@ -216,12 +221,55 @@ function executeAction(
     };
   }
 
+  if (action.type === ActionType.Item && action.itemId) {
+    const item = getItem(action.itemId);
+    if (!item) {
+      return {
+        effectType: EffectType.Damage,
+        targetId: source.familiarData.id,
+        value: 0,
+        isCritical: false,
+        description: `Unknown item: ${action.itemId}`,
+      };
+    }
+
+    if (item.effect.type === ItemEffect.HP_HEAL) {
+      const healed = Math.min(actualTarget.familiarData.stats.maxHp - actualTarget.currentHp, item.effect.value);
+      return {
+        effectType: EffectType.Heal,
+        targetId: actualTarget.familiarData.id,
+        value: Math.max(0, healed),
+        isCritical: false,
+        description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, healed)} HP`,
+      };
+    }
+
+    if (item.effect.type === ItemEffect.MP_HEAL) {
+      const restored = Math.min(actualTarget.familiarData.stats.maxMp - actualTarget.currentMp, item.effect.value);
+      return {
+        effectType: EffectType.MpHeal,
+        targetId: actualTarget.familiarData.id,
+        value: Math.max(0, restored),
+        isCritical: false,
+        description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, restored)} MP`,
+      };
+    }
+
+    return {
+      effectType: EffectType.Damage,
+      targetId: actualTarget.familiarData.id,
+      value: 0,
+      isCritical: false,
+      description: `${source.familiarData.name} uses ${item.name}`,
+    };
+  }
+
   return {
     effectType: EffectType.Damage,
     targetId: actualTarget.familiarData.id,
     value: 0,
     isCritical: false,
-    description: action.type === ActionType.Item ? 'Item use not implemented' : 'No action taken',
+    description: 'No action taken',
   };
 }
 
@@ -337,4 +385,22 @@ export function applyDefend(familiar: BattleFamiliar): BattleFamiliar {
     ...familiar,
     statusEffects: [...familiar.statusEffects, createDefendEffect()],
   };
+}
+
+/**
+ * Tick down all cooldowns by one, then set the cooldown for the ability used
+ * this turn (so a cooldown of N makes the ability unusable for N turns).
+ */
+export function updateCooldowns(familiar: BattleFamiliar, action: BattleAction): BattleFamiliar {
+  const cooldowns: Record<string, number> = {};
+  for (const key of Object.keys(familiar.cooldowns)) {
+    cooldowns[key] = Math.max(0, familiar.cooldowns[key] - 1);
+  }
+  if (action.type === ActionType.Ability && action.abilityId) {
+    const ability = getAbility(action.abilityId);
+    if (ability) {
+      cooldowns[action.abilityId] = ability.cooldown;
+    }
+  }
+  return { ...familiar, cooldowns };
 }

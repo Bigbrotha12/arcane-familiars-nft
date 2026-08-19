@@ -15,7 +15,7 @@ class GameApiClient {
     }
   }
 
-  private async request<T>(method: string, path: string, body?: any): Promise<T> {
+  private async request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const options: RequestInit = {
       method,
@@ -32,7 +32,9 @@ class GameApiClient {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText }));
-      throw new Error(err.error || `Request failed: ${res.status}`);
+      const error = new Error(err.error || `Request failed: ${res.status}`) as Error & { status?: number };
+      error.status = res.status;
+      throw error;
     }
     return res.json() as Promise<T>;
   }
@@ -41,8 +43,8 @@ class GameApiClient {
     return this.request('POST', '/api/game/state/load', { anonymousId: this.anonymousId });
   }
 
-  async saveGameState(state: GameState): Promise<{ success: boolean }> {
-    return this.request('POST', '/api/game/state/save', { anonymousId: this.anonymousId, state });
+  async setParty(activeParty: string[]): Promise<{ success: boolean; state: GameState }> {
+    return this.request('POST', '/api/game/state/party', { anonymousId: this.anonymousId, activeParty });
   }
 
   async enterDungeon(areaId: string): Promise<{ dungeon: DungeonState; area: Area }> {
@@ -61,20 +63,20 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/exit', { anonymousId: this.anonymousId });
   }
 
-  async startBattle(playerFamiliarId: string, enemyFamiliarId: string): Promise<{ battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId, enemyFamiliarId });
+  async startBattle(playerFamiliarId: string): Promise<{ battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId });
   }
 
-  async battleAction(battleId: string, action: BattleAction): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
-    return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action });
+  async battleAction(battleId: string, action: BattleAction, expectedTurnCount?: number): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
+    return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action, expectedTurnCount });
   }
 
-  async fleeBattle(battleId: string): Promise<{ success: boolean; message: string; battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId });
+  async fleeBattle(battleId: string, expectedTurnCount?: number): Promise<{ success: boolean; message: string; battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId, expectedTurnCount });
   }
 
-  async swapFamiliar(battleId: string, newFamiliarId: string): Promise<{ battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId });
+  async swapFamiliar(battleId: string, newFamiliarId: string, expectedTurnCount?: number): Promise<{ battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId, expectedTurnCount });
   }
 }
 

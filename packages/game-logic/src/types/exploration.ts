@@ -1,4 +1,3 @@
-import type { Inventory } from '@/types/gameState';
 import type { Directions } from '@/utils/dungeonEngine';
 
 export interface Area {
@@ -11,6 +10,8 @@ export interface Area {
   bossId: string;
   bossReward: BossReward;
   bgColor: number;
+  baseFamiliar: string;
+  unlocks: string | null;
 }
 
 export enum RoomType {
@@ -30,6 +31,8 @@ export interface Room {
   treasureChance: number;
   treasurePool: TreasureEntry[];
   cleared: boolean;
+  pendingEncounter?: { enemyId: string; resolved: boolean; level?: number };
+  pendingTreasure?: { itemId: string; looted: boolean };
 }
 
 export interface TreasureEntry {
@@ -54,7 +57,7 @@ export interface DungeonState {
   party: string[];
   partyHp: Record<string, number>;
   partyMp: Record<string, number>;
-  inventory: Inventory;
   rooms: Record<string, Room>;
   activeIndex?: number;
+  seed?: number;
 }

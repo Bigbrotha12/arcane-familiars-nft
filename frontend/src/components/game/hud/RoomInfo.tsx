@@ -22,9 +22,9 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
   const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal
 
   return (
-    <div className="hud-frame pointer-events-none flex flex-col items-center gap-2 rounded-md px-lg py-md">
-      <div className="flex items-center gap-2">
-        <h2 className="font-display text-lg font-bold text-[#F0EFFF]">
+    <div className="hud-frame pointer-events-none flex w-[520px] flex-col items-center gap-2 rounded-md px-lg py-md">
+      <div className="flex max-w-full items-center gap-2">
+        <h2 className="truncate font-display text-lg font-bold text-[#F0EFFF]">
           {snapshot.roomName ?? 'Unknown Room'}
         </h2>
         <span
@@ -39,10 +39,6 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
           {snapshot.roomDescription}
         </p>
       )}
-
-      <div className="font-mono text-xs text-[#A5A3C4]">
-        Room {dungeon.currentRoomIndex + 1} of {dungeon.roomCount}
-      </div>
     </div>
   )
 }

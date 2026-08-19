@@ -1,13 +1,13 @@
-// Scrollable room event log (newest at the bottom, auto-scrolls on update).
+// Single-latest-event room log (bottom text box).
 
-import ScrollableLog from '@/components/game/hud/ScrollableLog'
+import EventBox from '@/components/game/hud/EventBox'
 
 interface RoomLogProps {
   entries: string[]
 }
 
 function RoomLog({ entries }: RoomLogProps) {
-  return <ScrollableLog title="Room Log" entries={entries} emptyText="No room events yet." />
+  return <EventBox title="Room Log" entries={entries} emptyText="No room events yet." />
 }
 
 export default RoomLog

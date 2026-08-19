@@ -11,11 +11,11 @@ import NavigationBar from './NavigationBar'
 import EncounterOverlay from './EncounterOverlay'
 import TreasureOverlay from './TreasureOverlay'
 import BossOverlay from './BossOverlay'
-import type { GameStateSnapshot, ExploreDirection } from '@/game'
+import type { GameStateSnapshot } from '@/game'
 
 interface ExplorationHUDProps {
   snapshot: GameStateSnapshot
-  onNavigate: (direction: ExploreDirection) => void
+  onNavigate: (roomId: string) => void
   onCollectTreasure: () => void
   onFleeEncounter: () => void
   onStartBattle: () => void
@@ -47,19 +47,14 @@ function ExplorationHUD({
         <RoomInfo snapshot={snapshot} />
       </div>
 
-      <div className="absolute right-4 top-4">
-        <RoomLog entries={snapshot.roomLog ?? []} />
-      </div>
-
-      <div className="absolute bottom-4 left-4">
+      <div className="absolute right-4 bottom-4">
         <PartyPanel party={snapshot.familiars} />
       </div>
 
-      {!overlayActive && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
-          <NavigationBar room={currentRoom} onNavigate={onNavigate} />
-        </div>
-      )}
+      <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
+        {!overlayActive && <NavigationBar room={currentRoom} onNavigate={onNavigate} />}
+        <RoomLog entries={snapshot.roomLog ?? []} />
+      </div>
 
       {snapshot.encounterActive ? (
         <EncounterOverlay onFight={onStartBattle} onFlee={onFleeEncounter} />

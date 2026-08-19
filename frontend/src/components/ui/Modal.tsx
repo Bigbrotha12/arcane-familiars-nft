@@ -28,7 +28,7 @@ function Modal({ open, onClose, title, children, hud = false }: ModalProps) {
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-md">
+    <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-md">
       <div
         className="absolute inset-0 bg-black/40 backdrop-blur-sm"
         onClick={onClose}

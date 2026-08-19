@@ -1,34 +1,35 @@
 // Navigation bar with exit buttons (one per exit, emits NAVIGATE_ROOM).
 // Anchored bottom-center; interactive.
+// Exits are keyed by roomId (unique), not direction, since a room can have
+// multiple exits sharing a direction.
 
 import Button from '@/components/ui/Button'
-import type { DungeonRoomSnapshot, ExploreDirection } from '@/game'
+import type { DungeonRoomSnapshot } from '@/game'
 
 interface NavigationBarProps {
   room: DungeonRoomSnapshot | null
-  onNavigate: (direction: ExploreDirection) => void
+  onNavigate: (roomId: string) => void
 }
 
 function NavigationBar({ room, onNavigate }: NavigationBarProps) {
   if (!room || room.exits.length === 0) return null
 
-  return (
-    <div className="hud-frame pointer-events-auto flex gap-2 rounded-md p-md">
-      {room.exits.map((exit) => {
-        const direction = exit.direction as ExploreDirection
-        const label = exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1)
+  const exits = room.exits.filter(
+    (exit, index, all) => all.findIndex((e) => e.roomId === exit.roomId) === index
+  )
 
-        return (
-          <Button
-            key={exit.direction}
-            variant="secondary"
-            size="sm"
-            onClick={() => onNavigate(direction)}
-          >
-            {label}
-          </Button>
-        )
-      })}
+  return (
+    <div className="hud-frame pointer-events-auto flex justify-center gap-2 rounded-md p-md">
+      {exits.map((exit) => (
+        <Button
+          key={exit.roomId}
+          variant="secondary"
+          size="sm"
+          onClick={() => onNavigate(exit.roomId)}
+        >
+          {exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1)}
+        </Button>
+      ))}
     </div>
   )
 }

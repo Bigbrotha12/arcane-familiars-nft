@@ -1,13 +1,13 @@
-// Scrollable battle event log (newest at the bottom, auto-scrolls on update).
+// Single-latest-event battle log (bottom text box).
 
-import ScrollableLog from '@/components/game/hud/ScrollableLog'
+import EventBox from '@/components/game/hud/EventBox'
 
 interface BattleLogProps {
   entries: string[]
 }
 
 function BattleLog({ entries }: BattleLogProps) {
-  return <ScrollableLog title="Battle Log" entries={entries} emptyText="No battle events yet." />
+  return <EventBox title="Battle Log" entries={entries} emptyText="No battle events yet." />
 }
 
 export default BattleLog

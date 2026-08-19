@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { Room, RoomExit, Area } from '@arcane-familiars/game-logic';
 import { getFamiliar, Directions, RoomType } from '@arcane-familiars/game-logic';
+import { Layout } from './layout';
 import { C, getHpColor, drawBar } from './theme';
 
 export interface ExplorationUICallbacks {
@@ -23,6 +24,7 @@ const NAV_Y = 530;
 export class ExplorationUI {
   private scene: Phaser.Scene;
   private callbacks: ExplorationUICallbacks;
+  private layout: Layout;
   private gw: number;
   private gh: number;
 
@@ -59,9 +61,42 @@ export class ExplorationUI {
   private mainContainer!: Phaser.GameObjects.Container;
   private destroyed = false;
 
+  private get roomCx(): number {
+    return this.layout.x(400);
+  }
+
+  private get roomCy(): number {
+    return this.layout.y(200);
+  }
+
+  private get roomW(): number {
+    return this.layout.s(460);
+  }
+
+  private get roomH(): number {
+    return this.layout.s(290);
+  }
+
+  private get leftCx(): number {
+    return this.layout.x(82);
+  }
+
+  private get rightX(): number {
+    return this.layout.x(635);
+  }
+
+  private get rightW(): number {
+    return this.layout.s(155);
+  }
+
+  private get navY(): number {
+    return this.layout.y(530);
+  }
+
   constructor(scene: Phaser.Scene, callbacks: ExplorationUICallbacks) {
     this.scene = scene;
     this.callbacks = callbacks;
+    this.layout = new Layout(scene);
     this.gw = scene.scale.width;
     this.gh = scene.scale.height;
   }
@@ -138,8 +173,8 @@ export class ExplorationUI {
   }
 
   private createAreaProgress(): void {
-    this.areaProgress = this.scene.add.text(this.gw - 14, 12, '', {
-      fontSize: '12px',
+    this.areaProgress = this.scene.add.text(this.layout.x(786), this.layout.y(12), '', {
+      fontSize: this.layout.font(12),
       fontFamily: 'JetBrains Mono',
       color: C.text,
     });
@@ -153,25 +188,25 @@ export class ExplorationUI {
   }
 
   private createLogPanel(): void {
-    const ly = 46;
+    const ly = this.layout.y(46);
 
-    const logBg = this.scene.add.rectangle(RIGHT_X + RIGHT_W / 2, 200, RIGHT_W, 340, C.panelBg, 0.7);
+    const logBg = this.scene.add.rectangle(this.rightX + this.rightW / 2, this.layout.y(200), this.rightW, this.layout.s(340), C.panelBg, 0.7);
     logBg.setStrokeStyle(1, C.border);
     this.mainContainer.add(logBg);
 
-    const logTitle = this.scene.add.text(RIGHT_X, ly, 'Room Log', {
-      fontSize: '11px',
+    const logTitle = this.scene.add.text(this.rightX, ly, 'Room Log', {
+      fontSize: this.layout.font(11),
       fontFamily: 'DM Sans',
       color: '#7C5CFC',
     });
     this.mainContainer.add(logTitle);
 
-    this.logText = this.scene.add.text(RIGHT_X, ly + 18, '', {
-      fontSize: '10px',
+    this.logText = this.scene.add.text(this.rightX, ly + this.layout.s(18), '', {
+      fontSize: this.layout.font(10),
       fontFamily: 'DM Sans',
       color: C.text,
-      wordWrap: { width: RIGHT_W - 12 },
-      lineSpacing: 3,
+      wordWrap: { width: this.rightW - this.layout.s(12) },
+      lineSpacing: this.layout.s(3),
     });
     this.mainContainer.add(this.logText);
   }
@@ -202,13 +237,13 @@ export class ExplorationUI {
 
   private createExitButton(): void {
     const btn = this.makeButton(
-      82, 18, 100, 28, 'Exit',
+      this.layout.x(82), this.layout.y(18), this.layout.s(100), this.layout.s(28), 'Exit',
       0x3B3870, C.primaryHover,
       () => this.callbacks.onExitDungeon(),
       {
         borderColor: C.border,
         labelColor: C.text,
-        fontSize: '11px',
+        fontSize: this.layout.font(11),
       },
     );
     this.exitBtn = btn.container;
@@ -229,7 +264,7 @@ export class ExplorationUI {
     const bgKey = `room_${area.id}_${(roomIndex % 3) + 1}`;
     if (this.scene.textures.exists(bgKey)) {
       this.roomBgImage.setTexture(bgKey);
-      this.roomBgImage.setDisplaySize(this.gw, this.gh);
+this.roomBgImage.setDisplaySize(this.gw, this.gh);
     }
 
     this.roomName.setText(room.name);
@@ -257,19 +292,19 @@ export class ExplorationUI {
     const bh = 34;
     const spacing = 10;
     const totalW = exits.length * bw + (exits.length - 1) * spacing;
-    const startX = (this.gw - totalW) / 2 + bw / 2;
+    const startX = this.layout.x((800 - totalW) / 2 + bw / 2);
 
     exits.forEach((exit, i) => {
       const btn = this.makeButton(
-        startX + i * (bw + spacing), NAV_Y,
-        bw, bh,
+        startX + i * this.layout.s(bw + spacing), this.navY,
+        this.layout.s(bw), this.layout.s(bh),
         exit.label, C.buttonBg, C.primaryHover,
         () => this.callbacks.onNavigate(exit.roomId),
-        { labelColor: C.textLight, fontSize: '12px', borderColor: C.border, labelY: -2 },
+        { labelColor: C.textLight, fontSize: this.layout.font(12), borderColor: C.border, labelY: -2 },
       );
 
-      const dirLabel = this.scene.add.text(0, -14, (Directions[exit.direction] ?? '').toUpperCase(), {
-        fontSize: '9px',
+      const dirLabel = this.scene.add.text(0, this.layout.s(-14), (Directions[exit.direction] ?? '').toUpperCase(), {
+        fontSize: this.layout.font(9),
         fontFamily: 'DM Sans',
         color: '#6366A1',
       });
@@ -288,15 +323,15 @@ export class ExplorationUI {
     this.encounterPanel.setVisible(true);
     this.navPanel.setVisible(false);
 
-    const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
     overlay.setInteractive();
     this.encounterPanel.add(overlay);
 
     const familiar = getFamiliar(enemyId);
     const enemyName = familiar?.name ?? enemyId;
 
-    const title = this.scene.add.text(ROOM_CX, ROOM_CY - 60, 'A wild familiar appears!', {
-      fontSize: '16px',
+    const title = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(60), 'A wild familiar appears!', {
+      fontSize: this.layout.font(16),
       fontFamily: 'Fredoka',
       color: '#F59E0B',
       fontStyle: '600',
@@ -304,8 +339,8 @@ export class ExplorationUI {
     title.setOrigin(0.5);
     this.encounterPanel.add(title);
 
-    const nameText = this.scene.add.text(ROOM_CX, ROOM_CY - 25, enemyName, {
-      fontSize: '20px',
+    const nameText = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(25), enemyName, {
+      fontSize: this.layout.font(20),
       fontFamily: 'Fredoka',
       color: '#EF4444',
       fontStyle: '600',
@@ -313,21 +348,21 @@ export class ExplorationUI {
     nameText.setOrigin(0.5);
     this.encounterPanel.add(nameText);
 
-    const enemySprite = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 64, 64, 0x4E2A2A);
+    const enemySprite = this.scene.add.rectangle(this.roomCx, this.roomCy + this.layout.s(30), this.layout.s(64), this.layout.s(64), 0x4E2A2A);
     enemySprite.setStrokeStyle(2, 0xEF4444);
     this.encounterPanel.add(enemySprite);
 
     const battleBtn = this.makeButton(
-      ROOM_CX - 70, ROOM_CY + 85,
-      120, 36, '[ Battle! ]', C.primary, C.primaryHover,
+      this.roomCx - this.layout.s(70), this.roomCy + this.layout.s(85),
+      this.layout.s(120), this.layout.s(36), '[ Battle! ]', C.primary, C.primaryHover,
       () => this.callbacks.onBattle(enemyId),
       { fontStyle: 'bold' },
     );
     this.encounterPanel.add(battleBtn.container);
 
     const fleeBtn = this.makeButton(
-      ROOM_CX + 70, ROOM_CY + 85,
-      120, 36, '[ Flee ]', 0x3B3870, C.primaryHover,
+      this.roomCx + this.layout.s(70), this.roomCy + this.layout.s(85),
+      this.layout.s(120), this.layout.s(36), '[ Flee ]', 0x3B3870, C.primaryHover,
       () => this.callbacks.onFlee(),
       { borderColor: C.border, labelColor: C.text },
     );
@@ -339,12 +374,12 @@ export class ExplorationUI {
     this.treasurePanel.setVisible(true);
     this.navPanel.setVisible(false);
 
-    const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
     overlay.setInteractive();
     this.treasurePanel.add(overlay);
 
-    const title = this.scene.add.text(ROOM_CX, ROOM_CY - 50, 'You found a treasure!', {
-      fontSize: '18px',
+    const title = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(50), 'You found a treasure!', {
+      fontSize: this.layout.font(18),
       fontFamily: 'Fredoka',
       color: '#F59E0B',
       fontStyle: '600',
@@ -352,29 +387,29 @@ export class ExplorationUI {
     title.setOrigin(0.5);
     this.treasurePanel.add(title);
 
-    const itemName = this.scene.add.text(ROOM_CX, ROOM_CY - 15, itemId, {
-      fontSize: '15px',
+    const itemName = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(15), itemId, {
+      fontSize: this.layout.font(15),
       fontFamily: 'DM Sans',
       color: C.textLight,
     });
     itemName.setOrigin(0.5);
     this.treasurePanel.add(itemName);
 
-    const chestIcon = this.scene.add.rectangle(ROOM_CX, ROOM_CY + 30, 48, 40, 0x7C5CFC);
+    const chestIcon = this.scene.add.rectangle(this.roomCx, this.roomCy + this.layout.s(30), this.layout.s(48), this.layout.s(40), 0x7C5CFC);
     chestIcon.setStrokeStyle(2, C.gold);
     this.treasurePanel.add(chestIcon);
 
     const takeBtn = this.makeButton(
-      ROOM_CX - 70, ROOM_CY + 85,
-      120, 36, '[ Take ]', C.primary, C.primaryHover,
+      this.roomCx - this.layout.s(70), this.roomCy + this.layout.s(85),
+      this.layout.s(120), this.layout.s(36), '[ Take ]', C.primary, C.primaryHover,
       () => this.callbacks.onTakeTreasure(itemId),
       { fontStyle: 'bold' },
     );
     this.treasurePanel.add(takeBtn.container);
 
     const leaveBtn = this.makeButton(
-      ROOM_CX + 70, ROOM_CY + 85,
-      120, 36, '[ Leave ]', 0x3B3870, C.primaryHover,
+      this.roomCx + this.layout.s(70), this.roomCy + this.layout.s(85),
+      this.layout.s(120), this.layout.s(36), '[ Leave ]', 0x3B3870, C.primaryHover,
       () => this.callbacks.onLeaveTreasure(),
       { borderColor: C.border, labelColor: C.text },
     );
@@ -385,10 +420,10 @@ export class ExplorationUI {
     this.partyContainer.removeAll(true);
     this.partyMemberElements = [];
 
-    const startY = 80;
+    const startY = this.layout.y(80);
 
     familiars.forEach((familiarId, i) => {
-      const y = startY + i * 100;
+      const y = startY + i * this.layout.s(100);
       const familiar = getFamiliar(familiarId);
       if (!familiar) return;
 
@@ -396,12 +431,12 @@ export class ExplorationUI {
       const hp = partyHp[familiarId] ?? stats.maxHp;
       const mp = partyMp[familiarId] ?? stats.maxMp;
 
-      const card = this.scene.add.rectangle(LEFT_CX, y + 20, 148, 90, C.cardBg, 0.8);
+      const card = this.scene.add.rectangle(this.leftCx, y + this.layout.s(20), this.layout.s(148), this.layout.s(90), C.cardBg, 0.8);
       card.setStrokeStyle(1, C.border);
       this.partyContainer.add(card);
 
-      const nameText = this.scene.add.text(LEFT_CX, y, familiar.name, {
-        fontSize: '12px',
+      const nameText = this.scene.add.text(this.leftCx, y, familiar.name, {
+        fontSize: this.layout.font(12),
         fontFamily: 'DM Sans',
         color: C.textLight,
       });
@@ -413,21 +448,21 @@ export class ExplorationUI {
       this.partyContainer.add(hpBar);
       this.partyContainer.add(mpBar);
 
-      const hpColor = getHpColor(hp, stats.maxHp);
-      drawBar(hpBar, LEFT_CX - 65, y + 32, 130, 10, hp, stats.maxHp, hpColor);
+const hpColor = getHpColor(hp, stats.maxHp);
+      drawBar(hpBar, this.leftCx - this.layout.s(65), y + this.layout.s(32), this.layout.s(130), this.layout.s(10), hp, stats.maxHp, hpColor);
 
-      const hpText = this.scene.add.text(LEFT_CX, y + 44, `HP: ${hp}/${stats.maxHp}`, {
-        fontSize: '9px',
+      const hpText = this.scene.add.text(this.leftCx, y + this.layout.s(44), `HP: ${hp}/${stats.maxHp}`, {
+        fontSize: this.layout.font(9),
         fontFamily: 'JetBrains Mono',
         color: C.text,
       });
       hpText.setOrigin(0.5);
       this.partyContainer.add(hpText);
 
-      drawBar(mpBar, LEFT_CX - 65, y + 58, 130, 8, mp, stats.maxMp, C.mpBar);
+drawBar(mpBar, this.leftCx - this.layout.s(65), y + this.layout.s(58), this.layout.s(130), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
-      const mpText = this.scene.add.text(LEFT_CX, y + 68, `MP: ${mp}/${stats.maxMp}`, {
-        fontSize: '9px',
+      const mpText = this.scene.add.text(this.leftCx, y + this.layout.s(68), `MP: ${mp}/${stats.maxMp}`, {
+        fontSize: this.layout.font(9),
         fontFamily: 'JetBrains Mono',
         color: C.text,
       });
@@ -445,7 +480,7 @@ export class ExplorationUI {
   updateMiniMap(rooms: Record<string, Room>, currentRoomId: string, visitedRoomIds: Set<string>): void {
     this.miniMapGfx.clear();
 
-    const ids = Object.keys(rooms);
+const ids = Object.keys(rooms);
     if (ids.length === 0) return;
 
     // Start room: the Start-typed room, else the numerically-first room id.
@@ -543,7 +578,7 @@ export class ExplorationUI {
         stroke = C.muted;
       }
 
-      g.fillStyle(fill, 1);
+g.fillStyle(fill, 1);
       g.fillCircle(p.x, p.y, radius);
       g.lineStyle(1, stroke, 1);
       g.strokeCircle(p.x, p.y, radius);
@@ -595,19 +630,19 @@ export class ExplorationUI {
     this.bossWarning.removeAll(true);
     this.bossWarning.setVisible(true);
 
-    const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.85);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.85);
     overlay.setInteractive();
     this.bossWarning.add(overlay);
 
-    const icon = this.scene.add.text(ROOM_CX, ROOM_CY - 60, '⚠', {
-      fontSize: '32px',
+    const icon = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(60), '⚠', {
+      fontSize: this.layout.font(32),
       color: '#EF4444',
     });
     icon.setOrigin(0.5);
     this.bossWarning.add(icon);
 
-    const title = this.scene.add.text(ROOM_CX, ROOM_CY - 25, 'BOSS ROOM AHEAD', {
-      fontSize: '20px',
+    const title = this.scene.add.text(this.roomCx, this.roomCy - this.layout.s(25), 'BOSS ROOM AHEAD', {
+      fontSize: this.layout.font(20),
       fontFamily: 'Fredoka',
       color: '#EF4444',
       fontStyle: '600',
@@ -615,8 +650,8 @@ export class ExplorationUI {
     title.setOrigin(0.5);
     this.bossWarning.add(title);
 
-    const desc = this.scene.add.text(ROOM_CX, ROOM_CY + 10, 'A powerful guardian awaits.\nPrepare your party before entering.', {
-      fontSize: '13px',
+    const desc = this.scene.add.text(this.roomCx, this.roomCy + this.layout.s(10), 'A powerful guardian awaits.\nPrepare your party before entering.', {
+      fontSize: this.layout.font(13),
       fontFamily: 'DM Sans',
       color: C.text,
       align: 'center',
@@ -625,8 +660,8 @@ export class ExplorationUI {
     this.bossWarning.add(desc);
 
     const enterBtn = this.makeButton(
-      ROOM_CX - 70, ROOM_CY + 70,
-      120, 36, 'Enter', C.bossRed, 0xDC2626,
+      this.roomCx - this.layout.s(70), this.roomCy + this.layout.s(70),
+      this.layout.s(120), this.layout.s(36), 'Enter', C.bossRed, 0xDC2626,
       () => {
         this.bossWarning.setVisible(false);
         this.callbacks.onBattle(enemyId);
@@ -635,8 +670,8 @@ export class ExplorationUI {
     this.bossWarning.add(enterBtn.container);
 
     const retreatBtn = this.makeButton(
-      ROOM_CX + 70, ROOM_CY + 70,
-      120, 36, 'Retreat', 0x3B3870, C.primaryHover,
+      this.roomCx + this.layout.s(70), this.roomCy + this.layout.s(70),
+      this.layout.s(120), this.layout.s(36), 'Retreat', 0x3B3870, C.primaryHover,
       () => {
         this.bossWarning.setVisible(false);
         if (this.callbacks.onRetreatFromBoss) {
@@ -703,9 +738,9 @@ export class ExplorationUI {
       bg.setStrokeStyle(1, options.borderColor);
     }
 
-    const labelY = options?.labelY ?? 0;
+    const labelY = options?.labelY !== undefined ? this.layout.s(options.labelY) : 0;
     const labelColor = options?.labelColor ?? '#F0EFFF';
-    const fontSize = options?.fontSize ?? '14px';
+    const fontSize = options?.fontSize ?? this.layout.font(14);
 
     const labelText = this.scene.add.text(0, labelY, label, {
       fontSize,

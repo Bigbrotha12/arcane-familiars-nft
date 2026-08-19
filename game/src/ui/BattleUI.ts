@@ -5,6 +5,7 @@ import {
   getAbility,
   ActionType,
 } from '@arcane-familiars/game-logic';
+import { Layout } from './layout';
 import { C, getHpColor, drawBar } from './theme';
 
 export interface BattleUICallbacks {
@@ -20,6 +21,7 @@ export const BATTLE_CONTINUE_EVENT = 'continue-after-battle';
 export class BattleUI {
   private scene: Phaser.Scene;
   private callbacks: BattleUICallbacks;
+  private layout: Layout;
   private gameWidth: number;
   private gameHeight: number;
 
@@ -47,14 +49,27 @@ export class BattleUI {
   private uiOnly: Phaser.GameObjects.GameObject[] = [];
   private floatingTweens: Phaser.Tweens.Tween[] = [];
   private overlayActive = false;
-  private readonly ENEMY_CENTER_X = 480;
-  private readonly ENEMY_CENTER_Y = 140;
-  private readonly PLAYER_CENTER_X = 180;
-  private readonly PLAYER_CENTER_Y = 400;
+
+  private get enemyCenterX(): number {
+    return this.layout.x(640);
+  }
+
+  private get enemyCenterY(): number {
+    return this.layout.y(105);
+  }
+
+  private get playerCenterX(): number {
+    return this.layout.x(180);
+  }
+
+  private get playerCenterY(): number {
+    return this.layout.y(400);
+  }
 
   constructor(scene: Phaser.Scene, callbacks: BattleUICallbacks) {
     this.scene = scene;
     this.callbacks = callbacks;
+    this.layout = new Layout(scene);
     this.gameWidth = scene.scale.width;
     this.gameHeight = scene.scale.height;
   }
@@ -89,97 +104,112 @@ export class BattleUI {
     // background image that BattleScene adds (also depth 0) BEFORE battleUI.init(),
     // so all UI added afterwards renders on top.
 
-    const separatorY = this.gameHeight - 80;
+    const separatorY = this.layout.y(520);
     this.register(this.scene.add.rectangle(
-      this.gameWidth / 2,
+      this.layout.x(400),
       separatorY,
-      this.gameWidth - 40,
-      2,
+      this.layout.s(760),
+      this.layout.s(2),
       0x1E1B4B,
     ));
   }
 
   private createEnemyArea(): void {
-    const sx = this.ENEMY_CENTER_X;
-    const sy = this.ENEMY_CENTER_Y;
+    const sx = this.enemyCenterX;
+    const sy = this.enemyCenterY;
 
     this.enemySprite = this.registerUI(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
-    this.enemySprite.setDisplaySize(120, 120);
+    this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.enemySprite.setDepth(1);
 
-    this.enemyName = this.registerUI(this.scene.add.text(sx, 70, '', {
-      fontSize: '14px',
-      fontFamily: 'DM Sans',
-      color: '#EF4444',
-    }));
-    this.enemyName.setOrigin(0.5);
-
-    this.enemyHpBar = this.registerUI(this.scene.add.graphics());
-    this.enemyMpBar = this.registerUI(this.scene.add.graphics());
-
-    this.enemyHpText = this.registerUI(this.scene.add.text(560, 200, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    this.enemyMpText = this.registerUI(this.scene.add.text(560, 218, '', {
-      fontSize: '11px',
-      fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
-
-    const enemyLabel = this.registerUI(this.scene.add.text(sx, sy + 60, 'ENEMY', {
-      fontSize: '9px',
-      fontFamily: 'DM Sans',
-      color: '#EF4444',
-    }));
-    enemyLabel.setOrigin(0.5);
+    const card = this.createStatCard(sx, sy + this.layout.s(100), C.textLight, '#EF4444');
+    this.enemyName = card.name;
+    this.enemyHpBar = card.hpBar;
+    this.enemyMpBar = card.mpBar;
+    this.enemyHpText = card.hpText;
+    this.enemyMpText = card.mpText;
   }
 
   private createPlayerArea(): void {
-    const sx = this.PLAYER_CENTER_X;
-    const sy = this.PLAYER_CENTER_Y;
+    const sx = this.playerCenterX;
+    const sy = this.playerCenterY;
 
     this.playerSprite = this.registerUI(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
-    this.playerSprite.setDisplaySize(120, 120);
+    this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.playerSprite.setDepth(1);
 
-    this.playerName = this.registerUI(this.scene.add.text(sx, 455, '', {
-      fontSize: '14px',
+    const card = this.createStatCard(sx, sy + this.layout.s(100), C.textLight, '#7C5CFC');
+    this.playerName = card.name;
+    this.playerHpBar = card.hpBar;
+    this.playerMpBar = card.mpBar;
+    this.playerHpText = card.hpText;
+    this.playerMpText = card.mpText;
+  }
+
+  private createStatCard(
+    x: number,
+    y: number,
+    textColor: string,
+    nameColor: string,
+  ): {
+    container: Phaser.GameObjects.Container;
+    name: Phaser.GameObjects.Text;
+    hpBar: Phaser.GameObjects.Graphics;
+    mpBar: Phaser.GameObjects.Graphics;
+    hpText: Phaser.GameObjects.Text;
+    mpText: Phaser.GameObjects.Text;
+  } {
+    const w = this.layout.s(200);
+    const h = this.layout.s(68);
+
+    const bg = this.scene.add.graphics();
+    bg.fillStyle(C.panelBg, 0.95);
+    bg.fillRoundedRect(-w / 2, -h / 2, w, h, this.layout.s(8));
+    bg.lineStyle(1, C.border, 1);
+    bg.strokeRoundedRect(-w / 2, -h / 2, w, h, this.layout.s(8));
+
+    const name = this.scene.add.text(0, this.layout.s(-24), '', {
+      fontSize: this.layout.font(14),
       fontFamily: 'DM Sans',
-      color: '#7C5CFC',
-    }));
-    this.playerName.setOrigin(0.5);
+      fontStyle: '600',
+      color: nameColor,
+    });
+    name.setOrigin(0.5);
 
-    this.playerHpBar = this.registerUI(this.scene.add.graphics());
-    this.playerMpBar = this.registerUI(this.scene.add.graphics());
+    const hpBar = this.scene.add.graphics();
+    const mpBar = this.scene.add.graphics();
 
-    this.playerHpText = this.registerUI(this.scene.add.text(260, 478, '', {
-      fontSize: '11px',
+    const hpText = this.scene.add.text(0, this.layout.s(-2), '', {
+      fontSize: this.layout.font(9),
       fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
+      color: textColor,
+    });
+    hpText.setOrigin(0.5);
 
-    this.playerMpText = this.registerUI(this.scene.add.text(260, 496, '', {
-      fontSize: '11px',
+    const mpText = this.scene.add.text(0, this.layout.s(18), '', {
+      fontSize: this.layout.font(9),
       fontFamily: 'JetBrains Mono',
-      color: C.text,
-    }));
+      color: textColor,
+    });
+    mpText.setOrigin(0.5);
 
-    const playerLabel = this.registerUI(this.scene.add.text(sx, sy + 60, 'PLAYER', {
-      fontSize: '9px',
-      fontFamily: 'DM Sans',
-      color: '#7C5CFC',
-    }));
-    playerLabel.setOrigin(0.5);
+    const container = this.scene.add.container(x, y, [bg, name, hpBar, mpBar, hpText, mpText]);
+    this.registerUI(container);
+    this.registerUI(bg);
+    this.registerUI(name);
+    this.registerUI(hpBar);
+    this.registerUI(mpBar);
+    this.registerUI(hpText);
+    this.registerUI(mpText);
+
+    return { container, name, hpBar, mpBar, hpText, mpText };
   }
 
   private createLogPanel(): void {
-    const px = 605;
-    const py = 50;
-    const pw = 180;
-    const ph = 310;
+    const px = this.layout.x(605);
+    const py = this.layout.y(50);
+    const pw = this.layout.s(180);
+    const ph = this.layout.s(310);
 
     const logBg = this.registerUI(this.scene.add.rectangle(
       px + pw / 2,
@@ -191,18 +221,18 @@ export class BattleUI {
     ));
     logBg.setStrokeStyle(1, C.border);
 
-    const logTitle = this.registerUI(this.scene.add.text(px + 8, py + 6, 'Battle Log', {
-      fontSize: '11px',
+    const logTitle = this.registerUI(this.scene.add.text(px + this.layout.s(8), py + this.layout.s(6), 'Battle Log', {
+      fontSize: this.layout.font(11),
       fontFamily: 'DM Sans',
       color: '#7C5CFC',
     }));
 
-    this.logText = this.registerUI(this.scene.add.text(px + 8, py + 24, '', {
-      fontSize: '10px',
+    this.logText = this.registerUI(this.scene.add.text(px + this.layout.s(8), py + this.layout.s(24), '', {
+      fontSize: this.layout.font(10),
       fontFamily: 'DM Sans',
       color: C.text,
-      wordWrap: { width: pw - 16 },
-      lineSpacing: 4,
+      wordWrap: { width: pw - this.layout.s(16) },
+      lineSpacing: this.layout.s(4),
     }));
   }
 
@@ -219,17 +249,17 @@ export class BattleUI {
       { label: 'Run', action: () => this.callbacks.onFlee() },
     ];
 
-    const positions = [120, 210, 300, 390, 480, 570];
-    const bw = 75;
-    const bh = 34;
-    const by = 565;
+    const positions = [120, 210, 300, 390, 480, 570].map((p) => this.layout.x(p));
+    const bw = this.layout.s(75);
+    const bh = this.layout.s(34);
+    const by = this.layout.y(565);
 
     buttonDefs.forEach((def, i) => {
       const bg = this.registerUI(this.scene.add.rectangle(0, 0, bw, bh, C.buttonBg));
       bg.setStrokeStyle(1, C.border);
 
       const label = this.registerUI(this.scene.add.text(0, 0, def.label, {
-        fontSize: '13px',
+        fontSize: this.layout.font(13),
         fontFamily: 'DM Sans',
         color: '#F0EFFF',
       }));
@@ -271,11 +301,11 @@ export class BattleUI {
       this.connectingText = undefined;
     }
     this.connectingText = this.registerUI(this.scene.add.text(
-      this.gameWidth / 2,
-      this.gameHeight / 2,
+      this.layout.x(400),
+      this.layout.y(300),
       'Connecting...',
       {
-        fontSize: '18px',
+        fontSize: this.layout.font(18),
         fontFamily: 'DM Sans',
         color: '#A5A3C4',
       },
@@ -339,14 +369,14 @@ export class BattleUI {
     const textureKey = `familiar_${familiar.familiarData.id}`;
     if (this.scene.textures.exists(textureKey)) {
       this.playerSprite.setTexture(textureKey);
-      this.playerSprite.setDisplaySize(120, 120);
+      this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     }
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
     const hpColor = getHpColor(hp, stats.maxHp);
-    drawBar(this.playerHpBar, 105, 478, 150, 12, hp, stats.maxHp, hpColor);
-    drawBar(this.playerMpBar, 105, 496, 150, 8, mp, stats.maxMp, C.mpBar);
+    drawBar(this.playerHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
+    drawBar(this.playerMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
     this.playerHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.playerMpText.setText(`MP: ${mp}/${stats.maxMp}`);
@@ -360,14 +390,14 @@ export class BattleUI {
     const textureKey = `familiar_${familiar.familiarData.id}`;
     if (this.scene.textures.exists(textureKey)) {
       this.enemySprite.setTexture(textureKey);
-      this.enemySprite.setDisplaySize(120, 120);
+      this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     }
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
     const hpColor = getHpColor(hp, stats.maxHp);
-    drawBar(this.enemyHpBar, 405, 200, 150, 12, hp, stats.maxHp, hpColor);
-    drawBar(this.enemyMpBar, 405, 218, 150, 8, mp, stats.maxMp, C.mpBar);
+    drawBar(this.enemyHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
+    drawBar(this.enemyMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
     this.enemyHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.enemyMpText.setText(`MP: ${mp}/${stats.maxMp}`);
@@ -390,14 +420,14 @@ export class BattleUI {
     this.abilityPanel.add(overlay);
 
     const panelBg = this.scene.add.rectangle(
-      this.gameWidth / 2, 320,
-      340, 300, C.panelBg, 0.95,
+      this.layout.x(400), this.layout.y(320),
+      this.layout.s(340), this.layout.s(300), C.panelBg, 0.95,
     );
     panelBg.setStrokeStyle(1, C.border);
     this.abilityPanel.add(panelBg);
 
-    const title = this.scene.add.text(this.gameWidth / 2, 190, 'Select Ability', {
-      fontSize: '16px',
+    const title = this.scene.add.text(this.layout.x(400), this.layout.y(190), 'Select Ability', {
+      fontSize: this.layout.font(16),
       fontFamily: 'Fredoka',
       color: '#F0EFFF',
       fontStyle: '600',
@@ -406,35 +436,35 @@ export class BattleUI {
     this.abilityPanel.add(title);
 
     const abilities = familiar.familiarData.abilities;
-    const startY = 215;
+    const startY = this.layout.y(215);
 
     abilities.forEach((abilityId, index) => {
       const ability = getAbility(abilityId);
       if (!ability) return;
 
-      const y = startY + index * 50;
+      const y = startY + index * this.layout.s(50);
       const canUse = familiar.currentMp >= ability.mpCost;
 
-      const bg = this.scene.add.rectangle(this.gameWidth / 2, y, 300, 42, canUse ? C.cardBg : 0x1A1A2E);
+      const bg = this.scene.add.rectangle(this.layout.x(400), y, this.layout.s(300), this.layout.s(42), canUse ? C.cardBg : 0x1A1A2E);
       bg.setStrokeStyle(1, canUse ? C.border : 0x2A2A4E);
       this.abilityPanel.add(bg);
 
-      const name = this.scene.add.text(this.gameWidth / 2 - 130, y - 7, ability.name, {
-        fontSize: '13px',
+      const name = this.scene.add.text(this.layout.x(400) - this.layout.s(130), y - this.layout.s(7), ability.name, {
+        fontSize: this.layout.font(13),
         fontFamily: 'DM Sans',
         color: canUse ? '#F0EFFF' : '#6366A1',
       });
       this.abilityPanel.add(name);
 
-      const desc = this.scene.add.text(this.gameWidth / 2 - 130, y + 9, `${ability.description}`, {
-        fontSize: '9px',
+      const desc = this.scene.add.text(this.layout.x(400) - this.layout.s(130), y + this.layout.s(9), `${ability.description}`, {
+        fontSize: this.layout.font(9),
         fontFamily: 'DM Sans',
         color: canUse ? '#A5A3C4' : '#6366A1',
       });
       this.abilityPanel.add(desc);
 
-      const cost = this.scene.add.text(this.gameWidth / 2 + 130, y, `MP:${ability.mpCost}`, {
-        fontSize: '11px',
+      const cost = this.scene.add.text(this.layout.x(400) + this.layout.s(130), y, `MP:${ability.mpCost}`, {
+        fontSize: this.layout.font(11),
         fontFamily: 'JetBrains Mono',
         color: canUse ? '#6366A1' : '#6366A1',
       });
@@ -443,8 +473,8 @@ export class BattleUI {
 
       if (canUse) {
         const btn = this.scene.add.container(0, 0);
-        btn.setSize(300, 42);
-        btn.setPosition(this.gameWidth / 2, y);
+        btn.setSize(this.layout.s(300), this.layout.s(42));
+        btn.setPosition(this.layout.x(400), y);
         btn.setInteractive({ useHandCursor: true });
 
         btn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
@@ -457,7 +487,7 @@ export class BattleUI {
       }
     });
 
-    this.addPanelBackButton(this.abilityPanel, this.gameHeight - 150);
+    this.addPanelBackButton(this.abilityPanel, this.layout.y(450));
   }
 
   showItemPanel(inventory: { itemId: string; quantity: number }[]): void {
@@ -477,14 +507,14 @@ export class BattleUI {
     this.itemPanel.add(overlay);
 
     const panelBg = this.scene.add.rectangle(
-      this.gameWidth / 2, 320,
-      340, 300, C.panelBg, 0.95,
+      this.layout.x(400), this.layout.y(320),
+      this.layout.s(340), this.layout.s(300), C.panelBg, 0.95,
     );
     panelBg.setStrokeStyle(1, C.border);
     this.itemPanel.add(panelBg);
 
-    const title = this.scene.add.text(this.gameWidth / 2, 190, 'Select Item', {
-      fontSize: '16px',
+    const title = this.scene.add.text(this.layout.x(400), this.layout.y(190), 'Select Item', {
+      fontSize: this.layout.font(16),
       fontFamily: 'Fredoka',
       color: '#F0EFFF',
       fontStyle: '600',
@@ -493,31 +523,31 @@ export class BattleUI {
     this.itemPanel.add(title);
 
     if (!inventory || inventory.length === 0) {
-      const msg = this.scene.add.text(this.gameWidth / 2, 300, 'No items available', {
-        fontSize: '13px',
+      const msg = this.scene.add.text(this.layout.x(400), this.layout.y(300), 'No items available', {
+        fontSize: this.layout.font(13),
         fontFamily: 'DM Sans',
         color: C.textMuted,
       });
       msg.setOrigin(0.5);
       this.itemPanel.add(msg);
     } else {
-      const startY = 215;
+      const startY = this.layout.y(215);
       inventory.forEach((entry, index) => {
-        const y = startY + index * 50;
-        const bg = this.scene.add.rectangle(this.gameWidth / 2, y, 300, 42, C.cardBg);
+        const y = startY + index * this.layout.s(50);
+        const bg = this.scene.add.rectangle(this.layout.x(400), y, this.layout.s(300), this.layout.s(42), C.cardBg);
         bg.setStrokeStyle(1, C.border);
         this.itemPanel.add(bg);
 
-        const name = this.scene.add.text(this.gameWidth / 2 - 130, y, `${entry.itemId} (x${entry.quantity})`, {
-          fontSize: '13px',
+        const name = this.scene.add.text(this.layout.x(400) - this.layout.s(130), y, `${entry.itemId} (x${entry.quantity})`, {
+          fontSize: this.layout.font(13),
           fontFamily: 'DM Sans',
           color: '#F0EFFF',
         });
         this.itemPanel.add(name);
 
         const btn = this.scene.add.container(0, 0);
-        btn.setSize(300, 42);
-        btn.setPosition(this.gameWidth / 2, y);
+        btn.setSize(this.layout.s(300), this.layout.s(42));
+        btn.setPosition(this.layout.x(400), y);
         btn.setInteractive({ useHandCursor: true });
 
         btn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
@@ -530,22 +560,22 @@ export class BattleUI {
       });
     }
 
-    this.addPanelBackButton(this.itemPanel, this.gameHeight - 150);
+    this.addPanelBackButton(this.itemPanel, this.layout.y(450));
   }
 
   private addPanelBackButton(panel: Phaser.GameObjects.Container, y: number): void {
-    const bg = this.scene.add.rectangle(0, 0, 100, 34, C.buttonBg);
+    const bg = this.scene.add.rectangle(0, 0, this.layout.s(100), this.layout.s(34), C.buttonBg);
     bg.setStrokeStyle(1, C.border);
 
     const label = this.scene.add.text(0, 0, 'Back', {
-      fontSize: '13px',
+      fontSize: this.layout.font(13),
       fontFamily: 'DM Sans',
       color: '#F0EFFF',
     });
     label.setOrigin(0.5);
 
-    const btn = this.scene.add.container(this.gameWidth / 2, y, [bg, label]);
-    btn.setSize(100, 34);
+    const btn = this.scene.add.container(this.layout.x(400), y, [bg, label]);
+    btn.setSize(this.layout.s(100), this.layout.s(34));
     btn.setInteractive({ useHandCursor: true });
 
     btn.on('pointerover', () => bg.setFillStyle(C.primaryHover));
@@ -598,11 +628,11 @@ export class BattleUI {
   }
 
   getEnemyDamagePosition(): { x: number; y: number } {
-    return { x: this.ENEMY_CENTER_X, y: this.ENEMY_CENTER_Y - 30 };
+    return { x: this.enemyCenterX, y: this.enemyCenterY - this.layout.s(30) };
   }
 
   getPlayerDamagePosition(): { x: number; y: number } {
-    return { x: this.PLAYER_CENTER_X, y: this.PLAYER_CENTER_Y - 30 };
+    return { x: this.playerCenterX, y: this.playerCenterY - this.layout.s(30) };
   }
 
   showDamageNumber(x: number, y: number, amount: number, color: string): void {
@@ -615,18 +645,18 @@ export class BattleUI {
 
   private addFloatingText(x: number, y: number, text: string, color: string): void {
     const textObj = this.scene.add.text(x, y, text, {
-      fontSize: '22px',
+      fontSize: this.layout.font(22),
       fontFamily: 'Fredoka',
       color,
       fontStyle: '600',
       stroke: '#000000',
-      strokeThickness: 3,
+      strokeThickness: this.layout.s(3),
     });
     textObj.setOrigin(0.5);
 
     const tween = this.scene.tweens.add({
       targets: textObj,
-      y: y - 60,
+      y: y - this.layout.s(60),
       alpha: 0,
       duration: 1000,
       ease: 'Power2',
@@ -677,15 +707,15 @@ export class BattleUI {
     this.outcomeOverlay.add(overlay);
 
     const titleText = this.scene.add.text(
-      this.gameWidth / 2, this.gameHeight / 2 - 60,
+      this.layout.x(400), this.layout.y(240),
       title,
       {
-        fontSize: '36px',
+        fontSize: this.layout.font(36),
         fontFamily: 'Fredoka',
         color,
         fontStyle: '600',
         stroke: '#000000',
-        strokeThickness: 4,
+        strokeThickness: this.layout.s(4),
       },
     );
     titleText.setOrigin(0.5);
@@ -693,10 +723,10 @@ export class BattleUI {
 
     lines.forEach((line, i) => {
       const lineText = this.scene.add.text(
-        this.gameWidth / 2, this.gameHeight / 2 - 10 + i * 24,
+        this.layout.x(400), this.layout.y(300) + this.layout.s(-10 + i * 24),
         line,
         {
-          fontSize: '14px',
+          fontSize: this.layout.font(14),
           fontFamily: 'DM Sans',
           color: '#A5A3C4',
         },
@@ -705,19 +735,19 @@ export class BattleUI {
       this.outcomeOverlay.add(lineText);
     });
 
-    const continueBg = this.scene.add.rectangle(0, 0, 140, 40, C.primary);
+    const continueBg = this.scene.add.rectangle(0, 0, this.layout.s(140), this.layout.s(40), C.primary);
     const continueLabel = this.scene.add.text(0, 0, 'Continue', {
-      fontSize: '16px',
+      fontSize: this.layout.font(16),
       fontFamily: 'DM Sans',
       color: '#F0EFFF',
     });
     continueLabel.setOrigin(0.5);
 
     const continueBtn = this.scene.add.container(
-      this.gameWidth / 2, this.gameHeight / 2 + 80 + lines.length * 12,
+      this.layout.x(400), this.layout.y(300) + this.layout.s(80 + lines.length * 12),
       [continueBg, continueLabel],
     );
-    continueBtn.setSize(140, 40);
+    continueBtn.setSize(this.layout.s(140), this.layout.s(40));
     continueBtn.setInteractive({ useHandCursor: true });
 
     continueBtn.on('pointerover', () => continueBg.setFillStyle(C.primaryHover));
