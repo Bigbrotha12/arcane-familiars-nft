@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import type { Room, RoomExit, Area } from '@arcane-familiars/game-logic';
 import { getFamiliar, Directions, RoomType } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
+import { C, getHpColor, drawBar } from './theme';
 
 export interface ExplorationUICallbacks {
   onNavigate: (roomId: string) => void;
@@ -13,30 +14,8 @@ export interface ExplorationUICallbacks {
   onRetreatFromBoss?: () => void;
 }
 
-const C = {
-  bg: 0x0A0A0F,
-  primary: 0x7C5CFC,
-  primaryHover: 0x6A4AE8,
-  text: '#A5A3C4',
-  textLight: '#F0EFFF',
-  textMuted: '#6366A1',
-  hpBar: 0x2DD4BF,
-  hpBarMid: 0xF59E0B,
-  hpBarLow: 0xEF4444,
-  mpBar: 0x6366A1,
-  buttonBg: 0x3B3870,
-  panelBg: 0x1E1B4B,
-  border: 0x3B3870,
-  cardBg: 0x2D2A5E,
-  barBg: 0x1A1A2E,
-  gold: 0xF59E0B,
-  bossRed: 0xEF4444,
-};
-
 const ROOM_CX = 400;
-const ROOM_CY = 224;
-const ROOM_W = 460;
-const ROOM_H = 290;
+const ROOM_CY = 200;
 const LEFT_CX = 82;
 const RIGHT_X = 635;
 const RIGHT_W = 155;
@@ -141,29 +120,28 @@ export class ExplorationUI {
   }
 
   private createBackground(): void {
+    // Flat fallback backdrop (covers the full canvas) behind the room image.
+    // No dividers here: the room art spans the whole canvas, matching the
+    // battle scene's full-canvas background treatment.
     const bg = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, C.bg);
     this.roomBackdrop.add(bg);
-
-    const line1 = this.scene.add.rectangle(this.layout.x(165), this.layout.y(300), this.layout.s(2), this.layout.s(580), C.border);
-    this.roomBackdrop.add(line1);
-    const line2 = this.scene.add.rectangle(this.layout.x(635), this.layout.y(300), this.layout.s(2), this.layout.s(580), C.border);
-    this.roomBackdrop.add(line2);
   }
 
   private createRoomArea(): void {
-    this.roomBgImage = this.scene.add.image(this.roomCx, this.roomCy, `room_${this.currentAreaId}_1`);
-    this.roomBgImage.setDisplaySize(this.roomW, this.roomH);
+    // Room art fills the entire canvas (like battle backgrounds), instead of
+    // the previous small centered panel.
+    this.roomBgImage = this.scene.add.image(this.gw / 2, this.gh / 2, `room_${this.currentAreaId}_1`);
+    this.roomBgImage.setDisplaySize(this.gw, this.gh);
     this.roomBgImage.setOrigin(0.5);
     this.roomBgImage.setDepth(-1);
     this.roomBackdrop.add(this.roomBgImage);
 
-    this.roomBg = this.scene.add.rectangle(this.roomCx, this.roomCy, this.roomW, this.roomH, C.panelBg, 0.45);
-    this.roomBg.setStrokeStyle(1, C.border);
+    this.roomBg = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, C.panelBg, 0.45);
     this.roomBg.setDepth(0);
     this.roomBackdrop.add(this.roomBg);
 
-    this.roomName = this.scene.add.text(this.roomCx, this.roomCy - this.roomH / 2 + this.layout.s(20), '', {
-      fontSize: this.layout.font(18),
+    this.roomName = this.scene.add.text(this.gw / 2, 60, '', {
+      fontSize: '18px',
       fontFamily: 'Fredoka',
       color: C.textLight,
       fontStyle: '600',
@@ -171,18 +149,18 @@ export class ExplorationUI {
     this.roomName.setOrigin(0.5);
     this.mainContainer.add(this.roomName);
 
-    this.roomTypeIndicator = this.scene.add.text(this.roomCx, this.roomCy - this.roomH / 2 + this.layout.s(44), '', {
-      fontSize: this.layout.font(11),
+    this.roomTypeIndicator = this.scene.add.text(this.gw / 2, 88, '', {
+      fontSize: '11px',
       fontFamily: 'DM Sans',
     });
     this.roomTypeIndicator.setOrigin(0.5);
     this.mainContainer.add(this.roomTypeIndicator);
 
-    this.roomDesc = this.scene.add.text(this.roomCx, this.roomCy + this.layout.s(10), '', {
-      fontSize: this.layout.font(13),
+    this.roomDesc = this.scene.add.text(this.gw / 2, 300, '', {
+      fontSize: '13px',
       fontFamily: 'DM Sans',
       color: C.text,
-      wordWrap: { width: this.roomW - this.layout.s(40) },
+      wordWrap: { width: 560 },
       align: 'center',
     });
     this.roomDesc.setOrigin(0.5);
@@ -286,7 +264,7 @@ export class ExplorationUI {
     const bgKey = `room_${area.id}_${(roomIndex % 3) + 1}`;
     if (this.scene.textures.exists(bgKey)) {
       this.roomBgImage.setTexture(bgKey);
-      this.roomBgImage.setDisplaySize(this.roomW, this.roomH);
+this.roomBgImage.setDisplaySize(this.gw, this.gh);
     }
 
     this.roomName.setText(room.name);
@@ -345,7 +323,7 @@ export class ExplorationUI {
     this.encounterPanel.setVisible(true);
     this.navPanel.setVisible(false);
 
-    const overlay = this.scene.add.rectangle(this.roomCx, this.roomCy, this.roomW, this.roomH, 0x000000, 0.7);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
     overlay.setInteractive();
     this.encounterPanel.add(overlay);
 
@@ -396,7 +374,7 @@ export class ExplorationUI {
     this.treasurePanel.setVisible(true);
     this.navPanel.setVisible(false);
 
-    const overlay = this.scene.add.rectangle(this.roomCx, this.roomCy, this.roomW, this.roomH, 0x000000, 0.7);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.7);
     overlay.setInteractive();
     this.treasurePanel.add(overlay);
 
@@ -470,8 +448,8 @@ export class ExplorationUI {
       this.partyContainer.add(hpBar);
       this.partyContainer.add(mpBar);
 
-      const hpColor = this.getHpColor(hp, stats.maxHp);
-      this.drawBar(hpBar, this.leftCx - this.layout.s(65), y + this.layout.s(32), this.layout.s(130), this.layout.s(10), hp, stats.maxHp, hpColor);
+const hpColor = getHpColor(hp, stats.maxHp);
+      drawBar(hpBar, this.leftCx - this.layout.s(65), y + this.layout.s(32), this.layout.s(130), this.layout.s(10), hp, stats.maxHp, hpColor);
 
       const hpText = this.scene.add.text(this.leftCx, y + this.layout.s(44), `HP: ${hp}/${stats.maxHp}`, {
         fontSize: this.layout.font(9),
@@ -481,7 +459,7 @@ export class ExplorationUI {
       hpText.setOrigin(0.5);
       this.partyContainer.add(hpText);
 
-      this.drawBar(mpBar, this.leftCx - this.layout.s(65), y + this.layout.s(58), this.layout.s(130), this.layout.s(8), mp, stats.maxMp, C.mpBar);
+drawBar(mpBar, this.leftCx - this.layout.s(65), y + this.layout.s(58), this.layout.s(130), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
       const mpText = this.scene.add.text(this.leftCx, y + this.layout.s(68), `MP: ${mp}/${stats.maxMp}`, {
         fontSize: this.layout.font(9),
@@ -502,38 +480,109 @@ export class ExplorationUI {
   updateMiniMap(rooms: Record<string, Room>, currentRoomId: string, visitedRoomIds: Set<string>): void {
     this.miniMapGfx.clear();
 
-    const mx = this.leftCx;
-    const my = this.layout.y(44);
-    const dotSpacing = this.layout.s(14);
-    const maxDots = 8;
+const ids = Object.keys(rooms);
+    if (ids.length === 0) return;
 
-    const roomIds = Object.keys(rooms).sort((a, b) => {
-      if (a === currentRoomId) return -1;
-      if (b === currentRoomId) return 1;
-      const aVisited = visitedRoomIds.has(a) ? 1 : 0;
-      const bVisited = visitedRoomIds.has(b) ? 1 : 0;
-      if (aVisited !== bVisited) return bVisited - aVisited;
-      return 0;
-    }).slice(0, maxDots);
+    // Start room: the Start-typed room, else the numerically-first room id.
+    const startId = ids.find((id) => rooms[id].type === RoomType.Start)
+      ?? ids.slice().sort((a, b) => {
+        const na = parseInt(a, 10);
+        const nb = parseInt(b, 10);
+        if (!Number.isNaN(na) && !Number.isNaN(nb)) return na - nb;
+        return a.localeCompare(b);
+      })[0];
 
-    roomIds.forEach((roomId, i) => {
-      const x = mx + (i % 4) * dotSpacing - dotSpacing * 1.5;
-      const y = my + Math.floor(i / 4) * dotSpacing;
+    // BFS from the start room: depth = column, row = position within the column.
+    const depth = new Map<string, number>();
+    const levelIds: string[][] = [];
+    const queue: string[] = [startId];
+    depth.set(startId, 0);
+    levelIds[0] = [startId];
 
-      let color: number;
-      if (roomId === currentRoomId) {
-        color = C.primary;
-      } else if (visitedRoomIds.has(roomId)) {
-        color = 0x6366A1;
-      } else if (rooms[roomId]?.type === RoomType.Boss) {
-        color = C.bossRed;
+    while (queue.length > 0) {
+      const id = queue.shift()!;
+      const d = depth.get(id)!;
+      for (const exit of rooms[id]?.exits ?? []) {
+        if (!rooms[exit.roomId] || depth.has(exit.roomId)) continue;
+        depth.set(exit.roomId, d + 1);
+        if (!levelIds[d + 1]) levelIds[d + 1] = [];
+        levelIds[d + 1].push(exit.roomId);
+        queue.push(exit.roomId);
+      }
+    }
+    // Any rooms not reachable (shouldn't happen) share the start column.
+    for (const id of ids) {
+      if (!depth.has(id)) {
+        depth.set(id, 0);
+        if (!levelIds[0]) levelIds[0] = [];
+        levelIds[0].push(id);
+      }
+    }
+
+    // Layout nodes.
+    const originX = LEFT_CX;
+    const originY = 44;
+    const colW = 18;
+    const rowH = 15;
+    const radius = 3.5;
+    const pos: Record<string, { x: number; y: number }> = {};
+    for (let col = 0; col < levelIds.length; col++) {
+      levelIds[col].forEach((id, row) => {
+        pos[id] = { x: originX + col * colW, y: originY + row * rowH };
+      });
+    }
+
+    const g = this.miniMapGfx;
+
+    // Edges (deduped undirected).
+    const drawn = new Set<string>();
+    for (const id of ids) {
+      for (const exit of rooms[id]?.exits ?? []) {
+        if (!pos[exit.roomId]) continue;
+        const key = [id, exit.roomId].sort().join('|');
+        if (drawn.has(key)) continue;
+        drawn.add(key);
+        const a = pos[id];
+        const b = pos[exit.roomId];
+        const lit = id === currentRoomId || exit.roomId === currentRoomId;
+        g.lineStyle(lit ? 1.5 : 1, lit ? C.primary : C.border, lit ? 1 : 0.7);
+        g.lineBetween(a.x, a.y, b.x, b.y);
+      }
+    }
+
+    // Nodes.
+    for (const id of ids) {
+      const p = pos[id];
+      if (!p) continue;
+      const isCurrent = id === currentRoomId;
+      const isStart = rooms[id].type === RoomType.Start;
+      const isBoss = rooms[id].type === RoomType.Boss;
+      const isVisited = visitedRoomIds.has(id);
+
+      let fill: number;
+      let stroke: number;
+      if (isCurrent) {
+        fill = C.primary;
+        stroke = 0xF0EFFF;
+      } else if (isStart) {
+        fill = C.hpBar;
+        stroke = C.bg;
+      } else if (isVisited) {
+        fill = C.muted;
+        stroke = C.panelBg;
+      } else if (isBoss) {
+        fill = C.bossRed;
+        stroke = C.bg;
       } else {
-        color = C.barBg;
+        fill = C.buttonBg;
+        stroke = C.muted;
       }
 
-      this.miniMapGfx.fillStyle(color, 1);
-      this.miniMapGfx.fillCircle(x, y, this.layout.s(4));
-    });
+g.fillStyle(fill, 1);
+      g.fillCircle(p.x, p.y, radius);
+      g.lineStyle(1, stroke, 1);
+      g.strokeCircle(p.x, p.y, radius);
+    }
   }
 
   addLogMessage(text: string): void {
@@ -581,7 +630,7 @@ export class ExplorationUI {
     this.bossWarning.removeAll(true);
     this.bossWarning.setVisible(true);
 
-    const overlay = this.scene.add.rectangle(this.roomCx, this.roomCy, this.roomW, this.roomH, 0x000000, 0.85);
+const overlay = this.scene.add.rectangle(this.gw / 2, this.gh / 2, this.gw, this.gh, 0x000000, 0.85);
     overlay.setInteractive();
     this.bossWarning.add(overlay);
 
@@ -710,29 +759,5 @@ export class ExplorationUI {
     container.on('pointerdown', onClick);
 
     return { container, bg, label: labelText };
-  }
-
-  private getHpColor(current: number, max: number): number {
-    const ratio = current / max;
-    if (ratio > 0.5) return C.hpBar;
-    if (ratio > 0.25) return C.hpBarMid;
-    return C.hpBarLow;
-  }
-
-  private drawBar(
-    g: Phaser.GameObjects.Graphics,
-    x: number, y: number, w: number, h: number,
-    cur: number, max: number, color: number,
-  ): void {
-    g.clear();
-    g.fillStyle(C.barBg, 1);
-    g.fillRect(x, y, w, h);
-    g.lineStyle(1, C.border, 1);
-    g.strokeRect(x, y, w, h);
-    const ratio = Math.max(0, Math.min(1, cur / max));
-    if (ratio > 0) {
-      g.fillStyle(color, 1);
-      g.fillRect(x + 1, y + 1, (w - 2) * ratio, h - 2);
-    }
   }
 }

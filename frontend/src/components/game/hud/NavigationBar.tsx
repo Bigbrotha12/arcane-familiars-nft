@@ -19,7 +19,7 @@ function NavigationBar({ room, onNavigate }: NavigationBarProps) {
   )
 
   return (
-    <div className="pointer-events-auto flex justify-center gap-2 rounded-md bg-[#1E1B4B]/85 p-md shadow-card backdrop-blur-sm">
+    <div className="hud-frame pointer-events-auto flex justify-center gap-2 rounded-md p-md">
       {exits.map((exit) => (
         <Button
           key={exit.roomId}

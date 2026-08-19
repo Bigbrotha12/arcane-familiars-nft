@@ -14,7 +14,7 @@ interface ItemPanelProps {
 
 function ItemPanel({ open, items, onSelect, onClose }: ItemPanelProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Select Item">
+    <Modal open={open} onClose={onClose} title="Select Item" hud>
       <div className="flex flex-col gap-3">
         {items.length === 0 && (
           <p className="font-body text-sm text-text-muted">No items available.</p>

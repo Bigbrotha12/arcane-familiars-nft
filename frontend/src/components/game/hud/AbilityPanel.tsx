@@ -14,7 +14,7 @@ interface AbilityPanelProps {
 
 function AbilityPanel({ open, abilities, onSelect, onClose }: AbilityPanelProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Select Ability">
+    <Modal open={open} onClose={onClose} title="Select Ability" hud>
       <div className="flex flex-col gap-3">
         {abilities.length === 0 && (
           <p className="font-body text-sm text-text-muted">No abilities available.</p>

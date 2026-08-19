@@ -23,7 +23,7 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="flex w-full max-w-sm flex-col items-center gap-6 rounded-md bg-[#1E1B4B]/95 p-xl text-center shadow-card-hover">
+      <div className="hud-frame flex w-full max-w-sm flex-col items-center gap-6 rounded-md p-xl text-center">
         <h2 className={`font-display text-3xl font-semibold ${titleColor}`}>{title}</h2>
 
         <div className="flex flex-col items-center gap-2">

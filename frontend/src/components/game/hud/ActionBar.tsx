@@ -22,7 +22,7 @@ const ACTIONS: { label: string; action: BattleActionName; primary?: boolean; nee
 
 function ActionBar({ disabled = false, canSwap = false, onAction }: ActionBarProps) {
   return (
-    <div className="pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-md bg-[#1E1B4B]/80 p-sm shadow-card backdrop-blur-sm">
+    <div className="hud-frame pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-md p-sm">
       {ACTIONS.map(({ label, action, primary = false, needsParty = false }) => (
         <Button
           key={action}

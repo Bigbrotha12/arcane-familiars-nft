@@ -6,6 +6,7 @@ import {
   ActionType,
 } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
+import { C, getHpColor, drawBar } from './theme';
 
 export interface BattleUICallbacks {
   onAction: (action: BattleAction) => void;
@@ -14,24 +15,6 @@ export interface BattleUICallbacks {
   onShowItem?: () => void;
   onSwap?: () => void;
 }
-
-const C = {
-  bg: 0x0A0A0F,
-  primary: 0x7C5CFC,
-  primaryHover: 0x6A4AE8,
-  text: '#A5A3C4',
-  textLight: '#F0EFFF',
-  textMuted: '#6366A1',
-  hpBar: 0x2DD4BF,
-  hpBarMid: 0xF59E0B,
-  hpBarLow: 0xEF4444,
-  mpBar: 0x6366A1,
-  buttonBg: 0x3B3870,
-  panelBg: 0x1E1B4B,
-  border: 0x3B3870,
-  cardBg: 0x2D2A5E,
-  barBg: 0x1A1A2E,
-};
 
 export const BATTLE_CONTINUE_EVENT = 'continue-after-battle';
 
@@ -135,7 +118,7 @@ export class BattleUI {
     const sx = this.enemyCenterX;
     const sy = this.enemyCenterY;
 
-    this.enemySprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.enemySprite = this.registerUI(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
     this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.enemySprite.setDepth(1);
 
@@ -151,7 +134,7 @@ export class BattleUI {
     const sx = this.playerCenterX;
     const sy = this.playerCenterY;
 
-    this.playerSprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.playerSprite = this.registerUI(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
     this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.playerSprite.setDepth(1);
 
@@ -211,13 +194,13 @@ export class BattleUI {
     mpText.setOrigin(0.5);
 
     const container = this.scene.add.container(x, y, [bg, name, hpBar, mpBar, hpText, mpText]);
-    this.register(container);
-    this.register(bg);
-    this.register(name);
-    this.register(hpBar);
-    this.register(mpBar);
-    this.register(hpText);
-    this.register(mpText);
+    this.registerUI(container);
+    this.registerUI(bg);
+    this.registerUI(name);
+    this.registerUI(hpBar);
+    this.registerUI(mpBar);
+    this.registerUI(hpText);
+    this.registerUI(mpText);
 
     return { container, name, hpBar, mpBar, hpText, mpText };
   }
@@ -391,9 +374,9 @@ export class BattleUI {
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
-    const hpColor = this.getHpColor(hp, stats.maxHp);
-    this.drawBar(this.playerHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
-    this.drawBar(this.playerMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
+    const hpColor = getHpColor(hp, stats.maxHp);
+    drawBar(this.playerHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
+    drawBar(this.playerMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
     this.playerHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.playerMpText.setText(`MP: ${mp}/${stats.maxMp}`);
@@ -412,36 +395,12 @@ export class BattleUI {
     const hp = Math.max(0, familiar.currentHp);
     const mp = Math.max(0, familiar.currentMp);
 
-    const hpColor = this.getHpColor(hp, stats.maxHp);
-    this.drawBar(this.enemyHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
-    this.drawBar(this.enemyMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
+    const hpColor = getHpColor(hp, stats.maxHp);
+    drawBar(this.enemyHpBar, this.layout.s(-92), this.layout.s(-14), this.layout.s(184), this.layout.s(10), hp, stats.maxHp, hpColor);
+    drawBar(this.enemyMpBar, this.layout.s(-92), this.layout.s(6), this.layout.s(184), this.layout.s(8), mp, stats.maxMp, C.mpBar);
 
     this.enemyHpText.setText(`HP: ${hp}/${stats.maxHp}`);
     this.enemyMpText.setText(`MP: ${mp}/${stats.maxMp}`);
-  }
-
-  private getHpColor(current: number, max: number): number {
-    const ratio = current / max;
-    if (ratio > 0.5) return C.hpBar;
-    if (ratio > 0.25) return C.hpBarMid;
-    return C.hpBarLow;
-  }
-
-  private drawBar(
-    g: Phaser.GameObjects.Graphics,
-    x: number, y: number, w: number, h: number,
-    cur: number, max: number, color: number,
-  ): void {
-    g.clear();
-    g.fillStyle(C.barBg, 1);
-    g.fillRect(x, y, w, h);
-    g.lineStyle(1, C.border, 1);
-    g.strokeRect(x, y, w, h);
-    const ratio = Math.max(0, Math.min(1, cur / max));
-    if (ratio > 0) {
-      g.fillStyle(color, 1);
-      g.fillRect(x + 1, y + 1, (w - 2) * ratio, h - 2);
-    }
   }
 
   showAbilityPanel(familiar: BattleFamiliar): void {

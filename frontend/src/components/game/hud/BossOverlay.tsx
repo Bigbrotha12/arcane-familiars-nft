@@ -11,7 +11,7 @@ interface BossOverlayProps {
 function BossOverlay({ onEnter, onRetreat }: BossOverlayProps) {
   return (
     <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/40">
-      <div className="rounded-lg bg-[#1E1B4B]/90 p-lg shadow-card-hover max-w-sm">
+      <div className="hud-frame max-w-sm rounded-lg p-lg">
         <h2 className="mb-lg font-display text-xl font-bold text-error">
           ⚠ BOSS ROOM AHEAD
         </h2>
