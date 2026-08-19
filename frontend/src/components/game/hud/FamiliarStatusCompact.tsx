@@ -1,5 +1,5 @@
 // Compact floating card with name, HP/MP bars, and status effect icons.
-// Positioned above enemy, below player. Semi-transparent background.
+// Solid background with double-lined border.
 
 import type { FamiliarState } from '@/game'
 
@@ -16,7 +16,7 @@ function FamiliarStatusCompact({ familiar, position, statusEffects = [] }: Famil
 
   return (
     <div
-      className={`pointer-events-none flex w-48 flex-col gap-1 rounded-md border border-[#3B3870] bg-[#1E1B4B]/85 px-2 py-1.5 shadow-lg backdrop-blur-sm ${
+      className={`pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg ${
         position === 'above' ? 'flex-col' : 'flex-col-reverse'
       }`}
     >
