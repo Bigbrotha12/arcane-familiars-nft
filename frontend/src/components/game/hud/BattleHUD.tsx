@@ -72,7 +72,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         {enemy && (
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: '42%', top: '17.5%' }}
+            style={{ left: '61%', top: '17.5%' }}
           >
             <FamiliarStatusCompact familiar={enemy} isBoss={snapshot.isBoss} />
           </div>
@@ -82,7 +82,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         {activeFamiliar && (
           <div
             className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: '56%', top: '66.7%' }}
+            style={{ left: '39%', top: '66.7%' }}
           >
             <FamiliarStatusCompact familiar={activeFamiliar} />
           </div>
