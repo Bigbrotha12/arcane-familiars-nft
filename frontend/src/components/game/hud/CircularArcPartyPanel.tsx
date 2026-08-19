@@ -35,8 +35,8 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
   const radius = (size - strokeWidth) / 2
   const circumference = 2 * Math.PI * radius
 
-  const hpOffset = circumference * (1 - hpRatio * 0.75)
-  const mpOffset = circumference * (1 - mpRatio * 0.75)
+  const hpOffset = circumference * (1 - hpRatio)
+  const mpOffset = circumference * (1 - mpRatio)
 
   const nameLabel = (
     <span
@@ -90,7 +90,7 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
             stroke={mpColor}
             strokeWidth={3}
             strokeDasharray={2 * Math.PI * (radius - strokeWidth - 2)}
-            strokeDashoffset={2 * Math.PI * (radius - strokeWidth - 2) * (1 - mpRatio * 0.75)}
+            strokeDashoffset={2 * Math.PI * (radius - strokeWidth - 2) * (1 - mpRatio)}
             strokeLinecap="round"
             className="transition-all duration-300"
           />

@@ -15,49 +15,49 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
   const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
 
   return (
-    <div className="pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
-      <div className="flex items-center justify-between gap-1">
-        <span className="truncate font-body text-xs font-semibold text-[#F0EFFF]">
+    <div className="pointer-events-none flex w-96 flex-col gap-2 rounded-lg border-8 border-double border-[#3B3870] bg-[#1E1B4B] px-4 py-3 shadow-lg">
+      <div className="flex items-center justify-between gap-2">
+        <span className="truncate font-body text-2xl font-semibold text-[#F0EFFF]">
           {familiar.name}
         </span>
         {isBoss && (
-          <span className="shrink-0 rounded-sm bg-error/20 px-1.5 py-0.5 font-display text-[9px] font-semibold uppercase tracking-wider text-error">
+          <span className="shrink-0 rounded-md bg-error/20 px-3 py-1 font-display text-lg font-semibold uppercase tracking-wider text-error">
             Boss
           </span>
         )}
       </div>
 
-      <div className="flex items-center gap-1">
-        <span className="font-mono text-[9px] font-medium text-teal">HP</span>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-[2px] border border-[#2A2A45] bg-[#1A1A2E]">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-lg font-medium text-teal">HP</span>
+        <div className="h-3 flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E]">
           <div className={`h-full ${hpColor} transition-all duration-300`} style={{ width: `${hpRatio * 100}%` }} />
         </div>
-        <span className="font-mono text-[9px] tabular-nums text-[#B8B5E0]">
+        <span className="font-mono text-lg tabular-nums text-[#B8B5E0]">
           {Math.max(0, Math.floor(familiar.hp))}/{familiar.maxHp}
         </span>
       </div>
 
-      <div className="flex items-center gap-1">
-        <span className="font-mono text-[9px] font-medium text-accent">MP</span>
-        <div className="h-1.5 flex-1 overflow-hidden rounded-[2px] border border-[#2A2A45] bg-[#1A1A2E]">
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-lg font-medium text-accent">MP</span>
+        <div className="h-3 flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E]">
           <div className="h-full bg-accent transition-all duration-300" style={{ width: `${mpRatio * 100}%` }} />
         </div>
-        <span className="font-mono text-[9px] tabular-nums text-[#B8B5E0]">
+        <span className="font-mono text-lg tabular-nums text-[#B8B5E0]">
           {Math.max(0, Math.floor(familiar.mp))}/{familiar.maxMp}
         </span>
       </div>
 
       {statusEffects.length > 0 && (
-        <div className="flex items-center gap-0.5 border-t border-[#3B3870] pt-1">
+        <div className="flex items-center gap-1 border-t-2 border-[#3B3870] pt-2">
           {statusEffects.map((effect) => (
             <div
               key={effect.id}
-              className="relative flex h-5 w-5 items-center justify-center rounded-sm bg-[#2D2A5E] text-[10px]"
+              className="relative flex h-10 w-10 items-center justify-center rounded-md bg-[#2D2A5E] text-xl"
               title={effect.id}
             >
               {effect.icon}
               {effect.duration !== undefined && (
-                <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-[#1E1B4B] px-0.5 font-mono text-[7px] text-[#A5A3C4]">
+                <span className="absolute -bottom-1 -right-1 rounded-full bg-[#1E1B4B] px-1 font-mono text-sm text-[#A5A3C4]">
                   {effect.duration}
                 </span>
               )}
