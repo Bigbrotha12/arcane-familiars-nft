@@ -1,9 +1,9 @@
 // Preview component showing the two selected designs:
 // 1. Compact Card (solid, double border, positioned left of enemy, right of player)
-// 2. Circular Arc party panel (active larger above-left, inactive smaller below-right)
+// 2. Circular Arc party panel with multiple variations
 
 import CompactCardInContext from './CompactCardInContext'
-import CircularArcPartyPreview from './CircularArcPartyPreview'
+import CircularArcVariations from './CircularArcVariations'
 
 function FamiliarStatusPreview() {
   return (
@@ -19,19 +19,20 @@ function FamiliarStatusPreview() {
           </h2>
           <p className="mb-4 text-sm text-[#A5A3C4]">
             Positioned left of enemy sprite, right of player sprite. Solid background with double-lined border.
+            Vertically centered with generous spacing.
           </p>
           <CompactCardInContext />
         </section>
 
         <section>
           <h2 className="mb-4 font-display text-lg font-medium text-[#B8B5E0]">
-            B. Circular Arc Party Panel
+            B. Circular Arc Party Panel (Multiple Variations)
           </h2>
           <p className="mb-4 text-sm text-[#A5A3C4]">
-            Active familiar (larger arc, above-left of center). Inactive familiars (smaller arcs, below-right of center).
-            Status effects as horizontal divider between arcs.
+            2 familiars only. Active familiar larger and offset. Inactive familiar smaller with grayscale.
+            Status effects handle up to 10 icons with wrapping. Arcs positioned close together.
           </p>
-          <CircularArcPartyPreview />
+          <CircularArcVariations />
         </section>
       </div>
     </div>

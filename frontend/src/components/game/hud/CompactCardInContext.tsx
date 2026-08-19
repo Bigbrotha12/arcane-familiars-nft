@@ -45,7 +45,7 @@ function CompactCardInContext() {
   return (
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
       {/* Enemy area - top right */}
-      <div className="absolute top-16 right-32">
+      <div className="absolute top-24 right-24">
         {/* Enemy sprite placeholder */}
         <div className="h-24 w-24 rounded-full bg-gradient-to-br from-purple-600 to-purple-900 border-2 border-purple-400 shadow-lg flex items-center justify-center text-4xl">
           👾
@@ -53,7 +53,7 @@ function CompactCardInContext() {
       </div>
 
       {/* Enemy card - positioned to the LEFT of enemy sprite with separation */}
-      <div className="absolute top-20 right-64">
+      <div className="absolute top-24 right-[380px]">
         <div className="pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
           <div className="flex items-center justify-between gap-1">
             <span className="truncate font-body text-xs font-semibold text-[#F0EFFF]">
@@ -103,7 +103,7 @@ function CompactCardInContext() {
       </div>
 
       {/* Player area - bottom left */}
-      <div className="absolute bottom-16 left-32">
+      <div className="absolute bottom-24 left-24">
         {/* Player sprite placeholder */}
         <div className="h-24 w-24 rounded-full bg-gradient-to-br from-blue-400 to-blue-700 border-2 border-blue-300 shadow-lg flex items-center justify-center text-4xl">
           🐕
@@ -111,7 +111,7 @@ function CompactCardInContext() {
       </div>
 
       {/* Player card - positioned to the RIGHT of player sprite with separation */}
-      <div className="absolute bottom-20 left-64">
+      <div className="absolute bottom-24 left-[380px]">
         <div className="pointer-events-none flex w-48 flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
           <div className="flex items-center justify-between gap-1">
             <span className="truncate font-body text-xs font-semibold text-[#F0EFFF]">
