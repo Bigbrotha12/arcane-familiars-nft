@@ -39,6 +39,10 @@ const mockStatusEffects = [
   { id: 'poison', icon: '☠️', duration: 4 },
   { id: 'stun', icon: '⚡', duration: 1 },
   { id: 'boost', icon: '⬆️', duration: 3 },
+  { id: 'slow', icon: '🐌', duration: 2 },
+  { id: 'haste', icon: '💨', duration: 2 },
+  { id: 'blind', icon: '🌑', duration: 3 },
+  { id: 'rage', icon: '💢', duration: 1 },
 ]
 
 function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80) {
@@ -271,24 +275,72 @@ export function ArcVariationD() {
   )
 }
 
-export function ArcVariationE() {
-  // Very close to overlapping, horizontal status, grayscale
+export function ArcVariationE1() {
+  // Very close to overlapping, horizontal status below inactive, 10 effects
   return (
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex flex-col items-center gap-3">
           {/* Active familiar - larger, offset left and up */}
-          <div className="relative -ml-12 -mb-4">
+          <div className="relative -ml-12">
             {renderArc(mockParty[0], true, 92)}
           </div>
 
-          {/* Status effects - horizontal, compact */}
-          {renderStatusHorizontal(mockStatusEffects, 160)}
-
-          {/* Inactive familiar - smaller, grayscale, offset right and down */}
-          <div className="relative -mr-12 -mt-4">
+          {/* Inactive familiar - smaller, grayscale, offset right and down, almost touching */}
+          <div className="relative -mr-12 -mt-2">
             {renderArc(mockParty[1], false, 72)}
           </div>
+
+          {/* Status effects - horizontal, below inactive */}
+          {renderStatusHorizontal(mockStatusEffects, 160)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ArcVariationE2() {
+  // Absolute positioning for precise overlap control, status below inactive
+  return (
+    <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
+      <div className="relative w-[200px] h-[280px]">
+        {/* Active familiar - positioned with absolute */}
+        <div className="absolute top-0 left-1/2 -translate-x-[60%]">
+          {renderArc(mockParty[0], true, 92)}
+        </div>
+
+        {/* Inactive familiar - positioned almost touching below */}
+        <div className="absolute top-[85px] left-1/2 -translate-x-[40%]">
+          {renderArc(mockParty[1], false, 72)}
+        </div>
+
+        {/* Status effects - below both arcs */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
+          {renderStatusHorizontal(mockStatusEffects, 160)}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export function ArcVariationE3() {
+  // Tighter overlap with absolute positioning, status below
+  return (
+    <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
+      <div className="relative w-[200px] h-[260px]">
+        {/* Active familiar - positioned with absolute */}
+        <div className="absolute top-0 left-1/2 -translate-x-[60%]">
+          {renderArc(mockParty[0], true, 92)}
+        </div>
+
+        {/* Inactive familiar - almost touching */}
+        <div className="absolute top-[78px] left-1/2 -translate-x-[40%]">
+          {renderArc(mockParty[1], false, 72)}
+        </div>
+
+        {/* Status effects - below both arcs */}
+        <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
+          {renderStatusHorizontal(mockStatusEffects, 160)}
         </div>
       </div>
     </div>
@@ -328,9 +380,23 @@ function CircularArcVariations() {
 
       <div>
         <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">
-          E. Very Close to Overlapping, Horizontal Status, Grayscale
+          E1. Very Close, Horizontal Status Below Inactive, 10 Effects
         </h3>
-        <ArcVariationE />
+        <ArcVariationE1 />
+      </div>
+
+      <div>
+        <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">
+          E2. Absolute Positioning, Status Below Inactive, 10 Effects
+        </h3>
+        <ArcVariationE2 />
+      </div>
+
+      <div>
+        <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">
+          E3. Tighter Overlap, Status Below Inactive, 10 Effects
+        </h3>
+        <ArcVariationE3 />
       </div>
     </div>
   )
