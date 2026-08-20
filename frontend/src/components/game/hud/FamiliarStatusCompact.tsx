@@ -9,6 +9,8 @@ interface FamiliarStatusCompactProps {
   statusEffects?: Array<{ id: string; icon: string; duration?: number }>
 }
 
+const EMPTY_STATUS_SLOTS = 4
+
 function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }: FamiliarStatusCompactProps) {
   const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
@@ -47,24 +49,31 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
         </span>
       </div>
 
-      {statusEffects.length > 0 && (
-        <div className="flex items-center gap-1 border-t-2 border-[#3B3870] pt-1.5">
-          {statusEffects.map((effect) => (
+      <div className="flex items-center gap-1 border-t-2 border-[#3B3870] pt-1.5">
+        {statusEffects.map((effect) => (
+          <div
+            key={effect.id}
+            className="relative flex h-[30px] w-[30px] items-center justify-center rounded-md bg-[#2D2A5E] text-[15px]"
+            title={effect.id}
+          >
+            {effect.icon}
+            {effect.duration !== undefined && (
+              <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-[#1E1B4B] px-0.5 font-mono text-[10px] text-[#A5A3C4]">
+                {effect.duration}
+              </span>
+            )}
+          </div>
+        ))}
+        {statusEffects.length === 0 &&
+          Array.from({ length: EMPTY_STATUS_SLOTS }).map((_, i) => (
             <div
-              key={effect.id}
-              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-md bg-[#2D2A5E] text-[15px]"
-              title={effect.id}
+              key={`empty-${i}`}
+              className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-dashed border-[#3B3870] bg-[#15133A]/40 text-[#3B3870]"
             >
-              {effect.icon}
-              {effect.duration !== undefined && (
-                <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-[#1E1B4B] px-0.5 font-mono text-[10px] text-[#A5A3C4]">
-                  {effect.duration}
-                </span>
-              )}
+              •
             </div>
           ))}
-        </div>
-      )}
+      </div>
     </div>
   )
 }
