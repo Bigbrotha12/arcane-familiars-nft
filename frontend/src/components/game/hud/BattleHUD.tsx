@@ -81,7 +81,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         {activeFamiliar && (
           <div
             className="absolute"
-            style={{ right: '16px', top: '220px' }}
+            style={{ right: '16px', bottom: '300px' }}
           >
             <FamiliarStatusCompact familiar={activeFamiliar} />
           </div>
