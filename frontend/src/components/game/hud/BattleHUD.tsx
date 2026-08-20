@@ -6,12 +6,11 @@
 
 import { useState } from 'react'
 import FamiliarStatusCompact from './FamiliarStatusCompact'
-import CircularArcPartyPanel from './CircularArcPartyPanel'
-import ActionBar, { type ActionBarItem } from './ActionBar'
+import CombinedControlsPanel from './CombinedControlsPanel'
 import AbilityPanel from './AbilityPanel'
 import ItemPanel from './ItemPanel'
-import BattleLog from './BattleLog'
 import BattleOutcome from './BattleOutcome'
+import type { ActionBarItem } from './ActionBar'
 import type { GameStateSnapshot, BattleEndedPayload, BattleActionName, PlayerActionPayload } from '@/game'
 
 interface BattleHUDProps {
@@ -88,15 +87,13 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
           </div>
         )}
 
-        {/* Arc party panel - bottom right */}
-        <div className="absolute right-4 bottom-4">
-          <CircularArcPartyPanel party={party} activeId={activeFamiliar?.id} />
-        </div>
-
-        <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
-          <ActionBar items={actions} />
-          <BattleLog entries={snapshot.battleLog ?? []} />
-        </div>
+        {/* Combined bottom panel */}
+        <CombinedControlsPanel
+          actions={actions}
+          logEntries={snapshot.battleLog ?? []}
+          party={party}
+          activeId={activeFamiliar?.id}
+        />
 
         {outcome && <BattleOutcome outcome={outcome} onContinue={onContinue} />}
       </div>

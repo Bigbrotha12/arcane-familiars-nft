@@ -5,12 +5,11 @@
 
 import MiniMap from './MiniMap'
 import RoomInfo from './RoomInfo'
-import RoomLog from './RoomLog'
-import PartyPanel from './PartyPanel'
-import ActionBar, { type ActionBarItem } from './ActionBar'
+import CombinedControlsPanel from './CombinedControlsPanel'
 import EncounterOverlay from './EncounterOverlay'
 import TreasureOverlay from './TreasureOverlay'
 import BossOverlay from './BossOverlay'
+import type { ActionBarItem } from './ActionBar'
 import type { GameStateSnapshot } from '@/game'
 
 interface ExplorationHUDProps {
@@ -55,14 +54,14 @@ function ExplorationHUD({
         <RoomInfo snapshot={snapshot} />
       </div>
 
-      <div className="absolute right-4 bottom-4">
-        <PartyPanel party={snapshot.familiars} />
-      </div>
-
-      <div className="pointer-events-none absolute bottom-4 left-1/2 flex w-[520px] -translate-x-1/2 flex-col gap-1">
-        {!overlayActive && <ActionBar items={exitActions} />}
-        <RoomLog entries={snapshot.roomLog ?? []} />
-      </div>
+      {/* Combined bottom panel */}
+      {!overlayActive && (
+        <CombinedControlsPanel
+          actions={exitActions}
+          logEntries={snapshot.roomLog ?? []}
+          party={snapshot.familiars}
+        />
+      )}
 
       {snapshot.encounterActive ? (
         <EncounterOverlay onFight={onStartBattle} onFlee={onFleeEncounter} />
