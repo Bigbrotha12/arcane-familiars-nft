@@ -10,8 +10,11 @@ function makeRng(seed = 42): () => number {
   return seededRandom(seed);
 }
 
+let uidCounter = 0;
+
 function makeFamiliar(overrides: Partial<BattleFamiliar> = {}): BattleFamiliar {
   return {
+    uid: `player-${++uidCounter}`,
     familiarData: getFamiliar("whiteDog")!,
     currentHp: 120,
     currentMp: 80,
@@ -396,6 +399,55 @@ describe("resolveTurn", () => {
     // Enemy HP: 140 - 33 = 107
     expect(result.updatedPlayerFamiliar.currentHp).toBe(75);
     expect(result.updatedEnemyFamiliar.currentHp).toBe(107);
+  });
+
+  it("does not double-apply damage when player and enemy share the same species", () => {
+    const rng = makeRng(42);
+    const result = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar({ currentHp: 120 }),
+      makeFamiliar({ currentHp: 120 }),
+      { type: ActionType.Attack },
+      rng,
+    );
+    // Both deal 20 (55 * 1.0 - 70 / 2). Without the uid fix the player's own
+    // attack would also land on the player, dropping them to 80 instead of 100.
+    expect(result.updatedPlayerFamiliar.currentHp).toBe(100);
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(100);
+  });
+
+  it("gives the player 1 HP on a mutual KO so the win does not leave them at 0 HP", () => {
+    const rng = makeRng(42);
+    const result = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar({ currentHp: 20 }),
+      makeFamiliar({ currentHp: 20 }),
+      { type: ActionType.Attack },
+      rng,
+    );
+    // Both attacks deal 20 damage: 55 * 1.0 - 70 / 2 = 20
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(0);
+    expect(result.updatedPlayerFamiliar.currentHp).toBe(1);
+    expect(checkBattleOutcome(result.updatedPlayerFamiliar, result.updatedEnemyFamiliar)).toBe(Outcome.Win);
+  });
+
+  it("keeps the player at 0 HP on a plain loss", () => {
+    const rng = makeRng(42);
+    const result = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar({ currentHp: 45 }),
+      makeFamiliar({
+        familiarData: getFamiliar("yellowFighter")!,
+        currentHp: 140,
+      }),
+      { type: ActionType.Attack },
+      rng,
+    );
+    // Player (attack: 55) attacks enemy (defense: 45): 33
+    // Enemy (attack: 80) attacks player (defense: 70): 45
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(107);
+    expect(result.updatedPlayerFamiliar.currentHp).toBe(0);
+    expect(checkBattleOutcome(result.updatedPlayerFamiliar, result.updatedEnemyFamiliar)).toBe(Outcome.Loss);
   });
 
   it("returns 0 damage and Unknown ability description for a nonexistent abilityId", () => {

@@ -438,9 +438,9 @@ preload(): void {
     if (!isDamage && !isHeal) return;
     if (!this.battleState) return;
 
-    const enemyId = this.battleState.enemyFamiliar.familiarData.id;
-    if (!result.targetId || !enemyId) return;
-    const targetIsEnemy = result.targetId === enemyId;
+    const enemyUid = this.battleState.enemyFamiliar.uid;
+    if (!result.targetId || !enemyUid) return;
+    const targetIsEnemy = result.targetId === enemyUid;
     const pos = targetIsEnemy
       ? this.battleUI.getEnemyDamagePosition()
       : this.battleUI.getPlayerDamagePosition();

@@ -86,8 +86,8 @@ export function resolveTurn(
   const playerResult = executeAction(playerAction, playerFamiliar, enemyFamiliar, rng);
 
   // Apply player action result
-  let updatedPlayer = applyActionResult(playerFamiliar, playerResult, playerFamiliar.familiarData.id);
-  let updatedEnemy = applyActionResult(enemyFamiliar, playerResult, enemyFamiliar.familiarData.id);
+  let updatedPlayer = applyActionResult(playerFamiliar, playerResult);
+  let updatedEnemy = applyActionResult(enemyFamiliar, playerResult);
 
   // Deduct MP for player ability use
   if (playerAction.type === ActionType.Ability && playerAction.abilityId) {
@@ -101,8 +101,8 @@ export function resolveTurn(
   const enemyResult = executeAction(enemyAction, updatedEnemy, updatedPlayer, rng);
 
   // Apply enemy action result
-  updatedPlayer = applyActionResult(updatedPlayer, enemyResult, playerFamiliar.familiarData.id);
-  updatedEnemy = applyActionResult(updatedEnemy, enemyResult, enemyFamiliar.familiarData.id);
+  updatedPlayer = applyActionResult(updatedPlayer, enemyResult);
+  updatedEnemy = applyActionResult(updatedEnemy, enemyResult);
 
   // Deduct MP for enemy ability use
   if (enemyAction.type === ActionType.Ability && enemyAction.abilityId) {
@@ -116,15 +116,22 @@ export function resolveTurn(
   updatedPlayer = applyStatusEffects(updatedPlayer);
   updatedEnemy = applyStatusEffects(updatedEnemy);
 
+  // Mutual KO: both combatants fall on the same turn. The player is awarded
+  // the victory (checkBattleOutcome checks the enemy first) but survives with
+  // 1 HP so they can keep exploring. A win must never leave the player at 0 HP;
+  // 0 HP always means a loss / end of exploration.
+  if (updatedPlayer.currentHp <= 0 && updatedEnemy.currentHp <= 0) {
+    updatedPlayer = { ...updatedPlayer, currentHp: 1 };
+  }
+
   return { playerResult, enemyResult, updatedPlayerFamiliar: updatedPlayer, updatedEnemyFamiliar: updatedEnemy };
 }
 
 function applyActionResult(
   familiar: BattleFamiliar,
   result: ActionResult,
-  targetId: string,
 ): BattleFamiliar {
-  if (result.targetId !== targetId) return familiar;
+  if (result.targetId !== familiar.uid) return familiar;
 
   let updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
 
@@ -160,17 +167,17 @@ function executeAction(
     if (ability) {
       actualTarget = (ability.target === Target.Self || ability.target === Target.Ally) ? source : target;
     } else {
-      actualTarget = action.targetId === source.familiarData.id ? source : target;
+      actualTarget = action.targetId === source.uid ? source : target;
     }
   } else {
-    actualTarget = action.targetId === source.familiarData.id ? source : target;
+    actualTarget = action.targetId === source.uid ? source : target;
   }
 
   if (action.type === ActionType.Attack) {
     const { damage, isCritical } = calculateDamage(source, actualTarget, 1.0, ScalingStat.Attack, rng);
     return {
       effectType: EffectType.Damage,
-      targetId: actualTarget.familiarData.id,
+      targetId: actualTarget.uid,
       value: damage,
       isCritical,
       description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
@@ -182,7 +189,7 @@ function executeAction(
     if (!ability) {
       return {
         effectType: EffectType.Damage,
-        targetId: actualTarget.familiarData.id,
+        targetId: actualTarget.uid,
         value: 0,
         isCritical: false,
         description: 'Unknown ability used',
@@ -191,7 +198,7 @@ function executeAction(
     if (source.currentMp < ability.mpCost) {
       return {
         effectType: EffectType.Damage,
-        targetId: actualTarget.familiarData.id,
+        targetId: actualTarget.uid,
         value: 0,
         isCritical: false,
         description: `${source.familiarData.name} does not have enough MP to use ${ability.name}`,
@@ -203,7 +210,7 @@ function executeAction(
   if (action.type === ActionType.Defend) {
     return {
       effectType: EffectType.Buff,
-      targetId: source.familiarData.id,
+      targetId: source.uid,
       value: 1.5,
       isCritical: false,
       description: `${source.familiarData.name} defends`,
@@ -214,7 +221,7 @@ function executeAction(
   if (action.type === ActionType.Run) {
     return {
       effectType: EffectType.Damage,
-      targetId: source.familiarData.id,
+      targetId: source.uid,
       value: 0,
       isCritical: false,
       description: `${source.familiarData.name} attempts to flee`,
@@ -226,7 +233,7 @@ function executeAction(
     if (!item) {
       return {
         effectType: EffectType.Damage,
-        targetId: source.familiarData.id,
+        targetId: source.uid,
         value: 0,
         isCritical: false,
         description: `Unknown item: ${action.itemId}`,
@@ -237,7 +244,7 @@ function executeAction(
       const healed = Math.min(actualTarget.familiarData.stats.maxHp - actualTarget.currentHp, item.effect.value);
       return {
         effectType: EffectType.Heal,
-        targetId: actualTarget.familiarData.id,
+        targetId: actualTarget.uid,
         value: Math.max(0, healed),
         isCritical: false,
         description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, healed)} HP`,
@@ -248,7 +255,7 @@ function executeAction(
       const restored = Math.min(actualTarget.familiarData.stats.maxMp - actualTarget.currentMp, item.effect.value);
       return {
         effectType: EffectType.MpHeal,
-        targetId: actualTarget.familiarData.id,
+        targetId: actualTarget.uid,
         value: Math.max(0, restored),
         isCritical: false,
         description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, restored)} MP`,
@@ -257,7 +264,7 @@ function executeAction(
 
     return {
       effectType: EffectType.Damage,
-      targetId: actualTarget.familiarData.id,
+      targetId: actualTarget.uid,
       value: 0,
       isCritical: false,
       description: `${source.familiarData.name} uses ${item.name}`,
@@ -266,7 +273,7 @@ function executeAction(
 
   return {
     effectType: EffectType.Damage,
-    targetId: actualTarget.familiarData.id,
+    targetId: actualTarget.uid,
     value: 0,
     isCritical: false,
     description: 'No action taken',
@@ -294,7 +301,7 @@ function executeAbility(
 
     return {
       effectType: ability.effectType,
-      targetId: target.familiarData.id,
+      targetId: target.uid,
       value: damage,
       isCritical,
       description: `${source.familiarData.name} uses ${ability.name} for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
@@ -317,7 +324,7 @@ function executeAbility(
 
     return {
       effectType: EffectType.Heal,
-      targetId: target.familiarData.id,
+      targetId: target.uid,
       value: healAmount,
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name} to restore ${healAmount} HP`,
@@ -338,7 +345,7 @@ function executeAbility(
 
     return {
       effectType: EffectType.Buff,
-      targetId: source.familiarData.id,
+      targetId: source.uid,
       value: ability.multiplier,
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name}`,
@@ -348,7 +355,7 @@ function executeAbility(
 
   return {
     effectType: ability.effectType,
-    targetId: target.familiarData.id,
+    targetId: target.uid,
     value: 0,
     isCritical: false,
     description: `${source.familiarData.name} uses ${ability.name}`,

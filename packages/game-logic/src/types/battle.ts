@@ -2,6 +2,9 @@ import type { StatName, EffectType } from '@/data/abilities';
 import type { FamiliarData } from '@/data/familiars';
 
 export interface BattleFamiliar {
+  /** Unique identity of this combatant within the battle. Unlike `familiarData.id`
+   *  (a species id), two combatants can never share a uid, so targeting is unambiguous. */
+  uid: string;
   familiarData: FamiliarData;
   currentHp: number;
   currentMp: number;
@@ -35,6 +38,7 @@ export interface BattleAction {
 
 export interface ActionResult {
   effectType: EffectType;
+  /** uid of the combatant this result applies to. */
   targetId: string;
   value: number;
   isCritical: boolean;

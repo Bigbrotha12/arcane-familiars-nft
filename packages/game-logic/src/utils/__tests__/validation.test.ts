@@ -13,6 +13,7 @@ function createBattleState(overrides: Partial<BattleState> = {}): BattleState {
   return {
     id: "test-battle",
     playerFamiliar: {
+      uid: "player",
       familiarData: familiar,
       currentHp: 120,
       currentMp: 80,
@@ -21,6 +22,7 @@ function createBattleState(overrides: Partial<BattleState> = {}): BattleState {
       isAlly: true,
     },
     enemyFamiliar: {
+      uid: "enemy",
       familiarData: getFamiliar("meadowGuardian")!,
       currentHp: 240,
       currentMp: 160,
