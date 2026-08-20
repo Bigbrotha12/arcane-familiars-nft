@@ -26,7 +26,7 @@ export class BattleUI {
   }
 
   private get playerCenterY(): number {
-    return this.layout.y(400);
+    return this.layout.y(280);
   }
 
   constructor(scene: Phaser.Scene) {

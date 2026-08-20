@@ -67,21 +67,21 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
   return (
     <>
       <div className="pointer-events-none absolute inset-0 z-10">
-        {/* Enemy status card - left of enemy sprite (~80%/17.5% canvas) */}
+        {/* Enemy status card - top left corner */}
         {enemy && (
           <div
-            className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: '51%', top: '17.5%' }}
+            className="absolute"
+            style={{ left: '16px', top: '16px' }}
           >
             <FamiliarStatusCompact familiar={enemy} isBoss={snapshot.isBoss} />
           </div>
         )}
 
-        {/* Player status card - right of player sprite (~22.5%/66.7% canvas) */}
+        {/* Player status card - right corner, above action bar */}
         {activeFamiliar && (
           <div
-            className="absolute -translate-x-1/2 -translate-y-1/2"
-            style={{ left: '49%', top: '66.7%' }}
+            className="absolute"
+            style={{ right: '16px', top: '220px' }}
           >
             <FamiliarStatusCompact familiar={activeFamiliar} />
           </div>
