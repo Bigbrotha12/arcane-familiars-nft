@@ -77,11 +77,11 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
           </div>
         )}
 
-        {/* Player status card - right corner, above action bar */}
+{/* Player status card - right corner, above action bar */}
         {activeFamiliar && (
           <div
             className="absolute"
-            style={{ right: '16px', bottom: '300px' }}
+            style={{ right: '16px', bottom: '332px' }}
           >
             <FamiliarStatusCompact familiar={activeFamiliar} />
           </div>
