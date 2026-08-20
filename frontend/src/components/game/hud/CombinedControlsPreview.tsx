@@ -64,12 +64,12 @@ function CombinedControlsPreview() {
 
         {/* The combined parent component under review */}
         <div className="mx-auto w-full max-w-2xl">
-          <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1.5">
             {/* Row 1 — action bar */}
             <ActionBar items={previewActions} />
 
             {/* Row 2 — log (75%) + party (25%) */}
-            <div className="hud-frame flex min-h-[200px] rounded-md">
+            <div className="flex min-h-[200px] rounded-md border-[6px] border-double border-[#3B3870] bg-[#1E1B4B]/85">
               <div className="flex w-3/4 flex-col p-md">
                 <div className="flex flex-1 flex-col [&>div]:flex-1">
                   <BattleLog entries={previewLog} />
@@ -77,7 +77,7 @@ function CombinedControlsPreview() {
               </div>
               <div className="relative w-1/4">
                 {/* Partial vertical separator */}
-                <div className="absolute top-4 bottom-4 left-0 border-l-2 border-[#A78BFA]" />
+                <div className="absolute top-4 bottom-4 left-0 w-[3px] border-l-2 border-double border-[#3B3870]" />
                 <div className="flex h-full items-center justify-center">
                   <CircularArcPartyPanel party={previewParty} activeId="whiteDog" />
                 </div>
