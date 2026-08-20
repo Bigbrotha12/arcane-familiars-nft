@@ -66,7 +66,7 @@ export class BattleUI {
   }
 
   private createGround(x: number, y: number): void {
-    const ground = this.register(this.scene.add.ellipse(x, y + this.layout.s(54), this.layout.s(120), this.layout.s(28)));
+    const ground = this.register(this.scene.add.ellipse(x, y + this.layout.s(50), this.layout.s(120), this.layout.s(28)));
     ground.setStrokeStyle(this.layout.s(3), 0x7C5CFC, 1);
     ground.setFillStyle(0x1E1B4B, 1);
     ground.setDepth(0);
