@@ -64,7 +64,7 @@ function CombinedControlsPreview() {
 
         {/* The combined parent component under review */}
         <div className="mx-auto w-full max-w-2xl">
-          <div className="flex flex-col gap-1.5">
+          <div className="flex flex-col gap-4">
             {/* Row 1 — action bar */}
             <ActionBar items={previewActions} />
 
