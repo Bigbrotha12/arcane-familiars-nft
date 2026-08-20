@@ -18,7 +18,7 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
   const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
 
   return (
-    <div className="pointer-events-none flex w-72 flex-col gap-1.5 rounded-md border-[6px] border-double border-[#3B3870] bg-[#1E1B4B] px-3 py-2 shadow-lg">
+    <div className="pointer-events-none flex w-[340px] flex-col gap-1.5 rounded-md border-[6px] border-double border-[#3B3870] bg-[#1E1B4B] px-3 py-2 shadow-lg">
       <div className="flex items-center justify-between gap-1.5">
         <span className="truncate font-body text-lg font-semibold text-[#F0EFFF]">
           {familiar.name}
@@ -50,13 +50,13 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
         </span>
       </div>
 
-      <div className="grid grid-cols-5 justify-items-center gap-1 border-t-2 border-[#3B3870] pt-1.5">
+      <div className="grid grid-cols-10 gap-0.5 border-t-2 border-[#3B3870] pt-1.5">
         {Array.from({ length: MAX_STATUS_SLOTS }).map((_, i) => {
           const effect = statusEffects[i]
           return effect ? (
             <div
               key={effect.id}
-              className="relative flex h-[30px] w-[30px] items-center justify-center rounded-md bg-[#2D2A5E] text-[15px]"
+              className="relative flex h-[26px] w-full items-center justify-center rounded-md bg-[#2D2A5E] text-[14px]"
               title={effect.id}
             >
               {effect.icon}
@@ -66,14 +66,7 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
                 </span>
               )}
             </div>
-          ) : (
-            <div
-              key={`empty-${i}`}
-              className="flex h-[30px] w-[30px] items-center justify-center rounded-md border border-dashed border-[#3B3870] bg-[#15133A]/40 text-[#3B3870]"
-            >
-              •
-            </div>
-          )
+          ) : null
         })}
       </div>
     </div>
