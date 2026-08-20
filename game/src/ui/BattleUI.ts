@@ -26,7 +26,7 @@ export class BattleUI {
   }
 
   private get playerCenterY(): number {
-    return this.layout.y(268);
+    return this.layout.y(332);
   }
 
   constructor(scene: Phaser.Scene) {
@@ -49,6 +49,7 @@ export class BattleUI {
     const sx = this.enemyCenterX;
     const sy = this.enemyCenterY;
 
+    this.createGround(sx, sy);
     this.enemySprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
     this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.enemySprite.setDepth(1);
@@ -58,9 +59,17 @@ export class BattleUI {
     const sx = this.playerCenterX;
     const sy = this.playerCenterY;
 
+    this.createGround(sx, sy);
     this.playerSprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
     this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.playerSprite.setDepth(1);
+  }
+
+  private createGround(x: number, y: number): void {
+    const ground = this.register(this.scene.add.ellipse(x, y + this.layout.s(70), this.layout.s(120), this.layout.s(28)));
+    ground.setStrokeStyle(this.layout.s(3), 0x7C5CFC, 0.5);
+    ground.setFillStyle(0x1E1B4B, 0.45);
+    ground.setDepth(0);
   }
 
   showConnecting(): void {
