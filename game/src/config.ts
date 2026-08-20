@@ -9,8 +9,8 @@ import { DESIGN_WIDTH, DESIGN_HEIGHT } from './ui/layout';
 
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
-  width: typeof window !== 'undefined' ? Math.floor(window.innerWidth * window.devicePixelRatio) : DESIGN_WIDTH,
-  height: typeof window !== 'undefined' ? Math.floor(window.innerHeight * window.devicePixelRatio) : DESIGN_HEIGHT,
+  width: DESIGN_WIDTH,
+  height: DESIGN_HEIGHT,
   parent: 'game-container',
   backgroundColor: '#0A0A0F',
   scale: {

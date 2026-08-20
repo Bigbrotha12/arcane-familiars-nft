@@ -5,6 +5,7 @@ import PlayLayout from '@/components/layout/PlayLayout';
 import ComingSoon from '@/components/common/ComingSoon';
 import LandingPage from '@/components/layout/LandingPage';
 import GamePage from '@/components/game/GamePage';
+import FamiliarStatusPreview from '@/components/game/hud/FamiliarStatusPreview';
 
 const router = createBrowserRouter([
   {
@@ -32,6 +33,10 @@ const router = createBrowserRouter([
       { index: true, element: <Navigate to="/play/game" replace /> },
       { path: 'game', element: <GamePage /> },
     ],
+  },
+  {
+    path: '/preview',
+    element: <FamiliarStatusPreview />,
   },
 ])
 

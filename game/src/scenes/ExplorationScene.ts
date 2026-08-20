@@ -2,11 +2,11 @@ import Phaser from 'phaser';
 import type { DungeonState, Area, Room, FamiliarData } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType, getFamiliar, Directions, Affinity } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
-import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
+import { ExplorationUI } from '../ui/ExplorationUI';
 import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
-import type { GameStateSnapshot, FamiliarState, OverlayModePayload, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
+import type { GameStateSnapshot, FamiliarState, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
@@ -80,19 +80,6 @@ export class ExplorationScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     this.layout = new Layout(this);
-    const callbacks: ExplorationUICallbacks = {
-      onNavigate: (roomId) => this.navigateToRoom(roomId).catch((err) => {
-        console.error('Navigate error:', err);
-      }),
-      onBattle: (enemyId) => this.startBattle(enemyId),
-      onFlee: () => this.handleFlee(),
-      onTakeTreasure: (itemId) => this.handleTakeTreasure(itemId).catch((err) => {
-        console.error('Take treasure error:', err);
-      }),
-      onLeaveTreasure: () => this.handleLeaveTreasure(),
-      onExitDungeon: () => this.exitDungeon(),
-      onRetreatFromBoss: () => this.handleBossRetreat(),
-    };
 
     const area = AREAS[this.areaId];
     if (!area) {
@@ -105,7 +92,7 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.area = area;
-    this.explorationUI = new ExplorationUI(this, callbacks);
+    this.explorationUI = new ExplorationUI(this);
     this.explorationUI.init(area);
     this.events.on('shutdown', this.onShutdown, this);
 
@@ -116,7 +103,6 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
     gameEventBus.on(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.on(GameEvent.START_BATTLE, this.handleStartBattle);
-    gameEventBus.on(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
 
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
@@ -152,25 +138,13 @@ export class ExplorationScene extends Phaser.Scene {
         this.currentRoomIndex = this.getRoomIndex(currentRoom.id);
 
         this.explorationUI.showRoomInfo(currentRoom, this.currentRoomIndex, this.area.roomCount, this.area);
-        this.explorationUI.showAreaProgress(this.currentRoomIndex + 1, this.area.roomCount);
-        this.explorationUI.updatePartyStatus(
-          this.dungeon.partyHp,
-          this.dungeon.partyMp,
-          this.dungeon.party,
-        );
-        this.explorationUI.updateMiniMap(this.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
         this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
 
         if (currentRoom.type === RoomType.Boss) {
           this.pendingEnemyId = this.area.bossId;
           this.bossActive = true;
-          this.explorationUI.hideNavPanel();
-          this.explorationUI.showBossWarning(this.area.bossId);
         } else if (this.pendingTreasureItemId) {
           this.treasureActive = true;
-          this.explorationUI.showTreasure(this.pendingTreasureItemId);
-        } else {
-          this.explorationUI.showExits(currentRoom.exits);
         }
         this.emitStateUpdate();
       } else {
@@ -199,15 +173,7 @@ export class ExplorationScene extends Phaser.Scene {
       this.currentRoomIndex = 0;
 
       this.explorationUI.showRoomInfo(currentRoom, this.currentRoomIndex, this.area!.roomCount, this.area!);
-      this.explorationUI.showAreaProgress(1, this.area!.roomCount);
-      this.explorationUI.updatePartyStatus(
-        result.dungeon.partyHp,
-        result.dungeon.partyMp,
-        result.dungeon.party,
-      );
-      this.explorationUI.updateMiniMap(result.dungeon.rooms, currentRoom.id, this.visitedRoomIds);
       this.explorationUI.addLogMessage(`Entering ${this.area!.name}...`);
-      this.explorationUI.showExits(currentRoom.exits);
       this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to enter dungeon';
@@ -224,9 +190,6 @@ export class ExplorationScene extends Phaser.Scene {
     this.pendingEnemyId = null;
     this.pendingTreasureItemId = null;
 
-    this.explorationUI.hideBossWarning();
-    this.explorationUI.hideNavPanel();
-
     try {
       const result = await this.gameApi.exploreRoom(roomId);
       this.dungeon.currentRoomId = roomId;
@@ -237,13 +200,6 @@ export class ExplorationScene extends Phaser.Scene {
       this.currentRoomIndex = roomIndex;
 
       this.explorationUI.showRoomInfo(result.room, roomIndex, this.area.roomCount, this.area);
-      this.explorationUI.showAreaProgress(roomIndex + 1, this.area.roomCount);
-      this.explorationUI.updatePartyStatus(
-        this.dungeon.partyHp,
-        this.dungeon.partyMp,
-        this.dungeon.party,
-      );
-      this.explorationUI.updateMiniMap(this.dungeon.rooms, roomId, this.visitedRoomIds);
 
       const isBossRoom = result.room.type === RoomType.Boss;
 
@@ -251,7 +207,6 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
         this.pendingEnemyId = this.area.bossId;
         this.bossActive = true;
-        this.explorationUI.showBossWarning(this.area.bossId);
         this.isProcessing = false;
         this.emitStateUpdate();
       } else if (result.encounter && result.enemy) {
@@ -262,7 +217,6 @@ export class ExplorationScene extends Phaser.Scene {
         this.timers.push(this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
           this.encounterActive = true;
           this.pendingEnemyId = result.enemy!;
-          this.explorationUI.showEncounter(result.enemy!);
           this.isProcessing = false;
           this.emitStateUpdate();
         }));
@@ -271,7 +225,6 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.addLogMessage(`You find something in ${result.room.name}.`);
         this.timers.push(this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
           this.treasureActive = true;
-          this.explorationUI.showTreasure(result.treasureItem!);
           this.isProcessing = false;
           this.emitStateUpdate();
         }));
@@ -279,7 +232,6 @@ export class ExplorationScene extends Phaser.Scene {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
         this.emitStateUpdate();
         this.timers.push(this.time.delayedCall(this.EXITS_DELAY_MS, () => {
-          this.explorationUI.showExits(result.room.exits);
           this.isProcessing = false;
         }));
         return;
@@ -287,7 +239,6 @@ export class ExplorationScene extends Phaser.Scene {
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to explore room';
       this.explorationUI.addLogMessage(`Error: ${message}`);
-      this.explorationUI.showNavPanel();
       this.isProcessing = false;
     }
   }
@@ -315,18 +266,10 @@ export class ExplorationScene extends Phaser.Scene {
     this.encounterActive = false;
     this.pendingEnemyId = null;
     this.explorationUI.addLogMessage('You avoided the encounter.');
-    this.explorationUI.hideEncounterPanel();
     if (this.pendingTreasureItemId) {
       this.treasureActive = true;
-      this.explorationUI.showTreasure(this.pendingTreasureItemId);
       this.emitStateUpdate();
       return;
-    }
-    if (this.dungeon) {
-      const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
-      if (currentRoom) {
-        this.explorationUI.showExits(currentRoom.exits);
-      }
     }
     this.emitStateUpdate();
   }
@@ -348,28 +291,16 @@ export class ExplorationScene extends Phaser.Scene {
       this.explorationUI.addLogMessage(message);
     }
 
-    this.explorationUI.hideTreasurePanel();
     this.treasureActive = false;
     this.pendingTreasureItemId = null;
-    const currentRoom = this.dungeon.rooms[currentRoomId];
-    if (currentRoom) {
-      this.explorationUI.showExits(currentRoom.exits);
-    }
     this.isProcessing = false;
     this.emitStateUpdate();
   }
 
   private handleLeaveTreasure(): void {
     this.explorationUI.addLogMessage('You left the treasure behind.');
-    this.explorationUI.hideTreasurePanel();
     this.treasureActive = false;
     this.pendingTreasureItemId = null;
-    if (this.dungeon) {
-      const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
-      if (currentRoom) {
-        this.explorationUI.showExits(currentRoom.exits);
-      }
-    }
     this.emitStateUpdate();
   }
 
@@ -377,12 +308,6 @@ export class ExplorationScene extends Phaser.Scene {
     this.pendingEnemyId = null;
     this.bossActive = false;
     this.explorationUI.addLogMessage('You retreat from the boss chamber.');
-    if (this.dungeon) {
-      const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
-      if (currentRoom) {
-        this.explorationUI.showExits(currentRoom.exits);
-      }
-    }
     this.emitStateUpdate();
   }
 
@@ -399,7 +324,6 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.explorationUI.destroy();
-    gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
     this.scene.start('WorldMapScene');
   }
 
@@ -551,11 +475,6 @@ export class ExplorationScene extends Phaser.Scene {
     this.startBattle(this.pendingEnemyId);
   };
 
-  private handleOverlayModeChanged = (payload: OverlayModePayload): void => {
-    if (payload.mode !== 'exploration') return;
-    this.explorationUI.setVisible(!payload.enabled);
-  };
-
   private onShutdown(): void {
     this.cleanupTimers();
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
@@ -564,7 +483,6 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
     gameEventBus.off(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.off(GameEvent.START_BATTLE, this.handleStartBattle);
-    gameEventBus.off(GameEvent.OVERLAY_MODE_CHANGED, this.handleOverlayModeChanged);
   }
 
   private getRoomIndex(roomId: string): number {

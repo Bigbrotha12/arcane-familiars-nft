@@ -38,6 +38,12 @@
     animation: float 3s ease-in-out infinite;
   }
 
+  /* Game canvas border */
+  #game-container canvas {
+    border: 2px solid #A78BFA;
+    box-shadow: 0 0 20px rgba(167, 139, 250, 0.3);
+  }
+
   /* Solid HUD panel with a double solid border (inner light line + outer accent
      ring separated by a dark gap), so panels are clearly outlined over the game
      canvas without relying on translucency. */
