@@ -6,6 +6,7 @@ import type { FamiliarState } from '@/game'
 import FamiliarStatusCompact from './FamiliarStatusCompact'
 import CompactCardInContext from './CompactCardInContext'
 import CircularArcVariations from './CircularArcVariations'
+import CombinedControlsPreview from './CombinedControlsPreview'
 
 const previewFamiliar: FamiliarState = {
   id: 'whiteDog',
@@ -76,6 +77,8 @@ function FamiliarStatusPreview() {
           </p>
           <CircularArcVariations />
         </section>
+
+        <CombinedControlsPreview />
       </div>
     </div>
   )
