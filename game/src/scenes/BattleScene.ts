@@ -284,12 +284,28 @@ preload(): void {
     }
   }
 
-  private async handleSwap(): Promise<void> {
+  private async handleSwap(targetFamiliarId?: string): Promise<void> {
     if (this.isProcessingAction || !this.battleState || !this.gameState) return;
-    
-    const party = this.gameState.activeParty || this.gameState.playerFamiliars;
-    if (!party || party.length < 2) {
+
+    const rawParty = this.gameState.activeParty?.length
+      ? this.gameState.activeParty
+      : (this.gameState.playerFamiliars ?? []);
+    if (!rawParty || rawParty.length < 2) {
       this.battleUI.addLogMessage('No other familiars to swap with.');
+      return;
+    }
+
+    const nextIndex = targetFamiliarId
+      ? rawParty.indexOf(targetFamiliarId)
+      : (this.activeFamiliarIndex + 1) % rawParty.length;
+
+    if (nextIndex === -1) {
+      this.battleUI.addLogMessage('That familiar is not in your party.');
+      return;
+    }
+
+    if (nextIndex === this.activeFamiliarIndex) {
+      this.battleUI.addLogMessage('That familiar is already in battle.');
       return;
     }
 
@@ -297,8 +313,7 @@ preload(): void {
     this.phase = 'acting';
     this.emitStateUpdate();
 
-    const nextIndex = (this.activeFamiliarIndex + 1) % party.length;
-    const newFamiliarId = party[nextIndex];
+    const newFamiliarId = rawParty[nextIndex];
 
     try {
       const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId, this.battleState.turnCount);
@@ -403,7 +418,7 @@ preload(): void {
         }
         break;
       case 'swap':
-        this.handleSwap().catch((err) => {
+        this.handleSwap(payload.payload?.targetId).catch((err) => {
           console.error('Swap handler error:', err);
         });
         break;

@@ -39,12 +39,13 @@ const previewParty: FamiliarState[] = [
 ]
 
 const previewActions: ActionBarItem[] = [
-  { key: 'attack', label: 'Attack', primary: true, onClick: () => {} },
-  { key: 'defend', label: 'Defend', onClick: () => {} },
-  { key: 'ability', label: 'Ability', onClick: () => {} },
-  { key: 'item', label: 'Item', onClick: () => {} },
-  { key: 'swap', label: 'Swap', onClick: () => {} },
-  { key: 'run', label: 'Run', onClick: () => {} },
+  { key: 'attack', label: 'Attack', icon: '⚔️', primary: true, onClick: () => {} },
+  { key: 'defend', label: 'Defend', icon: '🛡️', onClick: () => {} },
+  { key: 'ability', label: 'Ability', icon: '✨', onClick: () => {} },
+  { key: 'item', label: 'Item', icon: '🎒', onClick: () => {} },
+  { key: 'swap', label: 'Swap', icon: '🔄', onClick: () => {} },
+  { key: 'familiars', label: 'Familiars', icon: '🐾', onClick: () => {} },
+  { key: 'run', label: 'Run', icon: '🏃', onClick: () => {} },
 ]
 
 const previewLog = [

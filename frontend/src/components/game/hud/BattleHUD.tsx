@@ -9,6 +9,7 @@ import FamiliarStatusCompact from './FamiliarStatusCompact'
 import CombinedControlsPanel from './CombinedControlsPanel'
 import AbilityPanel from './AbilityPanel'
 import ItemPanel from './ItemPanel'
+import FamiliarsPanel from './FamiliarsPanel'
 import BattleOutcome from './BattleOutcome'
 import type { ActionBarItem } from './ActionBar'
 import type { GameStateSnapshot, BattleEndedPayload, BattleActionName, PlayerActionPayload } from '@/game'
@@ -20,7 +21,7 @@ interface BattleHUDProps {
   onContinue: () => void
 }
 
-type ActivePanel = 'ability' | 'item' | null
+type ActivePanel = 'ability' | 'item' | 'familiars' | null
 
 function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null)
@@ -55,13 +56,19 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
     onAction('item', { itemId })
   }
 
+  const handleFamiliarSelect = (familiarId: string) => {
+    setActivePanel(null)
+    onAction('swap', { targetId: familiarId })
+  }
+
   const actions: ActionBarItem[] = [
-    { key: 'attack', label: 'Attack', primary: true, onClick: () => handleAction('attack') },
-    { key: 'defend', label: 'Defend', onClick: () => handleAction('defend') },
-    { key: 'ability', label: 'Ability', onClick: () => handleAction('ability') },
-    { key: 'item', label: 'Item', onClick: () => handleAction('item') },
-    { key: 'swap', label: 'Swap', disabled: !snapshot.canSwap, onClick: () => handleAction('swap') },
-    { key: 'run', label: 'Run', onClick: () => handleAction('run') },
+    { key: 'attack', label: 'Attack', icon: '⚔️', primary: true, onClick: () => handleAction('attack') },
+    { key: 'defend', label: 'Defend', icon: '🛡️', onClick: () => handleAction('defend') },
+    { key: 'ability', label: 'Ability', icon: '✨', onClick: () => handleAction('ability') },
+    { key: 'item', label: 'Item', icon: '🎒', onClick: () => handleAction('item') },
+    { key: 'swap', label: 'Swap', icon: '🔄', disabled: !snapshot.canSwap, onClick: () => handleAction('swap') },
+    { key: 'familiars', label: 'Familiars', icon: '🐾', onClick: () => setActivePanel('familiars') },
+    { key: 'run', label: 'Run', icon: '🏃', onClick: () => handleAction('run') },
   ].map((action) => ({ ...action, disabled: disabled || action.disabled }))
 
   return (
@@ -109,6 +116,14 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         open={activePanel === 'item'}
         items={snapshot.items ?? []}
         onSelect={handleItemSelect}
+        onClose={() => setActivePanel(null)}
+      />
+
+      <FamiliarsPanel
+        open={activePanel === 'familiars'}
+        party={party}
+        activeId={activeFamiliar?.id}
+        onSelect={handleFamiliarSelect}
         onClose={() => setActivePanel(null)}
       />
     </>
