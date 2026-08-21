@@ -36,7 +36,7 @@ function createBattleFamiliar(familiarId: string): BattleFamiliar {
   };
 }
 
-function seededRandom(): number {
+function mathRandom(): number {
   return Math.random();
 }
 
@@ -244,14 +244,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       itemToConsume = action.itemId;
     }
 
-    const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, seededRandom);
+    const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, mathRandom);
 
     const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar } = resolveTurn(
       action,
       battle.playerFamiliar,
       battle.enemyFamiliar,
       enemyAction,
-      seededRandom,
+      mathRandom,
     );
 
     battle.playerFamiliar = updatedPlayerFamiliar;

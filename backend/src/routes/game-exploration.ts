@@ -256,6 +256,16 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       s.dungeon = null;
     });
 
+    // Close any open dungeon run for this user.
+    await c.env.DB
+      .prepare(
+        `UPDATE dungeon_runs
+         SET ended_at = datetime('now')
+         WHERE anonymous_id = ? AND ended_at IS NULL`
+      )
+      .bind(anonymousId)
+      .run();
+
     return c.json({ success: true });
   } catch (error: any) {
     console.error('Exit dungeon error:', error.message);

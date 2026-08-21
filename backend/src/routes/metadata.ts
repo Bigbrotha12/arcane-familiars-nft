@@ -9,11 +9,12 @@ const metadataRouter = new Hono<{ Bindings: { DB: D1Database } }>();
 metadataRouter.get('/metadata/:id', async (c) => {
   try {
     const { id } = c.req.param();
-    const familiarId = parseInt(id, 10);
-    
-    if (isNaN(familiarId)) {
+
+    if (!/^\d+$/.test(id)) {
       return c.json({ error: 'Invalid familiar ID' }, 400);
     }
+
+    const familiarId = parseInt(id, 10);
     
     const result = await c.env.DB
       .prepare('SELECT * FROM familiars WHERE familiar_id = ?')

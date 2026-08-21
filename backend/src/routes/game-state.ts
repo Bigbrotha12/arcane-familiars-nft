@@ -17,7 +17,7 @@ function createDefaultGameState(anonymousId: string): GameState {
     inventory: {
       currency: 100,
       items: [
-        { itemId: 'health-potion', quantity: 3 },
+        { itemId: 'potion_small', quantity: 3 },
       ],
     },
     dungeon: null,
