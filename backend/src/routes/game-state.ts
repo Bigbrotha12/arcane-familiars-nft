@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import type { GameState } from '@arcane-familiars/game-logic';
+import { loadGameState, mutateGameState } from '../store/gameStateStore';
 
 const gameStateRouter = new Hono<{ Bindings: { DB: D1Database } }>();
 
@@ -36,22 +37,18 @@ gameStateRouter.post('/game/state/load', async (c) => {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
+    const loaded = await loadGameState(c.env.DB, anonymousId);
 
-    if (row) {
-      const state: GameState = JSON.parse(row.state_json);
-      return c.json({ state });
+    if (loaded) {
+      return c.json({ state: loaded.state });
     }
 
     const state = createDefaultGameState(anonymousId);
 
     await c.env.DB
       .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))`
+        `INSERT INTO game_states (anonymous_id, state_json, revision, updated_at)
+         VALUES (?, ?, 1, datetime('now'))`
       )
       .bind(anonymousId, JSON.stringify(state))
       .run();
@@ -71,18 +68,23 @@ gameStateRouter.post('/game/state/save', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, state' }, 400);
     }
 
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
+    // Client saves are rejected while a server-authoritative battle is in
+    // progress — a stale client snapshot would clobber battle results.
+    const activeBattle = await c.env.DB
+      .prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ?')
+      .bind(anonymousId)
+      .first<{ battle_id: string }>();
+    if (activeBattle) {
+      return c.json({ error: 'Cannot save during an active battle' }, 409);
+    }
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    const saved = await mutateGameState(c.env.DB, anonymousId, (s) => {
+      Object.assign(s, state);
+    });
+
+    if (!saved) {
+      return c.json({ error: 'Game state not found' }, 404);
+    }
 
     return c.json({ success: true });
   } catch (error: any) {

@@ -1,6 +1,16 @@
 import { Hono } from 'hono';
-import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, getFamiliar, RoomType } from '@arcane-familiars/game-logic';
+import {
+  AREAS,
+  generateDungeon,
+  rollEncounter,
+  rollTreasure,
+  selectTreasure,
+  selectEnemy,
+  getFamiliar,
+  validateDungeonExplore,
+  RoomType,
+} from '@arcane-familiars/game-logic';
+import { loadGameState, mutateGameState } from '../store/gameStateStore';
 
 const explorationRouter = new Hono<{ Bindings: { DB: D1Database } }>();
 
@@ -12,16 +22,11 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, areaId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
-
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.unlockedAreas.includes(areaId)) {
       return c.json({ error: 'Area is not unlocked' }, 403);
@@ -50,19 +55,17 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       }
     }
 
-    state.dungeon = dungeon;
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
+    let entered = false;
+    await mutateGameState(c.env.DB, anonymousId, (s) => {
+      // Re-check under the current revision to avoid clobbering a concurrent enter.
+      if (s.dungeon) return false;
+      s.dungeon = dungeon;
+      entered = true;
+    });
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    if (!entered) {
+      return c.json({ error: 'Already in a dungeon' }, 409);
+    }
 
     await c.env.DB
       .prepare(
@@ -87,16 +90,11 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
-
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
@@ -111,8 +109,11 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Room has already been cleared' }, 400);
     }
 
-    room.cleared = true;
-    state.dungeon.currentRoomId = roomId;
+    // B4: the target room must be adjacent to the player's current room.
+    const moveValidation = validateDungeonExplore(roomId, state.dungeon);
+    if (!moveValidation.valid) {
+      return c.json({ error: moveValidation.error }, 400);
+    }
 
     const rng = () => Math.random();
 
@@ -144,25 +145,25 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       }
     }
 
-    state.dungeon.pendingEncounter = encounter && enemy
-      ? { roomId, enemyId: enemy, isBoss: room.type === RoomType.Boss }
-      : null;
-    if (treasureItem) {
-      state.dungeon.pendingTreasures = { ...state.dungeon.pendingTreasures, [roomId]: treasureItem };
+    let explored = false;
+    await mutateGameState(c.env.DB, anonymousId, (s) => {
+      // Re-check under the current revision: another writer may have cleared it.
+      const target = s.dungeon?.rooms[roomId];
+      if (!s.dungeon || !target || target.cleared) return false;
+      target.cleared = true;
+      s.dungeon.currentRoomId = roomId;
+      s.dungeon.pendingEncounter = encounter && enemy
+        ? { roomId, enemyId: enemy, isBoss: room.type === RoomType.Boss }
+        : null;
+      if (treasureItem) {
+        s.dungeon.pendingTreasures = { ...s.dungeon.pendingTreasures, [roomId]: treasureItem };
+      }
+      explored = true;
+    });
+
+    if (!explored) {
+      return c.json({ error: 'Room has already been cleared' }, 400);
     }
-
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
 
     return c.json({ room, encounter, enemy, treasure, treasureItem });
   } catch (error: any) {
@@ -179,16 +180,11 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId, itemId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
-
-    const state: GameState = JSON.parse(row.state_json);
+    const state = loaded.state;
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
@@ -212,30 +208,31 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Item is not the treasure rolled for this room' }, 400);
     }
 
-    delete state.dungeon.pendingTreasures![roomId];
+    let collected = false;
+    await mutateGameState(c.env.DB, anonymousId, (s) => {
+      // Re-check under the current revision: treasure may already be collected.
+      const pending = s.dungeon?.pendingTreasures?.[roomId];
+      if (!pending || pending !== itemId) return false;
 
-    state.inventory = state.inventory ?? { currency: 0, items: [] };
-    const existingItem = state.inventory.items.find((i) => i.itemId === itemId);
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      state.inventory.items.push({ itemId, quantity: 1 });
+      delete s.dungeon!.pendingTreasures![roomId];
+
+      s.inventory = s.inventory ?? { currency: 0, items: [] };
+      const existingItem = s.inventory.items.find((i) => i.itemId === itemId);
+      if (existingItem) {
+        existingItem.quantity += 1;
+      } else {
+        s.inventory.items.push({ itemId, quantity: 1 });
+      }
+      collected = true;
+    });
+
+    if (!collected) {
+      return c.json({ error: 'No treasure available in this room' }, 400);
     }
 
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
+    const updated = await loadGameState(c.env.DB, anonymousId);
 
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
-
-    return c.json({ success: true, inventory: state.inventory });
+    return c.json({ success: true, inventory: updated?.state.inventory });
   } catch (error: any) {
     console.error('Collect treasure error:', error.message);
     return c.json({ error: 'Failed to collect treasure' }, 500);
@@ -250,29 +247,14 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
-      .bind(anonymousId)
-      .first<{ state_json: string }>();
-
-    if (!row) {
+    const loaded = await loadGameState(c.env.DB, anonymousId);
+    if (!loaded) {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
-    const state: GameState = JSON.parse(row.state_json);
-    state.dungeon = null;
-    state.lastSaved = Date.now();
-    const stateJson = JSON.stringify(state);
-
-    await c.env.DB
-      .prepare(
-        `INSERT INTO game_states (anonymous_id, state_json, updated_at)
-         VALUES (?, ?, datetime('now'))
-         ON CONFLICT(anonymous_id)
-         DO UPDATE SET state_json = ?, updated_at = datetime('now')`
-      )
-      .bind(anonymousId, stateJson, stateJson)
-      .run();
+    await mutateGameState(c.env.DB, anonymousId, (s) => {
+      s.dungeon = null;
+    });
 
     return c.json({ success: true });
   } catch (error: any) {

@@ -29,6 +29,7 @@ export default function GamePage() {
   const gameRef = useRef<PhaserGame | null>(null)
   const gameModuleRef = useRef<GameModule | null>(null)
   const [gameState, setGameState] = useState<GameStateSnapshot | null>(null)
+  const gameStateRef = useRef<GameStateSnapshot | null>(null)
   const [battleOutcome, setBattleOutcome] = useState<BattleEndedPayload | null>(null)
   const [showExitModal, setShowExitModal] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -44,6 +45,13 @@ export default function GamePage() {
   const autoSave = useCallback(() => {
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME)
   }, [])
+
+  // During battles the server owns state writes — a client autosave would
+  // clobber battle results with a stale snapshot.
+  const canAutoSave = useCallback(
+    () => gameStateRef.current?.currentScene !== 'battle',
+    []
+  )
 
   const handlePlayerAction = useCallback(
     (action: BattleActionName, payload?: PlayerActionPayload['payload']) => {
@@ -140,6 +148,7 @@ export default function GamePage() {
   const { handleBlockerProceed, handleBlockerReset, isBlockerActive } = useGameGuard({
     onAutoSave: autoSave,
     onShowExitModal: () => setShowExitModal(true),
+    canAutoSave,
   })
 
   const handleCancelExit = useCallback(() => {
@@ -182,7 +191,10 @@ export default function GamePage() {
           gameRef.current = mod.createGame('game-container')
         }
 
-        const onStateUpdate = (state: GameStateSnapshot) => setGameState(state)
+        const onStateUpdate = (state: GameStateSnapshot) => {
+          gameStateRef.current = state
+          setGameState(state)
+        }
         const onSaveComplete = (result: { success: boolean }) => {
           setSaving(false)
           if (result.success) {
