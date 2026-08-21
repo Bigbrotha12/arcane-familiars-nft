@@ -233,6 +233,17 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: actionValidation.error }, 400);
     }
 
+    // Item usage requires the item in inventory; it is consumed after the turn resolves.
+    let itemToConsume: string | null = null;
+    if (action.type === ActionType.Item && action.itemId) {
+      const preloaded = await loadGameState(c.env.DB, anonymousId);
+      const invItem = preloaded?.state.inventory?.items.find((i) => i.itemId === action.itemId);
+      if (!invItem || invItem.quantity < 1) {
+        return c.json({ error: `Item not in inventory: ${action.itemId}` }, 400);
+      }
+      itemToConsume = action.itemId;
+    }
+
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, seededRandom);
 
     const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar } = resolveTurn(
@@ -271,6 +282,15 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     if (loaded) {
       const familiarId = battle.playerFamiliar.familiarData.id;
       const saved = await mutateGameState(c.env.DB, anonymousId, (s) => {
+        if (itemToConsume) {
+          const invItem = s.inventory?.items.find((i) => i.itemId === itemToConsume);
+          if (invItem) {
+            invItem.quantity -= 1;
+            if (invItem.quantity <= 0) {
+              s.inventory!.items = s.inventory!.items.filter((i) => i.itemId !== itemToConsume);
+            }
+          }
+        }
         if (outcome === Outcome.Win) {
           s.battleCount = (s.battleCount ?? 0) + 1;
           s.winCount = (s.winCount ?? 0) + 1;

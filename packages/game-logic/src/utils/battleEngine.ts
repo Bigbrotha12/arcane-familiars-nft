@@ -1,6 +1,7 @@
 import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
+import { getItem, ItemEffect, ItemType } from '@/data/items';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -41,8 +42,10 @@ export function calculateDamage(
 
 /**
  * Tick status effects: apply HoT/DoT, decrement durations, remove expired.
+ * Effects in `skip` keep their current duration (e.g. effects applied by the
+ * second actor this turn, which must survive until the end of the next turn).
  */
-export function applyStatusEffects(familiar: BattleFamiliar): BattleFamiliar {
+export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEffect>): BattleFamiliar {
   const updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
   let hpChange = 0;
 
@@ -60,10 +63,21 @@ export function applyStatusEffects(familiar: BattleFamiliar): BattleFamiliar {
   );
 
   updated.statusEffects = updated.statusEffects
-    .map((e) => ({ ...e, turnsRemaining: e.turnsRemaining - 1 }))
+    .map((e) => (skip?.has(e) ? e : { ...e, turnsRemaining: e.turnsRemaining - 1 }))
     .filter((e) => e.turnsRemaining > 0);
 
   return updated;
+}
+
+/**
+ * Decrement all ability cooldowns; expired entries are removed.
+ */
+function tickCooldowns(familiar: BattleFamiliar): BattleFamiliar {
+  const cooldowns: Record<string, number> = {};
+  for (const [abilityId, turns] of Object.entries(familiar.cooldowns)) {
+    if (turns - 1 > 0) cooldowns[abilityId] = turns - 1;
+  }
+  return { ...familiar, cooldowns };
 }
 
 /**
@@ -81,18 +95,28 @@ export function resolveTurn(
   updatedPlayerFamiliar: BattleFamiliar;
   updatedEnemyFamiliar: BattleFamiliar;
 } {
+  // Tick cooldowns at the start of the round
+  let currentPlayer = tickCooldowns(playerFamiliar);
+  let currentEnemy = tickCooldowns(enemyFamiliar);
+
   // Execute player action with original familiars
-  const playerResult = executeAction(playerAction, playerFamiliar, enemyFamiliar, rng);
+  const playerResult = executeAction(playerAction, currentPlayer, currentEnemy, rng);
 
   // Apply player action result
-  let updatedPlayer = applyActionResult(playerFamiliar, playerResult, playerFamiliar.familiarData.id);
-  let updatedEnemy = applyActionResult(enemyFamiliar, playerResult, enemyFamiliar.familiarData.id);
+  let updatedPlayer = applyActionResult(currentPlayer, playerResult, currentPlayer.familiarData.id);
+  let updatedEnemy = applyActionResult(currentEnemy, playerResult, currentEnemy.familiarData.id);
 
-  // Deduct MP for player ability use
+  // Deduct MP and start cooldown for player ability use
   if (playerAction.type === ActionType.Ability && playerAction.abilityId) {
     const ability = getAbility(playerAction.abilityId);
-    if (ability && playerFamiliar.currentMp >= ability.mpCost) {
+    if (ability && currentPlayer.currentMp >= ability.mpCost) {
       updatedPlayer = { ...updatedPlayer, currentMp: updatedPlayer.currentMp - ability.mpCost };
+      if (ability.cooldown > 0) {
+        updatedPlayer = {
+          ...updatedPlayer,
+          cooldowns: { ...updatedPlayer.cooldowns, [ability.id]: ability.cooldown },
+        };
+      }
     }
   }
 
@@ -100,20 +124,28 @@ export function resolveTurn(
   const enemyResult = executeAction(enemyAction, updatedEnemy, updatedPlayer, rng);
 
   // Apply enemy action result
-  updatedPlayer = applyActionResult(updatedPlayer, enemyResult, playerFamiliar.familiarData.id);
-  updatedEnemy = applyActionResult(updatedEnemy, enemyResult, enemyFamiliar.familiarData.id);
+  updatedPlayer = applyActionResult(updatedPlayer, enemyResult, currentPlayer.familiarData.id);
+  updatedEnemy = applyActionResult(updatedEnemy, enemyResult, updatedEnemy.familiarData.id);
 
-  // Deduct MP for enemy ability use
+  // Deduct MP and start cooldown for enemy ability use
   if (enemyAction.type === ActionType.Ability && enemyAction.abilityId) {
     const ability = getAbility(enemyAction.abilityId);
-    if (ability && updatedEnemy.currentMp >= ability.mpCost) {
+    if (ability && currentEnemy.currentMp >= ability.mpCost) {
       updatedEnemy = { ...updatedEnemy, currentMp: updatedEnemy.currentMp - ability.mpCost };
+      if (ability.cooldown > 0) {
+        updatedEnemy = {
+          ...updatedEnemy,
+          cooldowns: { ...updatedEnemy.cooldowns, [ability.id]: ability.cooldown },
+        };
+      }
     }
   }
 
-  // Tick status effects
+  // Tick status effects. Effects applied by the enemy (the second actor) must
+  // not be decremented this turn — they have not protected against anything yet.
+  const freshEnemyEffects = new Set<StatusEffect>(enemyResult.appliedEffects ?? []);
   updatedPlayer = applyStatusEffects(updatedPlayer);
-  updatedEnemy = applyStatusEffects(updatedEnemy);
+  updatedEnemy = applyStatusEffects(updatedEnemy, freshEnemyEffects);
 
   return { playerResult, enemyResult, updatedPlayerFamiliar: updatedPlayer, updatedEnemyFamiliar: updatedEnemy };
 }
@@ -134,9 +166,25 @@ function applyActionResult(
     updated.currentHp = Math.min(updated.familiarData.stats.maxHp, updated.currentHp + result.value);
   }
 
-  // Apply status effects
+  // Restore MP (item usage)
+  if (result.mpRestore) {
+    updated.currentMp = Math.min(
+      updated.familiarData.stats.maxMp,
+      updated.currentMp + result.mpRestore,
+    );
+  }
+
+  // Apply status effects. Re-applying an effect from the same ability
+  // refreshes it instead of stacking multiplicatively.
   if (result.appliedEffects) {
-    updated.statusEffects.push(...result.appliedEffects);
+    for (const effect of result.appliedEffects) {
+      const existingIdx = updated.statusEffects.findIndex((e) => e.abilityId === effect.abilityId);
+      if (existingIdx >= 0) {
+        updated.statusEffects[existingIdx] = effect;
+      } else {
+        updated.statusEffects.push(effect);
+      }
+    }
   }
 
   return updated;
@@ -216,12 +264,44 @@ function executeAction(
     };
   }
 
+  if (action.type === ActionType.Item && action.itemId) {
+    const item = getItem(action.itemId);
+    if (!item || item.type !== ItemType.Consumable) {
+      return {
+        effectType: EffectType.Damage,
+        targetId: actualTarget.familiarData.id,
+        value: 0,
+        isCritical: false,
+        description: 'Unknown item used',
+      };
+    }
+
+    if (item.effect.type === ItemEffect.HP_HEAL) {
+      return {
+        effectType: EffectType.Heal,
+        targetId: source.familiarData.id,
+        value: item.effect.value,
+        isCritical: false,
+        description: `${source.familiarData.name} uses ${item.name}, restoring ${item.effect.value} HP`,
+      };
+    }
+
+    return {
+      effectType: EffectType.Heal,
+      targetId: source.familiarData.id,
+      value: 0,
+      isCritical: false,
+      mpRestore: item.effect.value,
+      description: `${source.familiarData.name} uses ${item.name}, restoring ${item.effect.value} MP`,
+    };
+  }
+
   return {
     effectType: EffectType.Damage,
     targetId: actualTarget.familiarData.id,
     value: 0,
     isCritical: false,
-    description: action.type === ActionType.Item ? 'Item use not implemented' : 'No action taken',
+    description: 'No action taken',
   };
 }
 

@@ -40,6 +40,8 @@ export interface ActionResult {
   isCritical: boolean;
   description: string;
   appliedEffects?: StatusEffect[];
+  /** MP restored to the target (item usage). */
+  mpRestore?: number;
 }
 
 export enum Outcome {
