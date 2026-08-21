@@ -5,6 +5,7 @@ import { BattleUI, BATTLE_CONTINUE_EVENT, BattleUICallbacks } from '../ui/Battle
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
+import { toFamiliarStateFromData } from '../utils/familiarState';
 import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, OverlayModePayload, BattlePhase, AbilityOption, ItemOption } from '../events';
 
 interface BattleSceneData {
@@ -197,7 +198,7 @@ preload(): void {
       const playerFamiliars: FamiliarState[] = partyIds
         .map((id) => getFamiliar(id))
         .filter((fd): fd is FamiliarData => Boolean(fd))
-        .map((fd) => this.toFamiliarStateFromData(fd))
+        .map((fd) => toFamiliarStateFromData(fd))
       if (playerFamiliars.length > 0) {
         playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar)
       }
@@ -490,22 +491,6 @@ preload(): void {
     };
   }
 
-  private toFamiliarStateFromData(fd: FamiliarData): FamiliarState {
-    return {
-      id: fd.id,
-      name: fd.name,
-      hp: fd.stats.hp,
-      maxHp: fd.stats.maxHp,
-      mp: fd.stats.mp,
-      maxMp: fd.stats.maxMp,
-      attack: fd.stats.attack,
-      defense: fd.stats.defense,
-      speed: fd.stats.speed,
-      arcane: fd.stats.arcane,
-      affinity: Affinity[fd.affinity] ?? String(fd.affinity),
-    };
-  }
-
   private emitStateUpdate(): void {
     if (!this.battleState) return;
     const player = this.battleState.playerFamiliar;
@@ -513,7 +498,7 @@ preload(): void {
     const party: FamiliarState[] = partyIds
       .map((id) => getFamiliar(id))
       .filter((fd): fd is FamiliarData => Boolean(fd))
-      .map((fd) => this.toFamiliarStateFromData(fd));
+      .map((fd) => toFamiliarStateFromData(fd));
     if (party.length > 0) {
       // Reflect the active familiar at its actual party position so the HUD
       // highlights the right member after a swap.

@@ -6,6 +6,7 @@ import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
+import { toFamiliarStateFromData, sortRoomIds } from '../utils/familiarState';
 import type { GameStateSnapshot, FamiliarState, OverlayModePayload, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
@@ -414,7 +415,7 @@ export class ExplorationScene extends Phaser.Scene {
       .map((id) => {
         const fd = getFamiliar(id);
         if (!fd) return null;
-        const state = this.toFamiliarStateFromData(fd);
+        const state = toFamiliarStateFromData(fd);
         const hp = dungeon.partyHp[id];
         const mp = dungeon.partyMp[id];
         if (typeof hp === 'number') state.hp = hp;
@@ -423,12 +424,7 @@ export class ExplorationScene extends Phaser.Scene {
       })
       .filter((f): f is FamiliarState => f !== null);
 
-    const roomIds = Object.keys(dungeon.rooms).sort((a, b) => {
-      const numA = parseInt(a, 10);
-      const numB = parseInt(b, 10);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      return a.localeCompare(b);
-    });
+    const roomIds = sortRoomIds(Object.keys(dungeon.rooms));
 
     const rooms: DungeonRoomSnapshot[] = roomIds
       .map((roomId) => dungeon.rooms[roomId])
@@ -469,22 +465,6 @@ export class ExplorationScene extends Phaser.Scene {
       bossRoom: this.bossActive,
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
-  }
-
-  private toFamiliarStateFromData(fd: FamiliarData): FamiliarState {
-    return {
-      id: fd.id,
-      name: fd.name,
-      hp: fd.stats.hp,
-      maxHp: fd.stats.maxHp,
-      mp: fd.stats.mp,
-      maxMp: fd.stats.maxMp,
-      attack: fd.stats.attack,
-      defense: fd.stats.defense,
-      speed: fd.stats.speed,
-      arcane: fd.stats.arcane,
-      affinity: Affinity[fd.affinity] ?? String(fd.affinity),
-    };
   }
 
   private handleSave = async (): Promise<void> => {

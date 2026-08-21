@@ -5,5 +5,4 @@ export interface Bindings {
   IMX_API_MAINNET: string;
   COLLECTION_CONTRACT_SANDBOX: string;
   COLLECTION_CONTRACT_MAINNET: string;
-  INFURA_API_KEY: string;
 }

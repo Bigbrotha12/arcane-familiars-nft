@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 import {
   AREAS,
   generateDungeon,
@@ -12,7 +13,7 @@ import {
 } from '@arcane-familiars/game-logic';
 import { loadGameState, mutateGameState } from '../store/gameStateStore';
 
-const explorationRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const explorationRouter = new Hono<{ Bindings: Bindings }>();
 
 explorationRouter.post('/game/dungeon/enter', async (c) => {
   try {

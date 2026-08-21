@@ -1,8 +1,9 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 import type { GameState } from '@arcane-familiars/game-logic';
 import { loadGameState, mutateGameState } from '../store/gameStateStore';
 
-const gameStateRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const gameStateRouter = new Hono<{ Bindings: Bindings }>();
 
 function createDefaultGameState(anonymousId: string): GameState {
   const id = crypto.randomUUID();

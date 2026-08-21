@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { getEffectiveStat, calculateDamage, applyStatusEffects, checkBattleOutcome, applyDefend, resolveTurn } from "../battleEngine";
+import { getEffectiveStat, calculateDamage, applyStatusEffects, checkBattleOutcome, resolveTurn } from "../battleEngine";
 import { seededRandom } from "../mathUtils";
 import { getFamiliar } from "../../data/familiars";
 import { ActionType, Outcome } from "../../types/battle";
@@ -181,20 +181,6 @@ describe("checkBattleOutcome", () => {
 
   it("returns continue when both familiars have HP above 0", () => {
     expect(checkBattleOutcome(makeFamiliar({ currentHp: 50 }), makeFamiliar({ currentHp: 30 }))).toBe(Outcome.Continue);
-  });
-});
-
-describe("applyDefend", () => {
-  it("adds a defense buff with 1.5x value and 1 turn duration", () => {
-    const result = applyDefend(makeFamiliar());
-    expect(result.statusEffects).toHaveLength(1);
-    expect(result.statusEffects[0]).toEqual({
-      abilityId: "defend",
-      type: EffectType.Buff,
-      stat: StatName.Defense,
-      value: 1.5,
-      turnsRemaining: 1,
-    });
   });
 });
 

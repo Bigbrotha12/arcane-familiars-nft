@@ -408,13 +408,3 @@ function createDefendEffect(): StatusEffect {
     turnsRemaining: 1,
   };
 }
-
-/**
- * Apply defend action: temporary 1.5x defense for the current round.
- */
-export function applyDefend(familiar: BattleFamiliar): BattleFamiliar {
-  return {
-    ...familiar,
-    statusEffects: [...familiar.statusEffects, createDefendEffect()],
-  };
-}

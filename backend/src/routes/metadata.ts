@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 
-const metadataRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const metadataRouter = new Hono<{ Bindings: Bindings }>();
 
 /**
  * GET /api/metadata/:id

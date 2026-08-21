@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 
-const authRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const authRouter = new Hono<{ Bindings: Bindings }>();
 
 // TODO: Blockchain auth layer deferred — signature verification will be added
 // when the blockchain integration phase begins. For now, accept any valid address.

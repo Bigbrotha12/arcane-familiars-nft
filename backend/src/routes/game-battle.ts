@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 import type {
   BattleState,
   BattleFamiliar,
@@ -14,13 +15,14 @@ import {
   resolveTurn,
   checkBattleOutcome,
   validateBattleAction,
+  AREAS,
   BattleResult,
   ActionType,
   Outcome,
 } from '@arcane-familiars/game-logic';
 import { loadGameState, mutateGameState } from '../store/gameStateStore';
 
-const gameBattleRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const gameBattleRouter = new Hono<{ Bindings: Bindings }>();
 
 function createBattleFamiliar(familiarId: string): BattleFamiliar {
   const data = getFamiliar(familiarId);
@@ -40,9 +42,14 @@ function mathRandom(): number {
   return Math.random();
 }
 
-function generateBattleRewards(isBoss: boolean): BattleRewards {
-  const baseCurrency = isBoss ? 150 : 40;
-  const currency = baseCurrency + Math.floor(Math.random() * 30);
+function generateBattleRewards(isBoss: boolean, areaId?: string | null): BattleRewards {
+  // Boss rewards come from the area data (single source of truth).
+  const bossReward = isBoss && areaId ? AREAS[areaId]?.bossReward : undefined;
+  if (bossReward) {
+    return { currency: bossReward.currency, items: [...bossReward.items] };
+  }
+
+  const currency = 40 + Math.floor(Math.random() * 30);
   const items: string[] = [];
 
   if (isBoss) {
@@ -264,12 +271,15 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let rewards: BattleRewards | undefined;
     if (outcome === Outcome.Win) {
       battle.status = BattleResult.Won;
-      rewards = generateBattleRewards(battle.isBoss);
     } else if (outcome === Outcome.Loss) {
       battle.status = BattleResult.Lost;
     }
 
     const loaded = await loadGameState(c.env.DB, anonymousId);
+
+    if (outcome === Outcome.Win) {
+      rewards = generateBattleRewards(battle.isBoss, loaded?.state.dungeon?.areaId);
+    }
 
     if (!loaded && outcome !== Outcome.Continue) {
       // Never delete the battle without applying its result — the player

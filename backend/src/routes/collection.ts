@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
+import type { Bindings } from '../types';
 
-const collectionRouter = new Hono<{ Bindings: { DB: D1Database } }>();
+const collectionRouter = new Hono<{ Bindings: Bindings }>();
 
 /**
  * GET /api/collection

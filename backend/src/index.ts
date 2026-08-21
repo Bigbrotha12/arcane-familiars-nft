@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import type { Bindings } from './types';
 import assetsRouter from './routes/assets';
 import balancesRouter from './routes/balances';
 import authRouter from './routes/auth';
@@ -8,17 +9,6 @@ import metadataRouter from './routes/metadata';
 import gameStateRouter from './routes/game-state';
 import gameExplorationRouter from './routes/game-exploration';
 import gameBattleRouter from './routes/game-battle';
-
-// Environment bindings from wrangler.jsonc
-type Bindings = {
-  DB: D1Database;
-  ENVIRONMENT: string;
-  IMX_API_SANDBOX: string;
-  IMX_API_MAINNET: string;
-  COLLECTION_CONTRACT_SANDBOX: string;
-  COLLECTION_CONTRACT_MAINNET: string;
-  INFURA_API_KEY: string;
-};
 
 const app = new Hono<{ Bindings: Bindings }>();
 

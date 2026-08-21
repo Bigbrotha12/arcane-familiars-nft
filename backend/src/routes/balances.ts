@@ -1,7 +1,8 @@
 import { Hono } from 'hono';
-import { getUserBalances } from '../utils/imx';
+import type { Bindings } from '../types';
+import { getUserBalances, ImxRequestError } from '../utils/imx';
 
-const balancesRouter = new Hono<{ Bindings: { ENVIRONMENT: string } }>();
+const balancesRouter = new Hono<{ Bindings: Bindings }>();
 
 const ETH_ADDRESS_REGEX = /^0x[a-fA-F0-9]{40}$/;
 
@@ -12,12 +13,16 @@ balancesRouter.get('/v2/balances/:address', async (c) => {
     return c.json({ error: 'Invalid Ethereum address' }, 400);
   }
 
-  const env = c.env.ENVIRONMENT === 'production' ? 'production' : 'sandbox';
+  const baseUrl = c.env.ENVIRONMENT === 'production' ? c.env.IMX_API_MAINNET : c.env.IMX_API_SANDBOX;
 
   try {
-    const data = await getUserBalances(address, env);
+    const data = await getUserBalances(address, baseUrl);
     return c.json(data);
   } catch (error) {
+    if (error instanceof ImxRequestError) {
+      console.error('IMX balances error:', error);
+      return c.json({ error: 'Failed to fetch balances' }, error.status >= 500 ? 502 : (error.status as 400 | 404));
+    }
     console.error('IMX balances error:', error);
     return c.json({ error: 'Failed to fetch balances' }, 502);
   }

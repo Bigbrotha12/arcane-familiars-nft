@@ -1,40 +1,47 @@
-import axios from 'axios';
-
-export function createIMXClient(environment: string): ReturnType<typeof axios.create> {
-  const baseURL = environment === 'production'
-    ? 'https://api.x.immutable.com'
-    : 'https://api.sandbox.x.immutable.com';
-
-  return axios.create({
-    baseURL,
-    timeout: 10000,
-    headers: { 'Content-Type': 'application/json' },
-  });
-}
-
 export async function getUserAssets(
   address: string,
   collection: string,
-  environment: string
-): Promise<any> {
-  const client = createIMXClient(environment);
-  const { data } = await client.get('/v1/assets', {
-    params: {
-      user: address,
-      collection,
-      page_size: 200,
-      order_by: 'updated_at',
-      direction: 'desc',
-    },
+  baseUrl: string,
+): Promise<unknown> {
+  const url = new URL('/v1/assets', baseUrl);
+  url.searchParams.set('user', address);
+  url.searchParams.set('collection', collection);
+  url.searchParams.set('page_size', '200');
+  url.searchParams.set('order_by', 'updated_at');
+  url.searchParams.set('direction', 'desc');
+
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(10_000),
   });
-  return data;
+  if (!res.ok) {
+    throw new ImxRequestError(`IMX assets request failed`, res.status);
+  }
+  return res.json();
 }
 
 export async function getUserBalances(
   address: string,
-  environment: string
-): Promise<any> {
-  const client = createIMXClient(environment);
-  const { data } = await client.get(`/v2/balances/${address}`);
-  return data;
+  baseUrl: string,
+): Promise<unknown> {
+  const url = new URL(`/v2/balances/${address}`, baseUrl);
+
+  const res = await fetch(url, {
+    headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(10_000),
+  });
+  if (!res.ok) {
+    throw new ImxRequestError(`IMX balances request failed`, res.status);
+  }
+  return res.json();
+}
+
+export class ImxRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ImxRequestError';
+    this.status = status;
+  }
 }
