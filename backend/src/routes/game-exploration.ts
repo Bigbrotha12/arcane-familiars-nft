@@ -107,6 +107,10 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Room not found' }, 404);
     }
 
+    if (room.cleared) {
+      return c.json({ error: 'Room has already been cleared' }, 400);
+    }
+
     room.cleared = true;
     state.dungeon.currentRoomId = roomId;
 
@@ -138,6 +142,13 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       if (treasure) {
         treasureItem = selectTreasure(room, rng);
       }
+    }
+
+    state.dungeon.pendingEncounter = encounter && enemy
+      ? { roomId, enemyId: enemy, isBoss: room.type === RoomType.Boss }
+      : null;
+    if (treasureItem) {
+      state.dungeon.pendingTreasures = { ...state.dungeon.pendingTreasures, [roomId]: treasureItem };
     }
 
     state.lastSaved = Date.now();
@@ -192,6 +203,18 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Room has not been explored' }, 400);
     }
 
+    const pendingItemId = state.dungeon.pendingTreasures?.[roomId];
+    if (!pendingItemId) {
+      return c.json({ error: 'No treasure available in this room' }, 400);
+    }
+
+    if (pendingItemId !== itemId) {
+      return c.json({ error: 'Item is not the treasure rolled for this room' }, 400);
+    }
+
+    delete state.dungeon.pendingTreasures![roomId];
+
+    state.inventory = state.inventory ?? { currency: 0, items: [] };
     const existingItem = state.inventory.items.find((i) => i.itemId === itemId);
     if (existingItem) {
       existingItem.quantity += 1;

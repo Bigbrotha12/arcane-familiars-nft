@@ -98,8 +98,8 @@ function getPersistedResources(
   const mp = dungeon?.partyMp?.[familiarId];
 
   return {
-    currentHp: typeof hp === 'number' && hp > 0 ? Math.min(hp, maxHp) : familiar.familiarData.stats.hp,
-    currentMp: typeof mp === 'number' && mp > 0 ? Math.min(mp, maxMp) : familiar.familiarData.stats.mp,
+    currentHp: typeof hp === 'number' ? Math.min(hp, maxHp) : familiar.familiarData.stats.hp,
+    currentMp: typeof mp === 'number' ? Math.min(mp, maxMp) : familiar.familiarData.stats.mp,
   };
 }
 
@@ -133,9 +133,30 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Game state not found' }, 404);
     }
 
+    const existingBattle = await c.env.DB
+      .prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ?')
+      .bind(anonymousId)
+      .first<{ battle_id: string }>();
+    if (existingBattle) {
+      return c.json({ error: 'A battle is already in progress' }, 409);
+    }
+
     const party = state.activeParty ?? [];
     if (!party.includes(playerFamiliarId)) {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
+    }
+
+    const pendingEncounter = state.dungeon?.pendingEncounter;
+    if (!pendingEncounter) {
+      return c.json({ error: 'No encounter to fight. Explore a room first.' }, 409);
+    }
+
+    if (state.dungeon && pendingEncounter.roomId !== state.dungeon.currentRoomId) {
+      return c.json({ error: 'Encounter is not in your current room' }, 409);
+    }
+
+    if (enemyFamiliarId !== pendingEncounter.enemyId) {
+      return c.json({ error: 'Enemy does not match the rolled encounter' }, 400);
     }
 
     const playerFamiliar = createBattleFamiliar(playerFamiliarId);
@@ -143,6 +164,14 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     playerFamiliar.currentHp = resources.currentHp;
     playerFamiliar.currentMp = resources.currentMp;
     playerFamiliar.isAlly = true;
+
+    if (playerFamiliar.currentHp <= 0) {
+      return c.json({ error: 'Familiar has fainted and cannot battle' }, 400);
+    }
+
+    // Consume the pending encounter so it cannot be farmed.
+    state.dungeon!.pendingEncounter = null;
+    await saveGameState(c.env.DB, anonymousId, state);
 
     const enemyFamiliar = createBattleFamiliar(enemyFamiliarId);
     const enemyData = getFamiliar(enemyFamiliarId);
@@ -343,6 +372,10 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     newFamiliar.currentHp = resources.currentHp;
     newFamiliar.currentMp = resources.currentMp;
     newFamiliar.isAlly = true;
+
+    if (newFamiliar.currentHp <= 0) {
+      return c.json({ error: 'Familiar has fainted and cannot battle' }, 400);
+    }
 
     battle.playerFamiliar = newFamiliar;
 

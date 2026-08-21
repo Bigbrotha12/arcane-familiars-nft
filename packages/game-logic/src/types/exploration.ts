@@ -48,6 +48,12 @@ export interface BossReward {
   items: string[];
 }
 
+export interface PendingEncounter {
+  roomId: string;
+  enemyId: string;
+  isBoss: boolean;
+}
+
 export interface DungeonState {
   areaId: string;
   currentRoomId: string;
@@ -57,4 +63,8 @@ export interface DungeonState {
   inventory: Inventory;
   rooms: Record<string, Room>;
   activeIndex?: number;
+  /** Server-rolled encounter awaiting a battle start. Cleared once consumed. */
+  pendingEncounter?: PendingEncounter | null;
+  /** Server-rolled treasure awaiting collection, keyed by roomId. */
+  pendingTreasures?: Record<string, string>;
 }
