@@ -36,25 +36,28 @@ function appendErrorOverlay({
   document.body.appendChild(errorDiv);
 }
 
-window.addEventListener('error', (event) => {
-  console.error('Uncaught error:', event.error);
-  appendErrorOverlay({
-    title: 'Uncaught Error:',
-    message: event.error?.message || event.message,
-    stack: event.error?.stack || '',
-    background: '#f44336',
+// Debug error overlays only in development — never leak stack traces in production.
+if (import.meta.env.DEV) {
+  window.addEventListener('error', (event) => {
+    console.error('Uncaught error:', event.error);
+    appendErrorOverlay({
+      title: 'Uncaught Error:',
+      message: event.error?.message || event.message,
+      stack: event.error?.stack || '',
+      background: '#f44336',
+    });
   });
-});
 
-window.addEventListener('unhandledrejection', (event) => {
-  console.error('Unhandled promise rejection:', event.reason);
-  appendErrorOverlay({
-    title: 'Unhandled Promise Rejection:',
-    message: event.reason?.message || String(event.reason),
-    stack: event.reason?.stack || '',
-    background: '#ff9800',
+  window.addEventListener('unhandledrejection', (event) => {
+    console.error('Unhandled promise rejection:', event.reason);
+    appendErrorOverlay({
+      title: 'Unhandled Promise Rejection:',
+      message: event.reason?.message || String(event.reason),
+      stack: event.reason?.stack || '',
+      background: '#ff9800',
+    });
   });
-});
+}
 
 const container: HTMLElement = document.getElementById("root")!
 const root: Root = createRoot(container);

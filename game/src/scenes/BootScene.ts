@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { SCENE_KEYS } from '../constants/scenes';
 
 export class BootScene extends Phaser.Scene {
   private readonly TRANSITION_DELAY_MS = 800;
@@ -30,7 +31,7 @@ export class BootScene extends Phaser.Scene {
     loading.setOrigin(0.5);
 
     const timer = this.time.delayedCall(this.TRANSITION_DELAY_MS, () => {
-      this.scene.start('WorldMapScene');
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
     });
     this.timers.push(timer);
 

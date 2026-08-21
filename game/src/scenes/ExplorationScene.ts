@@ -5,6 +5,7 @@ import { gameApiClient } from '../api/client';
 import { ExplorationUI, ExplorationUICallbacks } from '../ui/ExplorationUI';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
+import { SCENE_KEYS } from '../constants/scenes';
 import type { GameStateSnapshot, FamiliarState, OverlayModePayload, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
@@ -41,7 +42,7 @@ export class ExplorationScene extends Phaser.Scene {
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
-    super({ key: 'ExplorationScene' });
+    super({ key: SCENE_KEYS.EXPLORATION });
   }
 
   init(data: ExplorationSceneData): void {
@@ -296,9 +297,9 @@ export class ExplorationScene extends Phaser.Scene {
     this.bossActive = false;
     this.pendingEnemyId = null;
     this.explorationUI.destroy();
-    this.scene.start('BattleScene', {
+    this.scene.start(SCENE_KEYS.BATTLE, {
       enemyId,
-      returnScene: 'ExplorationScene',
+      returnScene: SCENE_KEYS.EXPLORATION,
       areaId: this.areaId,
       pendingTreasureItemId: this.pendingTreasureItemId,
       activeIndex: this.dungeon?.activeIndex ?? 0,
@@ -394,7 +395,7 @@ export class ExplorationScene extends Phaser.Scene {
 
     this.explorationUI.destroy();
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
-    this.scene.start('WorldMapScene');
+    this.scene.start(SCENE_KEYS.WORLD_MAP);
   }
 
   private cleanupTimers(): void {
@@ -503,7 +504,7 @@ export class ExplorationScene extends Phaser.Scene {
   private handleExit = (): void => {
     this.explorationUI.destroy();
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
-    this.scene.start('WorldMapScene');
+    this.scene.start(SCENE_KEYS.WORLD_MAP);
   };
 
   private handleNavigateRoom = (payload: NavigateRoomPayload): void => {

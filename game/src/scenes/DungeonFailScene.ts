@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { gameApiClient } from '../api/client';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
+import { SCENE_KEYS } from '../constants/scenes';
 import type { GameStateSnapshot } from '../events';
 
 interface DungeonFailData {
@@ -17,7 +18,7 @@ export class DungeonFailScene extends Phaser.Scene {
   private keyboardHandlers: { enter: () => void; space: () => void } | null = null;
 
   constructor() {
-    super({ key: 'DungeonFailScene' });
+    super({ key: SCENE_KEYS.DUNGEON_FAIL });
   }
 
   init(data: DungeonFailData): void {
@@ -148,7 +149,7 @@ export class DungeonFailScene extends Phaser.Scene {
 
     try {
       await gameApiClient.exitDungeon();
-      this.scene.start('WorldMapScene');
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to exit dungeon';
       errorText.setText(message);
@@ -183,7 +184,7 @@ export class DungeonFailScene extends Phaser.Scene {
   private handleEventExit = (): void => {
     if (!this.isExiting) {
       this.isExiting = true;
-      this.scene.start('WorldMapScene');
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
     }
   };
 
