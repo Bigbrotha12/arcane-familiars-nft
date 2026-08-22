@@ -83,6 +83,35 @@ preload(): void {
     this.load.image('battle_bg_meadow_guardian', '/assets/battle_bg/battle_bg_meadow_guardian.png');
     this.load.image('battle_bg_cave_warden', '/assets/battle_bg/battle_bg_cave_warden.png');
     this.load.image('battle_bg_shadow_lord', '/assets/battle_bg/battle_bg_shadow_lord.png');
+    // Familiar idle sheets (whiteDog only) + ability cast VFX
+    this.load.spritesheet('familiar_whiteDog_idle', '/assets/sprites/familiars/whiteDog/idle/whiteDog_idle.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('familiar_whiteDog_idle_left', '/assets/sprites/familiars/whiteDog/idle/whiteDog_idle_left.png', { frameWidth: 64, frameHeight: 64 });
+    this.load.spritesheet('effect_cast_light', '/assets/sprites/effects/effect_cast_light.png', { frameWidth: 96, frameHeight: 96 });
+  }
+
+  private createAnimations(): void {
+    const idleSheets: Array<[string, string]> = [
+      ['familiar_whiteDog_idle', 'familiar_idle'],
+      ['familiar_whiteDog_idle_left', 'familiar_idle_left'],
+    ];
+    for (const [textureKey, animKey] of idleSheets) {
+      if (this.textures.exists(textureKey) && !this.anims.exists(animKey)) {
+        this.anims.create({
+          key: animKey,
+          frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 48 }),
+          frameRate: 24,
+          repeat: -1,
+        });
+      }
+    }
+    if (this.textures.exists('effect_cast_light') && !this.anims.exists('effect_cast_light')) {
+      this.anims.create({
+        key: 'effect_cast_light',
+        frames: this.anims.generateFrameNumbers('effect_cast_light', { start: 0, end: 24 }),
+        frameRate: 24,
+        repeat: 0,
+      });
+    }
   }
 
   async create(): Promise<void> {
@@ -115,6 +144,8 @@ preload(): void {
       this.sceneBackground.setImage(bgKey);
       this.sceneBackground.setOverlay(0x000000, 0.4);
     }
+
+    this.createAnimations();
 
     this.battleUI = new BattleUI(this);
     this.battleUI.init();
@@ -227,6 +258,12 @@ preload(): void {
 
       this.battleUI.addLogMessage(turnResult.playerAction.description);
       this.showActionResultVisual(turnResult.playerAction);
+      if (
+        action.type === ActionType.Ability &&
+        this.battleState.playerFamiliar.familiarData.id === 'whiteDog'
+      ) {
+        this.battleUI.playAbilityEffect('effect_cast_light');
+      }
 
       this.timers.push(this.time.delayedCall(this.ENEMY_ACTION_DELAY_MS, () => {
         this.battleUI.addLogMessage(turnResult.enemyAction.description);
