@@ -1,6 +1,6 @@
 import { type Area, type Room, type DungeonState, RoomType } from '@/types/exploration';
 import type { FamiliarData } from '@/data/familiars';
-import { randomInRange, weightedRandom } from '@/utils/mathUtils';
+import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
 
 const ROOM_NAMES = [
   'Twilight Path', 'Crystal Alcove', 'Mossy Chamber', 'Stone Corridor',
@@ -210,16 +210,4 @@ export function scaleEnemy(baseFamiliar: FamiliarData, level: number): FamiliarD
  */
 export function validateMove(fromRoom: Room, toRoomId: string): boolean {
   return fromRoom.exits.some((exit) => exit.roomId === toRoomId);
-}
-
-// Re-export seededRandom for dungeon generation
-function seededRandom(seed: number): () => number {
-  let state = seed;
-  return () => {
-    state |= 0;
-    state = (state + 0x6d2b79f5) | 0;
-    let t = Math.imul(state ^ (state >>> 15), 1 | state);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }

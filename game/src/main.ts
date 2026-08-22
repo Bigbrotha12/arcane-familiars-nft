@@ -12,10 +12,6 @@ export function createGame(parentId: string): Phaser.Game {
   return game;
 }
 
-export function destroyGame(game: Phaser.Game): void {
-  game.destroy(true);
-}
-
 export type PhaserGame = Phaser.Game
 
 // Standalone mode: auto-init only when loaded directly with ?standalone=true

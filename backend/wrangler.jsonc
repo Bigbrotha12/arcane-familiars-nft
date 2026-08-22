@@ -9,6 +9,11 @@
 	// Local development uses its own D1 database (dev only, never remote).
 	// Production uses [env.production] below, so `wrangler dev` and
 	// `wrangler d1 ... --local` can never touch the production database.
+	"triggers": {
+		"crons": [
+			"0 3 * * *"
+		]
+	},
 	"d1_databases": [
 		{
 			"binding": "DB",

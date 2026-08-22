@@ -131,4 +131,3 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
 }
 
 export default BattleHUD
-export { BattleHUD }

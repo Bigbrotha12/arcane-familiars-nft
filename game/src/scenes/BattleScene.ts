@@ -6,6 +6,8 @@ import { SceneBackground } from '../ui/SceneBackground';
 import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
+import { SCENE_KEYS } from '../constants/scenes';
+import { toFamiliarStateFromData } from '../utils/familiarState';
 import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, BattlePhase, AbilityOption, ItemOption } from '../events';
 
 interface BattleSceneData {
@@ -54,12 +56,12 @@ export class BattleScene extends Phaser.Scene {
   private sceneBackground?: SceneBackground;
 
   constructor() {
-    super({ key: 'BattleScene' });
+    super({ key: SCENE_KEYS.BATTLE });
   }
 
   init(data: BattleSceneData): void {
     this.enemyId = data.enemyId;
-    this.returnScene = data.returnScene ?? 'WorldMapScene';
+    this.returnScene = data.returnScene ?? SCENE_KEYS.WORLD_MAP;
     this.areaId = data.areaId;
     this.isProcessingAction = false;
     this.battleState = null;
@@ -75,7 +77,7 @@ preload(): void {
       this.load.image(`familiar_${id}`, `/assets/sprites/familiars/${id}/${id}_portrait.png`);
     }
     // Load battle background images
-    this.load.image('battle_bg_verdund', '/assets/battle_bg/battle_bg_verdund.png');
+    this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
     this.load.image('battle_bg_crystal', '/assets/battle_bg/battle_bg_crystal.png');
     this.load.image('battle_bg_shadow', '/assets/battle_bg/battle_bg_shadow.png');
     this.load.image('battle_bg_meadow_guardian', '/assets/battle_bg/battle_bg_meadow_guardian.png');
@@ -92,7 +94,7 @@ preload(): void {
     // Boss battles are identified by the enemy familiar id passed in scene data
     // (battleState is not yet resolved at create() time).
     const areaBgMap: Record<string, string> = {
-      verdantMeadow: 'battle_bg_verdund',
+      verdantMeadow: 'battle_bg_verdant',
       crystalCaves: 'battle_bg_crystal',
       shadowForest: 'battle_bg_shadow',
     };
@@ -144,7 +146,7 @@ preload(): void {
     this.battleUI.addLogMessage('Returning to the world map...');
     this.timers.push(this.time.delayedCall(1800, () => {
       this.battleUI.destroy();
-      this.scene.start('WorldMapScene');
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
     }));
   }
 
@@ -169,7 +171,7 @@ preload(): void {
         .map((id) => getFamiliar(id))
         .filter((fd): fd is FamiliarData => Boolean(fd))
         .map((fd) => {
-          const state = this.toFamiliarStateFromData(fd);
+          const state = toFamiliarStateFromData(fd);
           const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
           const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
           if (typeof hp === 'number') state.hp = hp;
@@ -204,7 +206,8 @@ preload(): void {
     try {
       const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
       if (action.type === ActionType.Ability) {
-        this.battleUI.addLogMessage(`You use ${action.abilityId}!`);
+        const abilityName = getAbility(action.abilityId ?? '')?.name ?? action.abilityId;
+        this.battleUI.addLogMessage(`You use ${abilityName}!`);
       } else {
         this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
       }
@@ -486,7 +489,7 @@ preload(): void {
     this.sceneBackground = undefined;
 
     if (this.battleOutcome?.outcome === 'defeat') {
-      this.scene.start('DungeonFailScene', {
+      this.scene.start(SCENE_KEYS.DUNGEON_FAIL, {
         roomsExplored: this.roomsExplored,
         enemiesDefeated: this.enemiesDefeated,
       });
@@ -526,22 +529,6 @@ preload(): void {
     };
   }
 
-  private toFamiliarStateFromData(fd: FamiliarData): FamiliarState {
-    return {
-      id: fd.id,
-      name: fd.name,
-      hp: fd.stats.hp,
-      maxHp: fd.stats.maxHp,
-      mp: fd.stats.mp,
-      maxMp: fd.stats.maxMp,
-      attack: fd.stats.attack,
-      defense: fd.stats.defense,
-      speed: fd.stats.speed,
-      arcane: fd.stats.arcane,
-      affinity: Affinity[fd.affinity] ?? String(fd.affinity),
-    };
-  }
-
   private emitStateUpdate(): void {
     if (!this.battleState) return;
     const player = this.battleState.playerFamiliar;
@@ -558,7 +545,7 @@ preload(): void {
       .map((id) => getFamiliar(id))
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
-        const state = this.toFamiliarStateFromData(fd);
+        const state = toFamiliarStateFromData(fd);
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -566,7 +553,10 @@ preload(): void {
         return state;
       });
     if (party.length > 0) {
-      party[0] = this.toFamiliarState(player);
+      // Reflect the active familiar at its actual party position so the HUD
+      // highlights the right member after a swap.
+      const activeIdx = Math.min(this.activeFamiliarIndex, party.length - 1);
+      party[activeIdx] = this.toFamiliarState(player);
     }
     const abilities: AbilityOption[] = player.familiarData.abilities
       .map((id) => getAbility(id))
@@ -620,7 +610,7 @@ preload(): void {
     // Clean up battle background
     this.sceneBackground?.destroy();
     this.sceneBackground = undefined;
-    this.scene.start('WorldMapScene');
+    this.scene.start(SCENE_KEYS.WORLD_MAP);
   };
 
   private onShutdown(): void {

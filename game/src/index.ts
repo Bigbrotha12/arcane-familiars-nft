@@ -1,4 +1,4 @@
-export { createGame, destroyGame } from './main'
+export { createGame } from './main'
 export type { PhaserGame } from './main'
 export { gameEventBus } from './event-bus'
 export { GameEvent } from './events'

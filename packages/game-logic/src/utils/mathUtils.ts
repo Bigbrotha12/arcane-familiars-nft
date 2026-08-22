@@ -33,17 +33,3 @@ export function weightedRandom(rng: () => number, entries: { weight: number }[])
   }
   return entries.length - 1;
 }
-
-/**
- * Clamp a value between min and max.
- */
-export function clamp(value: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, value));
-}
-
-/**
- * Generate a random float in [min, max).
- */
-export function randomFloat(rng: () => number, min: number, max: number): number {
-  return rng() * (max - min) + min;
-}

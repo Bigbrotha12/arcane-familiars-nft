@@ -35,11 +35,11 @@ async function imxFetch<T>(baseURL: string, path: string, params: Record<string,
 
   const res = await fetch(url.toString(), {
     headers: { 'Content-Type': 'application/json' },
+    signal: AbortSignal.timeout(10_000),
   });
 
   if (!res.ok) {
-    const detail = await res.text().catch(() => '');
-    throw new Error(`IMX request failed (${res.status}): ${detail}`);
+    throw new ImxRequestError(`IMX request failed (${res.status})`, res.status);
   }
 
   return res.json() as Promise<T>;
@@ -89,6 +89,16 @@ export async function getUserBalances(
 ): Promise<unknown> {
   const baseURL = getIMXBaseURL(environment, bindings);
   return imxFetch<unknown>(baseURL, `/v2/balances/${address}`, {});
+}
+
+export class ImxRequestError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = 'ImxRequestError';
+    this.status = status;
+  }
 }
 
 export { getErrorMessage };

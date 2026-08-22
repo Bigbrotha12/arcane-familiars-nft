@@ -1,7 +1,7 @@
 import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
-import { getItem, ItemEffect } from '@/data/items';
+import { getItem, ItemEffect, ItemType } from '@/data/items';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -42,8 +42,10 @@ export function calculateDamage(
 
 /**
  * Tick status effects: apply HoT/DoT, decrement durations, remove expired.
+ * Effects in `skip` keep their current duration (e.g. effects applied by the
+ * second actor this turn, which must survive until the end of the next turn).
  */
-export function applyStatusEffects(familiar: BattleFamiliar): BattleFamiliar {
+export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEffect>): BattleFamiliar {
   const updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
   let hpChange = 0;
 
@@ -61,7 +63,7 @@ export function applyStatusEffects(familiar: BattleFamiliar): BattleFamiliar {
   );
 
   updated.statusEffects = updated.statusEffects
-    .map((e) => ({ ...e, turnsRemaining: e.turnsRemaining - 1 }))
+    .map((e) => (skip?.has(e) ? e : { ...e, turnsRemaining: e.turnsRemaining - 1 }))
     .filter((e) => e.turnsRemaining > 0);
 
   return updated;
@@ -112,9 +114,11 @@ export function resolveTurn(
     }
   }
 
-  // Tick status effects
+  // Tick status effects. Effects applied by the enemy (the second actor) must
+  // not be decremented this turn — they have not protected against anything yet.
+  const freshEnemyEffects = new Set<StatusEffect>(enemyResult.appliedEffects ?? []);
   updatedPlayer = applyStatusEffects(updatedPlayer);
-  updatedEnemy = applyStatusEffects(updatedEnemy);
+  updatedEnemy = applyStatusEffects(updatedEnemy, freshEnemyEffects);
 
   // Mutual KO: both combatants fall on the same turn. The player is awarded
   // the victory (checkBattleOutcome checks the enemy first) but survives with
@@ -144,9 +148,17 @@ function applyActionResult(
     updated.currentMp = Math.min(updated.familiarData.stats.maxMp, updated.currentMp + result.value);
   }
 
-  // Apply status effects
+  // Apply status effects. Re-applying an effect from the same ability
+  // refreshes it instead of stacking multiplicatively.
   if (result.appliedEffects) {
-    updated.statusEffects.push(...result.appliedEffects);
+    for (const effect of result.appliedEffects) {
+      const existingIdx = updated.statusEffects.findIndex((e) => e.abilityId === effect.abilityId);
+      if (existingIdx >= 0) {
+        updated.statusEffects[existingIdx] = effect;
+      } else {
+        updated.statusEffects.push(effect);
+      }
+    }
   }
 
   return updated;
@@ -230,13 +242,13 @@ function executeAction(
 
   if (action.type === ActionType.Item && action.itemId) {
     const item = getItem(action.itemId);
-    if (!item) {
+    if (!item || item.type !== ItemType.Consumable) {
       return {
         effectType: EffectType.Damage,
         targetId: source.uid,
         value: 0,
         isCritical: false,
-        description: `Unknown item: ${action.itemId}`,
+        description: `Unknown or non-consumable item: ${action.itemId}`,
       };
     }
 
