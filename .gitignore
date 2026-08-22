@@ -30,6 +30,5 @@ game/node_modules/*
 backend/.dev.vars
 backend/.wrangler/
 
-# Game
-
-.gstack/
+# tools
+.opencode/*

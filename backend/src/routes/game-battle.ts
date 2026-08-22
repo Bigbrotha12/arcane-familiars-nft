@@ -38,6 +38,7 @@ function createBattleFamiliar(familiarId: string): BattleFamiliar {
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
 
   return {
+    uid: generateId(),
     familiarData: data,
     currentHp: data.stats.hp,
     currentMp: data.stats.mp,
@@ -45,6 +46,13 @@ function createBattleFamiliar(familiarId: string): BattleFamiliar {
     cooldowns: {},
     isAlly: false,
   };
+}
+
+// Backfill unique combatant ids for battles persisted before the uid field
+// existed. Targeting relies on uid, so a missing uid would make results miss.
+function ensureBattleUids(battle: BattleState): void {
+  if (!battle.playerFamiliar.uid) battle.playerFamiliar.uid = generateId();
+  if (!battle.enemyFamiliar.uid) battle.enemyFamiliar.uid = generateId();
 }
 
 function getPersistedResources(
@@ -139,6 +147,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       // and re-starting cannot reroll enemy strength.
       const level = pending.level ?? area.levelRange[0];
       enemyFamiliar = {
+        uid: generateId(),
         familiarData: scaleEnemy(baseEnemy, level),
         currentHp: Math.round(baseEnemy.stats.hp * (1 + 0.1 * (level - 1))),
         currentMp: Math.round(baseEnemy.stats.mp * (1 + 0.1 * (level - 1))),
@@ -196,6 +205,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     const battle: BattleState = JSON.parse(row.battle_json);
+    ensureBattleUids(battle);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -406,6 +416,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     }
 
     const battle: BattleState = JSON.parse(row.battle_json);
+    ensureBattleUids(battle);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);

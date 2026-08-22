@@ -24,14 +24,14 @@ export function selectEnemyAction(
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
       if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Ally && enemy.currentMp >= ability.mpCost) {
-        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
+        return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }
     // Also check self-heal abilities
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
       if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Self && enemy.currentMp >= ability.mpCost) {
-        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
+        return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }
   }
@@ -42,7 +42,7 @@ export function selectEnemyAction(
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
       if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Buff && enemy.currentMp >= ability.mpCost) {
-        return { type: ActionType.Ability, abilityId, targetId: enemy.familiarData.id };
+        return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }
   }
@@ -64,10 +64,10 @@ export function selectEnemyAction(
       }
     }
     if (bestDamageAbility) {
-      return { type: ActionType.Ability, abilityId: bestDamageAbility.id, targetId: player.familiarData.id };
+      return { type: ActionType.Ability, abilityId: bestDamageAbility.id, targetId: player.uid };
     }
   }
 
   // 4. Basic attack
-  return { type: ActionType.Attack, targetId: player.familiarData.id };
+  return { type: ActionType.Attack, targetId: player.uid };
 }

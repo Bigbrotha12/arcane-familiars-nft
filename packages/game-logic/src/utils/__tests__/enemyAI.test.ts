@@ -8,6 +8,7 @@ import type { BattleFamiliar, BattleAction } from "../../types/battle";
 
 function makeEnemy(overrides: Partial<BattleFamiliar> = {}): BattleFamiliar {
   return {
+    uid: "enemy",
     familiarData: getFamiliar("meadowGuardian")!,
     currentHp: 240,
     currentMp: 160,
@@ -20,6 +21,7 @@ function makeEnemy(overrides: Partial<BattleFamiliar> = {}): BattleFamiliar {
 
 function makePlayer(overrides: Partial<BattleFamiliar> = {}): BattleFamiliar {
   return {
+    uid: "player",
     familiarData: getFamiliar("whiteDog")!,
     currentHp: 120,
     currentMp: 80,
@@ -43,7 +45,7 @@ describe("selectEnemyAction", () => {
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
       type: ActionType.Attack,
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -54,7 +56,7 @@ describe("selectEnemyAction", () => {
     expect(action).toEqual<BattleAction>({
       type: ActionType.Ability,
       abilityId: "naturabless",
-      targetId: enemy.familiarData.id,
+      targetId: enemy.uid,
     });
   });
 
@@ -65,7 +67,7 @@ describe("selectEnemyAction", () => {
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
       type: ActionType.Attack,
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -77,7 +79,7 @@ describe("selectEnemyAction", () => {
     expect(action).toEqual<BattleAction>({
       type: ActionType.Ability,
       abilityId: "sturdy",
-      targetId: enemy.familiarData.id,
+      targetId: enemy.uid,
     });
   });
 
@@ -88,7 +90,7 @@ describe("selectEnemyAction", () => {
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
       type: ActionType.Attack,
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -110,7 +112,7 @@ describe("selectEnemyAction", () => {
     expect(action).toEqual<BattleAction>({
       type: ActionType.Ability,
       abilityId: "brave",
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -135,7 +137,7 @@ describe("selectEnemyAction", () => {
     expect(action).toEqual<BattleAction>({
       type: ActionType.Ability,
       abilityId: "fireball",
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -155,7 +157,7 @@ describe("selectEnemyAction", () => {
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
       type: ActionType.Attack,
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 
@@ -176,7 +178,7 @@ describe("selectEnemyAction", () => {
     const action = selectEnemyAction(enemy, player, rng);
     expect(action).toEqual<BattleAction>({
       type: ActionType.Attack,
-      targetId: player.familiarData.id,
+      targetId: player.uid,
     });
   });
 });
