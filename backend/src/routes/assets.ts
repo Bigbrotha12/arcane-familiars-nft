@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Bindings } from '../types';
-import { getUserAssets, isValidEthAddress } from '../utils/imx';
+import { getUserAssets, isValidEthAddress, ImxRequestError } from '../utils/imx';
 import { getErrorMessage } from '../utils/http';
 
 const assetsRouter = new Hono<{ Bindings: Bindings }>();
@@ -22,6 +22,9 @@ assetsRouter.get('/v1/assets/:address', async (c) => {
     return c.json(data);
   } catch (error: unknown) {
     console.error('IMX assets error:', getErrorMessage(error));
+    if (error instanceof ImxRequestError && error.status < 500) {
+      return c.json({ error: 'Failed to fetch assets' }, error.status as 400 | 404);
+    }
     return c.json({ error: 'Failed to fetch assets' }, 502);
   }
 });

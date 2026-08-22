@@ -4,9 +4,11 @@ import { useBlocker } from 'react-router-dom'
 interface UseGameGuardOptions {
   onAutoSave: () => void
   onShowExitModal: () => void
+  /** Return false to skip the autosave (e.g. mid-battle, when the server owns writes). */
+  canAutoSave?: () => boolean
 }
 
-export function useGameGuard({ onAutoSave, onShowExitModal }: UseGameGuardOptions) {
+export function useGameGuard({ onAutoSave, onShowExitModal, canAutoSave }: UseGameGuardOptions) {
   const blocker = useBlocker(
     ({ currentLocation, nextLocation }) =>
       currentLocation.pathname !== nextLocation.pathname
@@ -31,6 +33,7 @@ export function useGameGuard({ onAutoSave, onShowExitModal }: UseGameGuardOption
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       e.preventDefault()
+      e.returnValue = ''
     }
     window.addEventListener('beforeunload', handler)
     return () => window.removeEventListener('beforeunload', handler)
@@ -39,10 +42,12 @@ export function useGameGuard({ onAutoSave, onShowExitModal }: UseGameGuardOption
   // Ref to hold the latest onAutoSave callback (avoids re-binding the event listener)
   const autoSaveRef = useRef(onAutoSave)
   autoSaveRef.current = onAutoSave
+  const canAutoSaveRef = useRef(canAutoSave)
+  canAutoSaveRef.current = canAutoSave
 
   useEffect(() => {
     const handler = () => {
-      if (document.hidden) {
+      if (document.hidden && canAutoSaveRef.current?.() !== false) {
         autoSaveRef.current()
       }
     }

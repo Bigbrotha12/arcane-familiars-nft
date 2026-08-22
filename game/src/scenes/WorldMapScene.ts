@@ -32,16 +32,6 @@ export class WorldMapScene extends Phaser.Scene {
 
   constructor() {
     super({ key: SCENE_KEYS.WORLD_MAP });
-    this.ariaLiveElement = document.createElement('div');
-    this.ariaLiveElement.setAttribute('role', 'status');
-    this.ariaLiveElement.setAttribute('aria-live', 'polite');
-    this.ariaLiveElement.setAttribute('aria-atomic', 'true');
-    this.ariaLiveElement.style.position = 'absolute';
-    this.ariaLiveElement.style.left = '-9999px';
-    this.ariaLiveElement.style.width = '1px';
-    this.ariaLiveElement.style.height = '1px';
-    this.ariaLiveElement.style.overflow = 'hidden';
-    document.body.appendChild(this.ariaLiveElement);
   }
 
   init(): void {
@@ -51,6 +41,21 @@ export class WorldMapScene extends Phaser.Scene {
     this.selectedCardIndex = -1;
     this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
+
+    // Created per scene start; removed on shutdown so revisits don't leak nodes.
+    if (!this.ariaLiveElement) {
+      const el = document.createElement('div');
+      el.setAttribute('role', 'status');
+      el.setAttribute('aria-live', 'polite');
+      el.setAttribute('aria-atomic', 'true');
+      el.style.position = 'absolute';
+      el.style.left = '-9999px';
+      el.style.width = '1px';
+      el.style.height = '1px';
+      el.style.overflow = 'hidden';
+      document.body.appendChild(el);
+      this.ariaLiveElement = el;
+    }
   }
 
   async create(): Promise<void> {

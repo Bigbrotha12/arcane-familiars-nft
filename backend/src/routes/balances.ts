@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import type { Bindings } from '../types';
-import { getUserBalances, isValidEthAddress } from '../utils/imx';
+import { getUserBalances, isValidEthAddress, ImxRequestError } from '../utils/imx';
 import { getErrorMessage } from '../utils/http';
 
 const balancesRouter = new Hono<{ Bindings: Bindings }>();
@@ -19,6 +19,9 @@ balancesRouter.get('/v2/balances/:address', async (c) => {
     return c.json(data);
   } catch (error: unknown) {
     console.error('IMX balances error:', getErrorMessage(error));
+    if (error instanceof ImxRequestError && error.status < 500) {
+      return c.json({ error: 'Failed to fetch balances' }, error.status as 400 | 404);
+    }
     return c.json({ error: 'Failed to fetch balances' }, 502);
   }
 });

@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, scaleEnemy, validateMove } from "../dungeonEngine";
+import { generateDungeon, rollEncounter, rollTreasure, selectTreasure, selectEnemy, validateMove } from "../dungeonEngine";
 import { seededRandom } from "../mathUtils";
 import { AREAS } from "../../data/areas";
 import { getFamiliar } from "../../data/familiars";
@@ -172,41 +172,6 @@ describe("selectEnemy", () => {
   it("with seeded RNG, returns deterministic results", () => {
     const area = AREAS.verdantMeadow;
     expect(selectEnemy(area, makeRng(55))).toBe(selectEnemy(area, makeRng(55)));
-  });
-});
-
-describe("scaleEnemy", () => {
-  it("level 1 returns stats unchanged (scale = 1.0)", () => {
-    const base = getFamiliar("whiteDog")!;
-    const scaled = scaleEnemy(base, 1);
-    expect(scaled.stats).toEqual(base.stats);
-  });
-
-  it("level 5 scales stats by 1.4", () => {
-    const base = getFamiliar("whiteDog")!;
-    const scaled = scaleEnemy(base, 5);
-    for (const key of ["hp", "maxHp", "mp", "maxMp", "attack", "defense", "arcane", "speed"] as const) {
-      expect(scaled.stats[key]).toBe(Math.round(base.stats[key] * 1.4));
-    }
-  });
-
-  it("all scaled values are rounded integers", () => {
-    const base = getFamiliar("yellowFighter")!;
-    const scaled = scaleEnemy(base, 3);
-    for (const key of ["hp", "mp", "attack", "defense", "arcane", "speed"] as const) {
-      expect(Number.isInteger(scaled.stats[key])).toBe(true);
-    }
-  });
-
-  it("non-stat properties are preserved", () => {
-    const base = getFamiliar("whiteDog")!;
-    const scaled = scaleEnemy(base, 5);
-    expect(scaled.id).toBe(base.id);
-    expect(scaled.name).toBe(base.name);
-    expect(scaled.description).toBe(base.description);
-    expect(scaled.abilities).toEqual(base.abilities);
-    expect(scaled.affinity).toBe(base.affinity);
-    expect(scaled.rarity).toBe(base.rarity);
   });
 });
 

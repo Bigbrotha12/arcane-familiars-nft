@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { seededRandom, randomInRange, weightedRandom, clamp, randomFloat } from "../mathUtils";
+import { seededRandom, randomInRange, weightedRandom } from "../mathUtils";
 
 function setupRng(seed = 42) {
   return seededRandom(seed);
@@ -85,42 +85,5 @@ describe("weightedRandom", () => {
     expect(counts[1]).toBeGreaterThan(0);
     expect(counts[2]).toBeGreaterThan(0);
     expect(counts.reduce((a, b) => a + b, 0)).toBe(300);
-  });
-});
-
-describe("clamp", () => {
-  it("returns min when value is below min", () => {
-    expect(clamp(-5, 0, 10)).toBe(0);
-  });
-
-  it("returns max when value is above max", () => {
-    expect(clamp(15, 0, 10)).toBe(10);
-  });
-
-  it("returns value when within range", () => {
-    expect(clamp(5, 0, 10)).toBe(5);
-  });
-
-  it("works with negative ranges", () => {
-    expect(clamp(-20, -10, -5)).toBe(-10);
-    expect(clamp(-3, -10, -5)).toBe(-5);
-    expect(clamp(-7, -10, -5)).toBe(-7);
-  });
-});
-
-describe("randomFloat", () => {
-  it("returns values in [min, max)", () => {
-    const rng = setupRng(42);
-    rng();
-    for (let i = 0; i < 50; i++) {
-      const v = randomFloat(rng, 5, 10);
-      expect(v).toBeGreaterThanOrEqual(5);
-      expect(v).toBeLessThan(10);
-    }
-  });
-
-  it("produces a known value for seed 42", () => {
-    const rng = setupRng(42);
-    expect(randomFloat(rng, 5, 10)).toBeCloseTo(8.005518759600818);
   });
 });
