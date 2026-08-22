@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, FAMILIARS, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
+import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
@@ -8,6 +8,8 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData } from '../utils/familiarState';
+import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
+import { effectAnimKey, getFamiliarSprites } from '../sprites/registry';
 import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, BattlePhase, AbilityOption, ItemOption } from '../events';
 
 interface BattleSceneData {
@@ -73,9 +75,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
 preload(): void {
-    for (const id of Object.keys(FAMILIARS)) {
-      this.load.image(`familiar_${id}`, `/assets/sprites/familiars/${id}/${id}_portrait.png`);
-    }
+    preloadFamiliarAssets(this);
     // Load battle background images
     this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
     this.load.image('battle_bg_crystal', '/assets/battle_bg/battle_bg_crystal.png');
@@ -83,35 +83,6 @@ preload(): void {
     this.load.image('battle_bg_meadow_guardian', '/assets/battle_bg/battle_bg_meadow_guardian.png');
     this.load.image('battle_bg_cave_warden', '/assets/battle_bg/battle_bg_cave_warden.png');
     this.load.image('battle_bg_shadow_lord', '/assets/battle_bg/battle_bg_shadow_lord.png');
-    // Familiar idle sheets (whiteDog only) + ability cast VFX
-    this.load.spritesheet('familiar_whiteDog_idle', '/assets/sprites/familiars/whiteDog/idle/whiteDog_idle.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('familiar_whiteDog_idle_left', '/assets/sprites/familiars/whiteDog/idle/whiteDog_idle_left.png', { frameWidth: 64, frameHeight: 64 });
-    this.load.spritesheet('effect_cast_light', '/assets/sprites/effects/effect_cast_light.png', { frameWidth: 96, frameHeight: 96 });
-  }
-
-  private createAnimations(): void {
-    const idleSheets: Array<[string, string]> = [
-      ['familiar_whiteDog_idle', 'familiar_idle'],
-      ['familiar_whiteDog_idle_left', 'familiar_idle_left'],
-    ];
-    for (const [textureKey, animKey] of idleSheets) {
-      if (this.textures.exists(textureKey) && !this.anims.exists(animKey)) {
-        this.anims.create({
-          key: animKey,
-          frames: this.anims.generateFrameNumbers(textureKey, { start: 0, end: 48 }),
-          frameRate: 24,
-          repeat: -1,
-        });
-      }
-    }
-    if (this.textures.exists('effect_cast_light') && !this.anims.exists('effect_cast_light')) {
-      this.anims.create({
-        key: 'effect_cast_light',
-        frames: this.anims.generateFrameNumbers('effect_cast_light', { start: 0, end: 24 }),
-        frameRate: 24,
-        repeat: 0,
-      });
-    }
   }
 
   async create(): Promise<void> {
@@ -145,7 +116,7 @@ preload(): void {
       this.sceneBackground.setOverlay(0x000000, 0.4);
     }
 
-    this.createAnimations();
+    createFamiliarAnimations(this);
 
     this.battleUI = new BattleUI(this);
     this.battleUI.init();
@@ -258,11 +229,11 @@ preload(): void {
 
       this.battleUI.addLogMessage(turnResult.playerAction.description);
       this.showActionResultVisual(turnResult.playerAction);
-      if (
-        action.type === ActionType.Ability &&
-        this.battleState.playerFamiliar.familiarData.id === 'whiteDog'
-      ) {
-        this.battleUI.playAbilityEffect('effect_cast_light');
+      if (action.type === ActionType.Ability) {
+        const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
+        if (sprites?.abilityEffect) {
+          this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
+        }
       }
 
       this.timers.push(this.time.delayedCall(this.ENEMY_ACTION_DELAY_MS, () => {
@@ -590,10 +561,9 @@ preload(): void {
         return state;
       });
     if (party.length > 0) {
-      // Reflect the active familiar at its actual party position so the HUD
-      // highlights the right member after a swap.
-      const activeIdx = Math.min(this.activeFamiliarIndex, party.length - 1);
-      party[activeIdx] = this.toFamiliarState(player);
+      // Party is rotated active-first (HUD contract: party[0] is the active
+      // familiar); stamp live battle stats onto slot 0.
+      party[0] = this.toFamiliarState(player);
     }
     const abilities: AbilityOption[] = player.familiarData.abilities
       .map((id) => getAbility(id))

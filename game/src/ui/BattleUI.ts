@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import type { BattleFamiliar } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
+import { familiarTextureKey, idleAnimKey, idleTextureKey, PLACEHOLDER_FAMILIAR_ID } from '../sprites/registry';
 
 export class BattleUI {
   private scene: Phaser.Scene;
@@ -50,7 +51,7 @@ export class BattleUI {
     const sy = this.enemyCenterY;
 
     this.createGround(sx, sy);
-    this.enemySprite = this.register(this.scene.add.sprite(sx, sy, 'familiar_whiteDog'));
+    this.enemySprite = this.register(this.scene.add.sprite(sx, sy, familiarTextureKey(PLACEHOLDER_FAMILIAR_ID)));
     this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.enemySprite.setDepth(1);
   }
@@ -60,7 +61,7 @@ export class BattleUI {
     const sy = this.playerCenterY;
 
     this.createGround(sx, sy);
-    this.playerSprite = this.register(this.scene.add.sprite(sx, sy, 'familiar_whiteDog'));
+    this.playerSprite = this.register(this.scene.add.sprite(sx, sy, familiarTextureKey(PLACEHOLDER_FAMILIAR_ID)));
     this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.playerSprite.setDepth(1);
   }
@@ -106,21 +107,23 @@ export class BattleUI {
   }
 
   updatePlayerDisplay(familiar: BattleFamiliar): void {
-    this.applyDisplay(this.playerSprite, familiar, '_idle', 'familiar_idle');
+    this.applyDisplay(this.playerSprite, familiar, 'right');
   }
 
   updateEnemyDisplay(familiar: BattleFamiliar): void {
-    this.applyDisplay(this.enemySprite, familiar, '_idle_left', 'familiar_idle_left');
+    this.applyDisplay(this.enemySprite, familiar, 'left');
   }
 
-  private applyDisplay(sprite: Phaser.GameObjects.Sprite, familiar: BattleFamiliar, idleSuffix: string, animKey: string): void {
-    const textureKey = `familiar_${familiar.familiarData.id}`;
-    const idleTextureKey = `${textureKey}${idleSuffix}`;
-    if (this.scene.textures.exists(idleTextureKey) && this.scene.anims.exists(animKey)) {
-      const alreadyIdle = sprite.anims.currentAnim?.key === animKey && sprite.frame.texture.key === idleTextureKey;
+  private applyDisplay(sprite: Phaser.GameObjects.Sprite, familiar: BattleFamiliar, facing: 'right' | 'left'): void {
+    const id = familiar.familiarData.id;
+    const textureKey = familiarTextureKey(id);
+    const idleKey = idleTextureKey(id, facing);
+    const animKey = idleAnimKey(id, facing);
+    if (this.scene.textures.exists(idleKey) && this.scene.anims.exists(animKey)) {
+      const alreadyIdle = sprite.anims.currentAnim?.key === animKey && sprite.frame.texture.key === idleKey;
       if (alreadyIdle) return;
       this.stopAnimIfPlaying(sprite);
-      sprite.setTexture(idleTextureKey);
+      sprite.setTexture(idleKey);
       sprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
       sprite.play(animKey, true);
     } else if (this.scene.textures.exists(textureKey)) {

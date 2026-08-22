@@ -7,6 +7,8 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
+import { preloadFamiliarPortraits } from '../sprites/loader';
+import { familiarTextureKey } from '../sprites/registry';
 
 interface PartySelectData {
   areaId: string;
@@ -103,9 +105,7 @@ export class PartySelectScene extends Phaser.Scene {
   }
 
 preload(): void {
-    for (const id of Object.keys(FAMILIARS)) {
-      this.load.image(`familiar_${id}`, `/assets/sprites/familiars/${id}/${id}_portrait.png`);
-    }
+    preloadFamiliarPortraits(this);
   }
 
   async create(): Promise<void> {
@@ -235,7 +235,7 @@ preload(): void {
 
       const container = this.add.container(x, this.layout.y(LAYOUT.CARD_Y), [border, bg]);
 
-      const portrait = this.add.image(0, -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70), `familiar_${id}`);
+      const portrait = this.add.image(0, -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70), familiarTextureKey(id));
       portrait.setDisplaySize(this.layout.s(110), this.layout.s(110));
       portrait.setDepth(1);
 
