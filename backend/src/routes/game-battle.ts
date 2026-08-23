@@ -168,13 +168,18 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       seed: battleSeed,
     };
 
-    await c.env.DB
-      .prepare(
+    // Supersede any leftover battle row: rows are only removed when a battle
+    // ends (win/loss/flee), so an abandoned session (closed tab, kicked out
+    // mid-battle) leaves a row behind that violates the one-battle-per-user
+    // unique index and would 500 every future start. There is no
+    // battle-resume path, so deleting it here is safe.
+    await c.env.DB.batch([
+      c.env.DB.prepare('DELETE FROM active_battles WHERE anonymous_id = ?').bind(anonymousId),
+      c.env.DB.prepare(
         `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
          VALUES (?, ?, ?, datetime('now'))`
-      )
-      .bind(battle.id, anonymousId, JSON.stringify(battle))
-      .run();
+      ).bind(battle.id, anonymousId, JSON.stringify(battle)),
+    ]);
 
     return c.json({ battle });
   } catch (error: unknown) {
