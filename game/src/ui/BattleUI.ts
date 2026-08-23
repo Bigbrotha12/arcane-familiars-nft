@@ -1,13 +1,14 @@
 import Phaser from 'phaser';
 import type { BattleFamiliar } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
+import { familiarTextureKey, idleAnimKey, idleTextureKey, PLACEHOLDER_FAMILIAR_ID } from '../sprites/registry';
 
 export class BattleUI {
   private scene: Phaser.Scene;
   private layout: Layout;
 
-  private playerSprite!: Phaser.GameObjects.Image;
-  private enemySprite!: Phaser.GameObjects.Image;
+  private playerSprite!: Phaser.GameObjects.Sprite;
+  private enemySprite!: Phaser.GameObjects.Sprite;
   private battleLog: string[] = [];
   private connectingText?: Phaser.GameObjects.Text;
   private owned: Phaser.GameObjects.GameObject[] = [];
@@ -50,7 +51,7 @@ export class BattleUI {
     const sy = this.enemyCenterY;
 
     this.createGround(sx, sy);
-    this.enemySprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.enemySprite = this.register(this.scene.add.sprite(sx, sy, familiarTextureKey(PLACEHOLDER_FAMILIAR_ID)));
     this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.enemySprite.setDepth(1);
   }
@@ -60,7 +61,7 @@ export class BattleUI {
     const sy = this.playerCenterY;
 
     this.createGround(sx, sy);
-    this.playerSprite = this.register(this.scene.add.image(sx, sy, 'familiar_whiteDog'));
+    this.playerSprite = this.register(this.scene.add.sprite(sx, sy, familiarTextureKey(PLACEHOLDER_FAMILIAR_ID)));
     this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     this.playerSprite.setDepth(1);
   }
@@ -106,19 +107,51 @@ export class BattleUI {
   }
 
   updatePlayerDisplay(familiar: BattleFamiliar): void {
-    const textureKey = `familiar_${familiar.familiarData.id}`;
-    if (this.scene.textures.exists(textureKey)) {
-      this.playerSprite.setTexture(textureKey);
-      this.playerSprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
-    }
+    this.applyDisplay(this.playerSprite, familiar, 'right');
   }
 
   updateEnemyDisplay(familiar: BattleFamiliar): void {
-    const textureKey = `familiar_${familiar.familiarData.id}`;
-    if (this.scene.textures.exists(textureKey)) {
-      this.enemySprite.setTexture(textureKey);
-      this.enemySprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
+    this.applyDisplay(this.enemySprite, familiar, 'left');
+  }
+
+  private applyDisplay(sprite: Phaser.GameObjects.Sprite, familiar: BattleFamiliar, facing: 'right' | 'left'): void {
+    const id = familiar.familiarData.id;
+    const textureKey = familiarTextureKey(id);
+    const idleKey = idleTextureKey(id, facing);
+    const animKey = idleAnimKey(id, facing);
+    if (this.scene.textures.exists(idleKey) && this.scene.anims.exists(animKey)) {
+      const alreadyIdle = sprite.anims.currentAnim?.key === animKey && sprite.frame.texture.key === idleKey;
+      if (alreadyIdle) return;
+      this.stopAnimIfPlaying(sprite);
+      sprite.setTexture(idleKey);
+      sprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
+      sprite.play(animKey, true);
+    } else if (this.scene.textures.exists(textureKey)) {
+      const alreadyStatic = !sprite.anims.isPlaying && sprite.frame.texture.key === textureKey;
+      if (alreadyStatic) return;
+      this.stopAnimIfPlaying(sprite);
+      sprite.setTexture(textureKey);
+      sprite.setDisplaySize(this.layout.s(120), this.layout.s(120));
     }
+  }
+
+  private stopAnimIfPlaying(sprite: Phaser.GameObjects.Sprite): void {
+    if (sprite.anims.isPlaying) {
+      sprite.anims.stop();
+    }
+  }
+
+  playAbilityEffect(animKey: string): void {
+    if (!this.scene.textures.exists(animKey) || !this.scene.anims.exists(animKey)) return;
+    const { x, y } = this.getEnemyDamagePosition();
+    const effect = this.register(this.scene.add.sprite(x, y, animKey));
+    effect.setDepth(2);
+    effect.setDisplaySize(this.layout.s(140), this.layout.s(140));
+    effect.once(Phaser.Animations.Events.ANIMATION_COMPLETE, () => {
+      effect.destroy();
+      this.removeFromOwned(effect);
+    });
+    effect.play(animKey);
   }
 
   addLogMessage(message: string): void {
@@ -158,6 +191,7 @@ export class BattleUI {
       strokeThickness: this.layout.s(3),
     });
     textObj.setOrigin(0.5);
+    textObj.setDepth(3);
 
     const tween = this.scene.tweens.add({
       targets: textObj,

@@ -12,7 +12,7 @@ export function createDefaultGameState(anonymousId: string): GameState {
     version: 1,
     id: generateId(),
     anonymousId,
-    playerFamiliars: ['yellowFighter', 'aquaSprite'],
+    playerFamiliars: ['whiteDog', 'yellowFighter', 'aquaSprite'],
     activeParty: [],
     inventory: {
       currency: 100,

@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, FAMILIARS, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
+import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
@@ -8,6 +8,8 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData } from '../utils/familiarState';
+import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
+import { effectAnimKey, getFamiliarSprites } from '../sprites/registry';
 import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, BattlePhase, AbilityOption, ItemOption } from '../events';
 
 interface BattleSceneData {
@@ -73,9 +75,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
 preload(): void {
-    for (const id of Object.keys(FAMILIARS)) {
-      this.load.image(`familiar_${id}`, `/assets/sprites/familiars/${id}/${id}_portrait.png`);
-    }
+    preloadFamiliarAssets(this);
     // Load battle background images
     this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
     this.load.image('battle_bg_crystal', '/assets/battle_bg/battle_bg_crystal.png');
@@ -115,6 +115,8 @@ preload(): void {
       this.sceneBackground.setImage(bgKey);
       this.sceneBackground.setOverlay(0x000000, 0.4);
     }
+
+    createFamiliarAnimations(this);
 
     this.battleUI = new BattleUI(this);
     this.battleUI.init();
@@ -227,6 +229,12 @@ preload(): void {
 
       this.battleUI.addLogMessage(turnResult.playerAction.description);
       this.showActionResultVisual(turnResult.playerAction);
+      if (action.type === ActionType.Ability) {
+        const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
+        if (sprites?.abilityEffect) {
+          this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
+        }
+      }
 
       this.timers.push(this.time.delayedCall(this.ENEMY_ACTION_DELAY_MS, () => {
         this.battleUI.addLogMessage(turnResult.enemyAction.description);
@@ -553,10 +561,9 @@ preload(): void {
         return state;
       });
     if (party.length > 0) {
-      // Reflect the active familiar at its actual party position so the HUD
-      // highlights the right member after a swap.
-      const activeIdx = Math.min(this.activeFamiliarIndex, party.length - 1);
-      party[activeIdx] = this.toFamiliarState(player);
+      // Party is rotated active-first (HUD contract: party[0] is the active
+      // familiar); stamp live battle stats onto slot 0.
+      party[0] = this.toFamiliarState(player);
     }
     const abilities: AbilityOption[] = player.familiarData.abilities
       .map((id) => getAbility(id))
