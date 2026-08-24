@@ -4,6 +4,21 @@
 // and emits callbacks — GamePage owns event-bus wiring (Step 6).
 
 import MiniMap from './MiniMap'
+
+const DIRECTION_ICONS: Record<string, string> = {
+  north: '▲',
+  south: '▼',
+  east: '►',
+  west: '◄',
+  northeast: '▲►',
+  northwest: '▲◄',
+  southeast: '▼►',
+  southwest: '▼◄',
+}
+
+function getDirectionIcon(direction: string): string | null {
+  return DIRECTION_ICONS[direction] ?? null
+}
 import RoomInfo from './RoomInfo'
 import CombinedControlsPanel from './CombinedControlsPanel'
 import EncounterOverlay from './EncounterOverlay'
@@ -43,6 +58,7 @@ function ExplorationHUD({
     .map((exit) => ({
       key: exit.roomId,
       label: exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1),
+      icon: getDirectionIcon(exit.direction),
       onClick: () => onNavigate(exit.roomId),
     }))
 
