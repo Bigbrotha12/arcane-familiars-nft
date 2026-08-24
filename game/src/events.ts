@@ -120,6 +120,7 @@ export interface ItemOption {
   description: string
   quantity: number
   usable: boolean
+  iconUrl?: string
 }
 
 export interface DungeonRoomSnapshot {

@@ -242,15 +242,46 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const state = loaded.state;
 
     // Consume items from the server-owned inventory.
+    let stateEffectNote: string | undefined;
     if (action.type === ActionType.Item && action.itemId) {
       const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
       if (!itemEntry || typeof itemEntry.quantity !== 'number' || itemEntry.quantity < 1) {
         return c.json({ error: 'You do not own this item' }, 400);
       }
-      if (!getItem(action.itemId)) {
+      const item = getItem(action.itemId);
+      if (!item) {
         return c.json({ error: 'Unknown item' }, 400);
       }
+
+      // Validate state-level effects BEFORE consuming, so a failed use does
+      // not eat the item.
+      const revive = item.effects.find((e) => e.kind === 'revive_party');
+      const fainted = revive && state.dungeon
+        ? state.dungeon.party.filter((id) => (state.dungeon?.partyHp[id] ?? 0) <= 0)
+        : [];
+      if (revive && fainted.length === 0) {
+        return c.json({ error: 'No fainted party members to revive' }, 400);
+      }
+
       itemEntry.quantity -= 1;
+
+      // State-level effects: applied here rather than in the battle engine,
+      // which only sees the two active combatants.
+      for (const effect of item.effects) {
+        if (effect.kind === 'grant_currency') {
+          state.inventory.currency += effect.value;
+          stateEffectNote = `gains ${effect.value} currency`;
+        }
+        if (effect.kind === 'revive_party' && state.dungeon) {
+          for (const id of fainted) {
+            const data = getFamiliar(id);
+            if (data) {
+              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
+            }
+          }
+          stateEffectNote = `revives ${fainted.length} party member${fainted.length === 1 ? '' : 's'}`;
+        }
+      }
     }
 
     // Derive a per-turn RNG from the battle seed so each turn gets a distinct,
@@ -356,6 +387,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       battleOutcome: outcome,
       rewards,
     };
+
+    // State-level item effects resolve outside the engine; surface them in
+    // the same log line the player already reads.
+    if (stateEffectNote) {
+      turnResult.playerAction.description += ` (${stateEffectNote})`;
+    }
 
     // Atomic: state + battle writes must succeed or fail together. Both
     // statements are conditional on the rows read above, so a stale writer
