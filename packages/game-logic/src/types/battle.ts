@@ -44,6 +44,10 @@ export interface ActionResult {
   isCritical: boolean;
   description: string;
   appliedEffects?: StatusEffect[];
+  /** Secondary MP restoration applied alongside the primary effect (multi-effect items). */
+  mpValue?: number;
+  /** Removes Debuff/Dot status effects from the target (item cleanse). */
+  cleanse?: boolean;
 }
 
 export enum Outcome {

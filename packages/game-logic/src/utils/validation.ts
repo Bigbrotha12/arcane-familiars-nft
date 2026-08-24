@@ -1,6 +1,7 @@
 import { ActionType, BattleResult, type BattleAction, type BattleState } from '@/types/battle';
 import type { DungeonState } from '@/types/exploration';
 import { getAbility } from '@/data/abilities';
+import { getItem, ItemType } from '@/data/items';
 import { validateMove } from '@/utils/dungeonEngine';
 
 export interface ValidationResult {
@@ -44,6 +45,10 @@ export function validateBattleAction(action: BattleAction, battleState: BattleSt
     case ActionType.Item: {
       if (!action.itemId) {
         return { valid: false, error: 'Item ID is required' };
+      }
+      const item = getItem(action.itemId);
+      if (!item || item.type !== ItemType.Consumable) {
+        return { valid: false, error: `Unknown or non-consumable item: ${action.itemId}` };
       }
       return { valid: true };
     }

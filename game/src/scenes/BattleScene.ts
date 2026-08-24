@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
+import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, describeItem, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
@@ -581,9 +581,10 @@ preload(): void {
       .map(({ item, itemData }) => ({
         id: item.itemId,
         name: itemData.name,
-        description: itemData.description,
+        description: describeItem(itemData),
         quantity: item.quantity,
         usable: item.quantity > 0,
+        iconUrl: itemData.icon ? `/assets/sprites/items/${itemData.icon}` : undefined,
       }));
     const snapshot: GameStateSnapshot = {
       familiars: [this.toFamiliarState(player)],
