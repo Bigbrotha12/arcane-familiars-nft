@@ -1,6 +1,15 @@
 import { type Area, type Room, type DungeonState, RoomType } from '@/types/exploration';
 import type { FamiliarData } from '@/data/familiars';
+import { ITEMS } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
+
+/**
+ * Dungeon treasure pool, derived from item data: any item with a dropWeight
+ * enters the pool automatically, so adding loot = adding data (items.ts).
+ */
+export const TREASURE_POOL: Room['treasurePool'] = Object.values(ITEMS)
+  .filter((item) => typeof item.dropWeight === 'number' && item.dropWeight > 0)
+  .map((item) => ({ itemId: item.id, weight: item.dropWeight as number }));
 
 const ROOM_NAMES = [
   'Twilight Path', 'Crystal Alcove', 'Mossy Chamber', 'Stone Corridor',
@@ -72,11 +81,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
       exits: [],
       encounterChance: 0.3 + depth * 0.3,
       treasureChance: 0.15 + depth * 0.1,
-      treasurePool: [
-        { itemId: 'potion_small', weight: 10 },
-        { itemId: 'potion_medium', weight: 5 },
-        { itemId: 'ether_small', weight: 3 },
-      ],
+      treasurePool: TREASURE_POOL.map((entry) => ({ ...entry })),
       cleared: false,
     };
     rooms[room.id] = room;

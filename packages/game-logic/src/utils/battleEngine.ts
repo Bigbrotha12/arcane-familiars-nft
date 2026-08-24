@@ -1,7 +1,7 @@
 import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
-import { getItem, ItemEffect, ItemType } from '@/data/items';
+import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -148,6 +148,11 @@ function applyActionResult(
     updated.currentMp = Math.min(updated.familiarData.stats.maxMp, updated.currentMp + result.value);
   }
 
+  // Secondary MP component of multi-effect items (e.g. Elixir: Heal + MpHeal).
+  if (result.mpValue) {
+    updated.currentMp = Math.min(updated.familiarData.stats.maxMp, updated.currentMp + result.mpValue);
+  }
+
   // Apply status effects. Re-applying an effect from the same ability
   // refreshes it instead of stacking multiplicatively.
   if (result.appliedEffects) {
@@ -161,7 +166,133 @@ function applyActionResult(
     }
   }
 
+  // Cleanse runs AFTER applying new effects so a cleanse+buff item keeps its
+  // own buff while stripping pre-existing Debuffs/Dots.
+  if (result.cleanse) {
+    updated.statusEffects = updated.statusEffects.filter(
+      (e) => e.type !== EffectType.Dot && e.type !== EffectType.Debuff,
+    );
+  }
+
   return updated;
+}
+
+/**
+ * Merge an item's combat effects into a single ActionResult. State-level
+ * effects (revive_party, grant_currency) are applied by the backend to the
+ * save state and intentionally ignored here.
+ *
+ * Constraint: an item must not mix self-targeted and enemy-targeted effects —
+ * the merged result carries a single targetId, so the enemy-targeted half
+ * wins and the rest is dropped. No shipped item mixes targets.
+ */
+function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleFamiliar): ActionResult {
+  const descriptions: string[] = [];
+  let damage = 0;
+  let hpHeal = 0;
+  let mpHeal = 0;
+  let cleanse = false;
+  let selfStatus: StatusEffect | undefined;
+  let enemyStatus: StatusEffect | undefined;
+
+  for (const effect of item.effects) {
+    switch (effect.kind) {
+      case 'heal_hp': {
+        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, effect.value));
+        hpHeal += healed;
+        descriptions.push(`restores ${healed} HP`);
+        break;
+      }
+      case 'heal_percentage': {
+        const healed = Math.max(0, Math.min(
+          source.familiarData.stats.maxHp - source.currentHp,
+          Math.floor((source.familiarData.stats.maxHp * effect.percentage) / 100),
+        ));
+        hpHeal += healed;
+        descriptions.push(`restores ${healed} HP`);
+        break;
+      }
+      case 'heal_mp': {
+        const restored = Math.max(0, Math.min(source.familiarData.stats.maxMp - source.currentMp, effect.value));
+        mpHeal += restored;
+        descriptions.push(`restores ${restored} MP`);
+        break;
+      }
+      case 'damage':
+        damage += effect.value;
+        descriptions.push(`deals ${effect.value} damage`);
+        break;
+      case 'buff': {
+        selfStatus = {
+          abilityId: item.id,
+          type: EffectType.Buff,
+          stat: effect.stat,
+          value: effect.value,
+          turnsRemaining: effect.turns,
+        };
+        descriptions.push(`+${Math.round((effect.value - 1) * 100)}% ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`);
+        break;
+      }
+      case 'debuff': {
+        enemyStatus = {
+          abilityId: item.id,
+          type: EffectType.Debuff,
+          stat: effect.stat,
+          value: effect.value,
+          turnsRemaining: effect.turns,
+        };
+        descriptions.push(`-${Math.round((1 - effect.value) * 100)}% enemy ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`);
+        break;
+      }
+      case 'cure_status':
+        cleanse = true;
+        descriptions.push('cures status ailments');
+        break;
+      case 'revive_party':
+      case 'grant_currency':
+        // State-level: the backend applies these after the turn resolves.
+        break;
+    }
+  }
+
+  const description = descriptions.length > 0
+    ? `${source.familiarData.name} uses ${item.name}: ${descriptions.join(', ')}`
+    : `${source.familiarData.name} uses ${item.name}`;
+
+  if (damage > 0 || enemyStatus) {
+    return {
+      effectType: EffectType.Damage,
+      targetId: enemy.uid,
+      value: damage,
+      isCritical: false,
+      description,
+      appliedEffects: enemyStatus ? [enemyStatus] : undefined,
+    };
+  }
+
+  if (hpHeal > 0 || mpHeal > 0 || selfStatus) {
+    return {
+      effectType: hpHeal > 0 ? EffectType.Heal : (selfStatus ? EffectType.Buff : EffectType.MpHeal),
+      targetId: source.uid,
+      value: hpHeal > 0 ? hpHeal : (selfStatus ? selfStatus.value : mpHeal),
+      isCritical: false,
+      description,
+      // mpValue is the SECONDARY channel: only set when the primary effect is
+      // not MpHeal itself, otherwise applyActionResult would add MP twice.
+      mpValue: hpHeal > 0 && mpHeal > 0 ? mpHeal : undefined,
+      appliedEffects: selfStatus ? [selfStatus] : undefined,
+      cleanse,
+    };
+  }
+
+  return {
+    effectType: EffectType.Heal,
+    targetId: source.uid,
+    value: 0,
+    isCritical: false,
+    description,
+    cleanse,
+  };
 }
 
 function executeAction(
@@ -252,35 +383,7 @@ function executeAction(
       };
     }
 
-    if (item.effect.type === ItemEffect.HP_HEAL) {
-      const healed = Math.min(actualTarget.familiarData.stats.maxHp - actualTarget.currentHp, item.effect.value);
-      return {
-        effectType: EffectType.Heal,
-        targetId: actualTarget.uid,
-        value: Math.max(0, healed),
-        isCritical: false,
-        description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, healed)} HP`,
-      };
-    }
-
-    if (item.effect.type === ItemEffect.MP_HEAL) {
-      const restored = Math.min(actualTarget.familiarData.stats.maxMp - actualTarget.currentMp, item.effect.value);
-      return {
-        effectType: EffectType.MpHeal,
-        targetId: actualTarget.uid,
-        value: Math.max(0, restored),
-        isCritical: false,
-        description: `${source.familiarData.name} uses ${item.name} to restore ${Math.max(0, restored)} MP`,
-      };
-    }
-
-    return {
-      effectType: EffectType.Damage,
-      targetId: actualTarget.uid,
-      value: 0,
-      isCritical: false,
-      description: `${source.familiarData.name} uses ${item.name}`,
-    };
+    return applyItemEffects(item, source, target);
   }
 
   return {

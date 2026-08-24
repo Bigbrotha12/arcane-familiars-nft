@@ -29,6 +29,13 @@ function ItemPanel({ open, items, onSelect, onClose }: ItemPanelProps) {
                 disabled={!usable}
                 onClick={() => onSelect(item.id)}
               >
+                {item.iconUrl && (
+                  <img
+                    src={item.iconUrl}
+                    alt=""
+                    className="mr-2 h-10 w-10 shrink-0 rounded-md border border-[#E8E4F0] bg-white object-contain"
+                  />
+                )}
                 <span className="flex-1 text-left font-body font-medium">{item.name}</span>
                 <span className="font-mono text-xs tabular-nums text-text-secondary">
                   x{item.quantity}
