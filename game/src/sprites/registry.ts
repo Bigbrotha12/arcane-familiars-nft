@@ -28,11 +28,13 @@ export interface FamiliarSpriteConfig {
 
 export const EFFECT_SPRITES = {
   cast_light: { file: 'effects/effect_cast_light.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
+  cast_water: { file: 'effects/effect_cast_water.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
   fire_attack: { file: 'effects/effect_fire_attack.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
 } satisfies Record<string, SpriteSheetConfig>;
 
 // Partial keyed by familiar ids: sprite art is optional per familiar, so only familiars with art get entries (no empty configs).
 export const FAMILIAR_SPRITES: Partial<Record<keyof typeof FAMILIARS, FamiliarSpriteConfig>> = {
+  aquaSprite: { idle: { file: 'idle/aquaSprite_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'cast_water' },
   whiteDog: { idle: { file: 'idle/whiteDog_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'cast_light' },
   yellowFighter: { idle: { file: 'idle/yellowFighter_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'fire_attack' },
 };
