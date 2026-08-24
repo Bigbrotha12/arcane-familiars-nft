@@ -2,15 +2,18 @@
 
 A browser-based NFT creature-collector game integrated with the Immutable X (IMX) L2 marketplace. Summon familiars, battle with turn-based combat, and trade on-chain — all from your browser.
 
-> **Status:** Active development — landing page live, game engine (Phaser 3) and blockchain integration in progress.
+> **Status:** Active development — **playable vertical slice**: dungeon exploration, server-authoritative turn-based combat (speed-ordered turns, status effects, items, party swapping, KO relay), loot and currency. Blockchain integration is the next milestone.
 
 ## Project Structure
 
 ```
-├── backend/         # Cloudflare Worker (Hono + D1)
-├── blockchain/      # Smart contracts
-├── docs/            # Plans, architecture decisions
-└── frontend/        # React SPA (Vite + SWC + Tailwind)
+├── backend/           # Cloudflare Worker (Hono + D1) — game state, battles, dungeons
+├── blockchain/        # Smart contracts
+├── docs/              # Plans, architecture decisions
+├── frontend/          # React SPA (Vite + SWC + Tailwind) — HUD + landing
+├── game/              # Phaser 3 scenes (world map, exploration, battle)
+└── packages/
+    └── game-logic/    # Shared pure-TS engine: combat math, items, types (vitest)
 ```
 
 ## Tech Stack
@@ -27,6 +30,12 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - **Cloudflare D1** (SQLite) for persistent storage
 - **TypeScript** with type-safe env bindings
 - Proxies Immutable X API for asset/balance data
+
+### Game
+- **Phaser 3** scenes embedded in the React app (`game/`), bridged via an event bus
+- **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution) consumed by both backend and client; 127 vitest specs
+- Server-authoritative battles: the client sends actions, the Worker resolves the full turn and returns a replayable result (ordered steps, canceled actions, forced swaps)
+- HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
 
 ### Blockchain
 - **Solidity 0.8.17** with Hardhat
@@ -82,18 +91,24 @@ Players summon **familiars** — creature NFTs with unique stats and abilities:
 | ATK | Attack power |
 | DEF | Defense |
 | ARC | Arcane power |
-| SPD | Speed |
+| SPD | Speed (decides turn order) |
 
 Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **rarity** tier (common through legendary), and up to 4 **abilities** that affect combat.
+
+### Implemented gameplay
+- **Dungeon runs**: pick a party of 2, explore room graphs (minimap), treasure rooms, boss rooms
+- **Turn-based combat**: speed-ordered sequential turns (faster familiar acts first; a KO'd-before-acting familiar loses its action), abilities with cooldowns and MP costs, status effects (buffs, debuffs, DoT/HoT), defend, flee
+- **Party management**: swap the active familiar between rooms or mid-battle (once per turn, free); if the active familiar falls, the backup relays in automatically — defeat only when both are down
+- **Items**: inventory drops (potions, bombs, revives, currency) usable in battle; consumption respects KO cancellation
 
 ## Development Phases
 
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
-| 2 — Game Prototype | Phaser 3 engine, core game loop, 3-5 familiars | Pending |
+| 2 — Game Prototype | Phaser 3 engine, core game loop, dungeons, battles, items, party | Done |
 | 3 — Blockchain | Contract updates, Sepolia deploy, IMX SDK | Pending |
-| 4 — MVP Polish | Wallet connect, mint flow, landing page | In progress |
+| 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing done; wallet/mint pending |
 | 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
 
 ## CI
