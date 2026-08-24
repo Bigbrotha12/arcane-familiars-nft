@@ -23,7 +23,7 @@ interface BattleSceneData {
 }
 
 export class BattleScene extends Phaser.Scene {
-  private readonly ENEMY_ACTION_DELAY_MS = 400;
+  private readonly STEP_DELAY_MS = 700;
   private readonly OUTCOME_DELAY_MS = 800;
   private readonly FLEE_DELAY_MS = 600;
   private layout!: Layout;
@@ -207,16 +207,59 @@ preload(): void {
 
     try {
       const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
-      if (action.type === ActionType.Ability) {
-        const abilityName = getAbility(action.abilityId ?? '')?.name ?? action.abilityId;
-        this.battleUI.addLogMessage(`You use ${abilityName}!`);
-      } else {
-        this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
-      }
-
       const { turnResult, state, turnCount } = result;
       const rewards = turnResult.rewards;
       if (state) this.gameState = state;
+
+      const playerUid = this.battleState.playerFamiliar.uid;
+      let intentAnnounced = false;
+      let abilityVfxPlayed = false;
+
+      for (let i = 0; i < turnResult.steps.length; i++) {
+        const step = turnResult.steps[i];
+        const isPlayerStep = step.actorUid === playerUid;
+
+        if (isPlayerStep && !intentAnnounced) {
+          intentAnnounced = true;
+          if (action.type === ActionType.Ability) {
+            const abilityName = getAbility(action.abilityId ?? '')?.name ?? action.abilityId;
+            this.battleUI.addLogMessage(`You use ${abilityName}!`);
+          } else {
+            this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
+          }
+        }
+
+        this.battleUI.addLogMessage(step.result.description);
+        this.showActionResultVisual(step.result);
+        if (isPlayerStep && action.type === ActionType.Ability && !abilityVfxPlayed) {
+          abilityVfxPlayed = true;
+          const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
+          if (sprites?.abilityEffect) {
+            this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
+          }
+        }
+
+        this.battleState = {
+          ...this.battleState!,
+          playerFamiliar: step.playerAfter,
+          enemyFamiliar: step.enemyAfter,
+        };
+        this.battleUI.updatePlayerDisplay(this.battleState.playerFamiliar);
+        this.battleUI.updateEnemyDisplay(this.battleState.enemyFamiliar);
+        this.emitStateUpdate();
+
+        if (i < turnResult.steps.length - 1) {
+          await this.sleep(this.STEP_DELAY_MS);
+          if (!this.scene || !this.scene.isActive()) return;
+        }
+      }
+
+      for (const canceled of turnResult.canceledActions) {
+        this.battleUI.addLogMessage(canceled.reason);
+        await this.sleep(this.STEP_DELAY_MS);
+        if (!this.scene || !this.scene.isActive()) return;
+      }
+
       this.battleState = {
         ...this.battleState!,
         playerFamiliar: turnResult.playerFamiliar,
@@ -227,34 +270,21 @@ preload(): void {
       this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
       this.battleUI.updateEnemyDisplay(turnResult.enemyFamiliar);
 
-      this.battleUI.addLogMessage(turnResult.playerAction.description);
-      this.showActionResultVisual(turnResult.playerAction);
-      if (action.type === ActionType.Ability) {
-        const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
-        if (sprites?.abilityEffect) {
-          this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
-        }
-      }
-
-      this.timers.push(this.time.delayedCall(this.ENEMY_ACTION_DELAY_MS, () => {
-        this.battleUI.addLogMessage(turnResult.enemyAction.description);
-        this.showActionResultVisual(turnResult.enemyAction);
-      }));
-
-      const outcome = turnResult.battleOutcome;
       this.emitStateUpdate();
 
-      this.timers.push(this.time.delayedCall(this.OUTCOME_DELAY_MS, () => {
-        if (outcome === Outcome.Win) {
-          this.handleVictory(rewards);
-        } else if (outcome === Outcome.Loss) {
-          this.handleDefeat();
-        } else {
-          this.phase = 'menu';
-        }
-        this.isProcessingAction = false;
-        this.emitStateUpdate();
-      }));
+      await this.sleep(this.OUTCOME_DELAY_MS);
+      if (!this.scene || !this.scene.isActive()) return;
+
+      const outcome = turnResult.battleOutcome;
+      if (outcome === Outcome.Win) {
+        this.handleVictory(rewards);
+      } else if (outcome === Outcome.Loss) {
+        this.handleDefeat();
+      } else {
+        this.phase = 'menu';
+      }
+      this.isProcessingAction = false;
+      this.emitStateUpdate();
     } catch (err) {
       const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
       if (recovered) return;
@@ -264,6 +294,13 @@ preload(): void {
       this.isProcessingAction = false;
       this.emitStateUpdate();
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = this.time.delayedCall(ms, () => resolve());
+      this.timers.push(timer);
+    });
   }
 
   private async handleFlee(): Promise<void> {

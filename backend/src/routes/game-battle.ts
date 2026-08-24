@@ -6,6 +6,7 @@ import type {
   BattleTurnResult,
   BattleRewards,
   GameState,
+  ItemData,
 } from '@arcane-familiars/game-logic';
 import {
   AREAS,
@@ -241,8 +242,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
     const state = loaded.state;
 
-    // Consume items from the server-owned inventory.
+    // Validate items BEFORE resolution; actual consumption and state effects
+    // happen after resolveTurn, only if the player's slot executed (a slower
+    // actor can be KO'd before acting under speed-ordered turns).
     let stateEffectNote: string | undefined;
+    let consumedItem: ItemData | undefined;
+    let faintedPartyIds: string[] = [];
     if (action.type === ActionType.Item && action.itemId) {
       const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
       if (!itemEntry || typeof itemEntry.quantity !== 'number' || itemEntry.quantity < 1) {
@@ -263,25 +268,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         return c.json({ error: 'No fainted party members to revive' }, 400);
       }
 
-      itemEntry.quantity -= 1;
-
-      // State-level effects: applied here rather than in the battle engine,
-      // which only sees the two active combatants.
-      for (const effect of item.effects) {
-        if (effect.kind === 'grant_currency') {
-          state.inventory.currency += effect.value;
-          stateEffectNote = `gains ${effect.value} currency`;
-        }
-        if (effect.kind === 'revive_party' && state.dungeon) {
-          for (const id of fainted) {
-            const data = getFamiliar(id);
-            if (data) {
-              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
-            }
-          }
-          stateEffectNote = `revives ${fainted.length} party member${fainted.length === 1 ? '' : 's'}`;
-        }
-      }
+      consumedItem = item;
+      faintedPartyIds = fainted;
     }
 
     // Derive a per-turn RNG from the battle seed so each turn gets a distinct,
@@ -290,7 +278,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const rng = seededRandom((battle.seed ?? cryptoSeed()) ^ (battle.turnCount + 1));
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, rng);
 
-    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar } = resolveTurn(
+    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar, steps: turnSteps, canceledActions } = resolveTurn(
       action,
       battle.playerFamiliar,
       battle.enemyFamiliar,
@@ -298,8 +286,39 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       rng,
     );
 
-    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, action);
-    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyAction);
+    const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
+    const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
+
+    // Consume the item and apply its state-level effects only if the player's
+    // slot executed: a KO-canceled actor never used the item, so it must not
+    // be eaten nor trigger revive_party/grant_currency. State-level effects:
+    // applied here rather than in the battle engine, which only sees the two
+    // active combatants.
+    if (action.type === ActionType.Item && action.itemId && playerActed && consumedItem) {
+      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
+      if (itemEntry) {
+        itemEntry.quantity -= 1;
+      }
+
+      for (const effect of consumedItem.effects) {
+        if (effect.kind === 'grant_currency') {
+          state.inventory.currency += effect.value;
+          stateEffectNote = `gains ${effect.value} currency`;
+        }
+        if (effect.kind === 'revive_party' && state.dungeon) {
+          for (const id of faintedPartyIds) {
+            const data = getFamiliar(id);
+            if (data) {
+              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
+            }
+          }
+          stateEffectNote = `revives ${faintedPartyIds.length} party member${faintedPartyIds.length === 1 ? '' : 's'}`;
+        }
+      }
+    }
+
+    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, playerActed && action.type === ActionType.Ability ? action.abilityId : undefined);
+    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined);
 
     // Snapshot the turn count before mutating so the battle write below is
     // conditional on the exact row this turn was computed from.
@@ -386,12 +405,19 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       enemyFamiliar: battle.enemyFamiliar,
       battleOutcome: outcome,
       rewards,
+      steps: turnSteps,
+      canceledActions,
     };
 
     // State-level item effects resolve outside the engine; surface them in
-    // the same log line the player already reads.
+    // the same log line the player already reads. Appending via the step's
+    // result also updates the compat field, which references the same object
+    // when the player executed.
     if (stateEffectNote) {
-      turnResult.playerAction.description += ` (${stateEffectNote})`;
+      const playerStep = turnResult.steps.find((s) => s.actorUid === battle.playerFamiliar.uid);
+      if (playerStep) {
+        playerStep.result.description += ` (${stateEffectNote})`;
+      }
     }
 
     // Atomic: state + battle writes must succeed or fail together. Both

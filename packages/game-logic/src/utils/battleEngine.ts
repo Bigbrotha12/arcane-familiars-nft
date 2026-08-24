@@ -1,4 +1,4 @@
-import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, ActionType, Outcome } from '@/types/battle';
+import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, type TurnStep, type CanceledAction, ActionType, Outcome } from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
 import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
@@ -42,14 +42,16 @@ export function calculateDamage(
 
 /**
  * Tick status effects: apply HoT/DoT, decrement durations, remove expired.
- * Effects in `skip` keep their current duration (e.g. effects applied by the
- * second actor this turn, which must survive until the end of the next turn).
+ * Effects in `skip` (those applied during the turn now ending, by EITHER
+ * actor) get no HoT/DoT proc and no decrement — they keep their full duration
+ * and must not take effect until the end of a turn they existed throughout.
  */
 export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEffect>): BattleFamiliar {
   const updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
   let hpChange = 0;
 
   for (const effect of updated.statusEffects) {
+    if (skip?.has(effect)) continue;
     if (effect.type === EffectType.Hot) {
       hpChange += effect.value;
     } else if (effect.type === EffectType.Dot) {
@@ -70,7 +72,12 @@ export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEf
 }
 
 /**
- * Resolve a single battle turn. Both actions are resolved with the player acting first.
+ * Resolve a single battle turn. Actors are ordered by effective Speed (higher
+ * first; ties go to the player, with no RNG roll so seeded runs stay
+ * deterministic). Each actor executes against the states left by the previous
+ * actor. An actor whose HP has dropped to 0 before its slot is canceled: it
+ * does not execute, spends no MP and applies no effects — its result slot is
+ * filled with a zero-damage placeholder carrying the cancel reason.
  */
 export function resolveTurn(
   playerAction: BattleAction,
@@ -83,52 +90,106 @@ export function resolveTurn(
   enemyResult: ActionResult;
   updatedPlayerFamiliar: BattleFamiliar;
   updatedEnemyFamiliar: BattleFamiliar;
+  steps: TurnStep[];
+  canceledActions: CanceledAction[];
 } {
-  // Execute player action with original familiars
-  const playerResult = executeAction(playerAction, playerFamiliar, enemyFamiliar, rng);
+  // Initiative is locked in before any action executes: speed effects applied
+  // during this turn only influence the NEXT turn's ordering.
+  const playerSpeed = getEffectiveStat(playerFamiliar.familiarData.stats.speed, playerFamiliar.statusEffects, StatName.Speed);
+  const enemySpeed = getEffectiveStat(enemyFamiliar.familiarData.stats.speed, enemyFamiliar.statusEffects, StatName.Speed);
 
-  // Apply player action result
-  let updatedPlayer = applyActionResult(playerFamiliar, playerResult);
-  let updatedEnemy = applyActionResult(enemyFamiliar, playerResult);
+  const ordered: Array<{ who: 'player' | 'enemy'; action: BattleAction }> =
+    playerSpeed >= enemySpeed
+      ? [{ who: 'player', action: playerAction }, { who: 'enemy', action: enemyAction }]
+      : [{ who: 'enemy', action: enemyAction }, { who: 'player', action: playerAction }];
 
-  // Deduct MP for player ability use
-  if (playerAction.type === ActionType.Ability && playerAction.abilityId) {
-    const ability = getAbility(playerAction.abilityId);
-    if (ability && playerFamiliar.currentMp >= ability.mpCost) {
-      updatedPlayer = { ...updatedPlayer, currentMp: updatedPlayer.currentMp - ability.mpCost };
+  let playerCurrent = playerFamiliar;
+  let enemyCurrent = enemyFamiliar;
+  const steps: TurnStep[] = [];
+  const canceledActions: CanceledAction[] = [];
+  // Effects applied by ANY actor this turn must not proc or tick at end of turn.
+  const freshEffects = new Set<StatusEffect>();
+
+  let playerResult: ActionResult | undefined;
+  let enemyResult: ActionResult | undefined;
+
+  for (const { who, action } of ordered) {
+    const isPlayer = who === 'player';
+    const actorPre = isPlayer ? playerCurrent : enemyCurrent;
+    const opponentPre = isPlayer ? enemyCurrent : playerCurrent;
+
+    // KO-cancellation: an actor knocked out earlier in the turn never acts.
+    if (actorPre.currentHp <= 0) {
+      const reason = `${actorPre.familiarData.name} was knocked out before it could act!`;
+      const placeholder: ActionResult = {
+        effectType: EffectType.Damage,
+        targetId: actorPre.uid,
+        value: 0,
+        isCritical: false,
+        description: reason,
+      };
+      if (isPlayer) playerResult = placeholder;
+      else enemyResult = placeholder;
+      canceledActions.push({ uid: actorPre.uid, reason });
+      continue;
     }
+
+    const result = executeAction(action, actorPre, opponentPre, rng);
+    let actorPost = applyActionResult(actorPre, result);
+    const opponentPost = applyActionResult(opponentPre, result);
+
+    // Deduct MP for ability use (same gate as before: known ability and the
+    // actor had enough MP when it executed).
+    if (action.type === ActionType.Ability && action.abilityId) {
+      const ability = getAbility(action.abilityId);
+      if (ability && actorPre.currentMp >= ability.mpCost) {
+        actorPost = { ...actorPost, currentMp: actorPost.currentMp - ability.mpCost };
+      }
+    }
+
+    if (result.appliedEffects) {
+      for (const effect of result.appliedEffects) freshEffects.add(effect);
+    }
+
+    if (isPlayer) {
+      playerResult = result;
+      playerCurrent = actorPost;
+      enemyCurrent = opponentPost;
+    } else {
+      enemyResult = result;
+      enemyCurrent = actorPost;
+      playerCurrent = opponentPost;
+    }
+
+    steps.push({
+      actorUid: actorPre.uid,
+      result,
+      playerAfter: playerCurrent,
+      enemyAfter: enemyCurrent,
+    });
   }
 
-  // Execute enemy action with updated familiars (so defend buff affects damage calc)
-  const enemyResult = executeAction(enemyAction, updatedEnemy, updatedPlayer, rng);
-
-  // Apply enemy action result
-  updatedPlayer = applyActionResult(updatedPlayer, enemyResult);
-  updatedEnemy = applyActionResult(updatedEnemy, enemyResult);
-
-  // Deduct MP for enemy ability use
-  if (enemyAction.type === ActionType.Ability && enemyAction.abilityId) {
-    const ability = getAbility(enemyAction.abilityId);
-    if (ability && updatedEnemy.currentMp >= ability.mpCost) {
-      updatedEnemy = { ...updatedEnemy, currentMp: updatedEnemy.currentMp - ability.mpCost };
-    }
-  }
-
-  // Tick status effects. Effects applied by the enemy (the second actor) must
-  // not be decremented this turn — they have not protected against anything yet.
-  const freshEnemyEffects = new Set<StatusEffect>(enemyResult.appliedEffects ?? []);
-  updatedPlayer = applyStatusEffects(updatedPlayer);
-  updatedEnemy = applyStatusEffects(updatedEnemy, freshEnemyEffects);
+  // Tick status effects. Effects applied during this turn (by either side)
+  // neither proc nor decrement — they have not existed for a full turn yet.
+  playerCurrent = applyStatusEffects(playerCurrent, freshEffects);
+  enemyCurrent = applyStatusEffects(enemyCurrent, freshEffects);
 
   // Mutual KO: both combatants fall on the same turn. The player is awarded
   // the victory (checkBattleOutcome checks the enemy first) but survives with
   // 1 HP so they can keep exploring. A win must never leave the player at 0 HP;
   // 0 HP always means a loss / end of exploration.
-  if (updatedPlayer.currentHp <= 0 && updatedEnemy.currentHp <= 0) {
-    updatedPlayer = { ...updatedPlayer, currentHp: 1 };
+  if (playerCurrent.currentHp <= 0 && enemyCurrent.currentHp <= 0) {
+    playerCurrent = { ...playerCurrent, currentHp: 1 };
   }
 
-  return { playerResult, enemyResult, updatedPlayerFamiliar: updatedPlayer, updatedEnemyFamiliar: updatedEnemy };
+  return {
+    playerResult: playerResult!,
+    enemyResult: enemyResult!,
+    updatedPlayerFamiliar: playerCurrent,
+    updatedEnemyFamiliar: enemyCurrent,
+    steps,
+    canceledActions,
+  };
 }
 
 function applyActionResult(
@@ -510,18 +571,19 @@ export function applyDefend(familiar: BattleFamiliar): BattleFamiliar {
 }
 
 /**
- * Tick down all cooldowns by one, then set the cooldown for the ability used
- * this turn (so a cooldown of N makes the ability unusable for N turns).
+ * Tick down all cooldowns by one, then set the cooldown of `usedAbilityId`
+ * (so a cooldown of N makes the ability unusable for N turns). Pass null or
+ * omit it when the actor never executed (KO-canceled) so no cooldown starts.
  */
-export function updateCooldowns(familiar: BattleFamiliar, action: BattleAction): BattleFamiliar {
+export function updateCooldowns(familiar: BattleFamiliar, usedAbilityId?: string | null): BattleFamiliar {
   const cooldowns: Record<string, number> = {};
   for (const key of Object.keys(familiar.cooldowns)) {
     cooldowns[key] = Math.max(0, familiar.cooldowns[key] - 1);
   }
-  if (action.type === ActionType.Ability && action.abilityId) {
-    const ability = getAbility(action.abilityId);
+  if (usedAbilityId) {
+    const ability = getAbility(usedAbilityId);
     if (ability) {
-      cooldowns[action.abilityId] = ability.cooldown;
+      cooldowns[usedAbilityId] = ability.cooldown;
     }
   }
   return { ...familiar, cooldowns };

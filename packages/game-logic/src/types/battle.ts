@@ -56,6 +56,22 @@ export enum Outcome {
   Continue
 }
 
+/** One executed action within a resolved turn, in playback order. */
+export interface TurnStep {
+  /** uid of the familiar that acted. */
+  actorUid: string;
+  result: ActionResult;
+  /** Full combatant states AFTER this step applied (snapshots for client playback). */
+  playerAfter: BattleFamiliar;
+  enemyAfter: BattleFamiliar;
+}
+
+/** An action that was skipped because its actor was KO'd before it could act. */
+export interface CanceledAction {
+  uid: string;
+  reason: string;
+}
+
 export interface BattleTurnResult {
   playerAction: ActionResult;
   enemyAction: ActionResult;
@@ -63,6 +79,10 @@ export interface BattleTurnResult {
   enemyFamiliar: BattleFamiliar;
   battleOutcome: Outcome;
   rewards?: BattleRewards;
+  /** Executed actions in playback order (speed-ordered). */
+  steps: TurnStep[];
+  /** Actions skipped because their actor was KO'd before it could act. */
+  canceledActions: CanceledAction[];
 }
 
 export interface BattleRewards {
