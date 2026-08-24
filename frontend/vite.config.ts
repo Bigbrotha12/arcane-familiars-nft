@@ -68,6 +68,7 @@ export default defineConfig({
   server: {
     port: 8080,
     open: true,
+    allowedHosts: process.env.VITE_ALLOW_ALL_HOSTS === "1" ? true : undefined,
   },
   build: {
     outDir: "dist",

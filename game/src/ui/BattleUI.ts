@@ -27,7 +27,7 @@ export class BattleUI {
   }
 
   private get playerCenterY(): number {
-    return this.layout.y(332);
+    return this.layout.y(305);
   }
 
   constructor(scene: Phaser.Scene) {
@@ -177,8 +177,8 @@ export class BattleUI {
     this.addFloatingText(x, y, `-${amount}`, color);
   }
 
-  showHealNumber(x: number, y: number, amount: number): void {
-    this.addFloatingText(x, y, `+${amount}`, '#10B981');
+  showHealNumber(x: number, y: number, amount: number, color = '#10B981'): void {
+    this.addFloatingText(x, y, `+${amount}`, color);
   }
 
   private addFloatingText(x: number, y: number, text: string, color: string): void {

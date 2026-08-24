@@ -3,9 +3,9 @@ import Nav from '@/components/layout/Nav'
 
 export default function PlayLayout() {
   return (
-    <div className="min-h-screen flex flex-col bg-surface-primary">
+    <div className="h-screen flex flex-col bg-surface-primary overflow-hidden">
       <Nav />
-      <main className="flex-1 flex flex-col">
+      <main className="flex-1 flex flex-col min-h-0">
         <Outlet />
       </main>
     </div>

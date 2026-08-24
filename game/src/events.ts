@@ -13,6 +13,7 @@ export enum GameEvent {
   START_BATTLE         = 'game:startBattle',
   OVERLAY_MODE_CHANGED = 'game:overlayModeChanged',
   BATTLE_CONTINUE     = 'game:battleContinue',     // React → Phaser: user dismissed outcome, continue
+  PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
 }
 
 export interface FamiliarState {
@@ -44,6 +45,7 @@ export interface GameStateSnapshot {
   items?: ItemOption[]
   canSwap?: boolean
   party?: FamiliarState[]
+  activeId?: string
   isBoss?: boolean
   roomType?: string
   roomDescription?: string
@@ -82,6 +84,10 @@ export interface PlayerActionPayload {
 
 export interface NavigateRoomPayload {
   roomId: string
+}
+
+export interface PartySwapPayload {
+  familiarId: string
 }
 
 export interface OverlayModePayload {

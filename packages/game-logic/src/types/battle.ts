@@ -56,6 +56,33 @@ export enum Outcome {
   Continue
 }
 
+/** One executed action within a resolved turn, in playback order. */
+export interface TurnStep {
+  /** uid of the familiar that acted. */
+  actorUid: string;
+  result: ActionResult;
+  /** Full combatant states AFTER this step applied (snapshots for client playback). */
+  playerAfter: BattleFamiliar;
+  enemyAfter: BattleFamiliar;
+}
+
+/** An action that was skipped because its actor was KO'd before it could act. */
+export interface CanceledAction {
+  uid: string;
+  reason: string;
+}
+
+/** Involuntary substitution fired by the battle action endpoint when the
+ *  active familiar is KO'd while another living party member remains: the
+ *  next member relays into the battle instead of ending the dungeon run.
+ *  Names only — clients compose their own log/message text. */
+export interface ForcedSwapInfo {
+  /** Display name of the familiar that fell. */
+  fallenName: string;
+  /** Display name of the party member who stepped in. */
+  incomingName: string;
+}
+
 export interface BattleTurnResult {
   playerAction: ActionResult;
   enemyAction: ActionResult;
@@ -63,6 +90,13 @@ export interface BattleTurnResult {
   enemyFamiliar: BattleFamiliar;
   battleOutcome: Outcome;
   rewards?: BattleRewards;
+  /** Executed actions in playback order (speed-ordered). */
+  steps: TurnStep[];
+  /** Actions skipped because their actor was KO'd before it could act. */
+  canceledActions: CanceledAction[];
+  /** Set when the active familiar was KO'd and a living party member
+   *  involuntarily took its place (battleOutcome is then Continue). */
+  forcedSwap?: ForcedSwapInfo;
 }
 
 export interface BattleRewards {

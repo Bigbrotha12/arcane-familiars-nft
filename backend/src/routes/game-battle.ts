@@ -5,7 +5,9 @@ import type {
   BattleAction,
   BattleTurnResult,
   BattleRewards,
+  ForcedSwapInfo,
   GameState,
+  ItemData,
 } from '@arcane-familiars/game-logic';
 import {
   AREAS,
@@ -71,6 +73,30 @@ function getPersistedResources(
   };
 }
 
+/**
+ * Write a combatant's final HP/MP back into the dungeon's per-member resource
+ * tables (voluntary swap-out, flee, end-of-turn persistence, KO relay).
+ */
+function persistCombatantResources(dungeon: GameState['dungeon'], familiar: BattleFamiliar): void {
+  if (!dungeon) return;
+  dungeon.partyHp[familiar.familiarData.id] = Math.max(0, familiar.currentHp);
+  dungeon.partyMp[familiar.familiarData.id] = Math.max(0, familiar.currentMp);
+}
+
+/**
+ * Build the ally combatant that enters battle for familiarId, seeded from the
+ * resources persisted in the dungeon state. Shared by battle start, voluntary
+ * swap-in, and the involuntary KO relay.
+ */
+function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string): BattleFamiliar {
+  const familiar = createBattleFamiliar(familiarId);
+  const resources = getPersistedResources(dungeon, familiarId, familiar);
+  familiar.currentHp = resources.currentHp;
+  familiar.currentMp = resources.currentMp;
+  familiar.isAlly = true;
+  return familiar;
+}
+
 function generateBattleRewards(rng: () => number): BattleRewards {
   const currency = 40 + Math.floor(rng() * 30);
   const items: string[] = [];
@@ -123,11 +149,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Invalid area' }, 500);
     }
 
-    const playerFamiliar = createBattleFamiliar(playerFamiliarId);
-    const resources = getPersistedResources(dungeon, playerFamiliarId, playerFamiliar);
-    playerFamiliar.currentHp = resources.currentHp;
-    playerFamiliar.currentMp = resources.currentMp;
-    playerFamiliar.isAlly = true;
+    const playerFamiliar = buildIncomingCombatant(dungeon, playerFamiliarId);
 
     // Enemy identity is derived from the persisted room encounter, never from the client.
     const enemyId = pending.enemyId;
@@ -241,8 +263,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
     const state = loaded.state;
 
-    // Consume items from the server-owned inventory.
+    // Validate items BEFORE resolution; actual consumption and state effects
+    // happen after resolveTurn, only if the player's slot executed (a slower
+    // actor can be KO'd before acting under speed-ordered turns).
     let stateEffectNote: string | undefined;
+    let consumedItem: ItemData | undefined;
+    let faintedPartyIds: string[] = [];
     if (action.type === ActionType.Item && action.itemId) {
       const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
       if (!itemEntry || typeof itemEntry.quantity !== 'number' || itemEntry.quantity < 1) {
@@ -263,25 +289,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         return c.json({ error: 'No fainted party members to revive' }, 400);
       }
 
-      itemEntry.quantity -= 1;
-
-      // State-level effects: applied here rather than in the battle engine,
-      // which only sees the two active combatants.
-      for (const effect of item.effects) {
-        if (effect.kind === 'grant_currency') {
-          state.inventory.currency += effect.value;
-          stateEffectNote = `gains ${effect.value} currency`;
-        }
-        if (effect.kind === 'revive_party' && state.dungeon) {
-          for (const id of fainted) {
-            const data = getFamiliar(id);
-            if (data) {
-              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
-            }
-          }
-          stateEffectNote = `revives ${fainted.length} party member${fainted.length === 1 ? '' : 's'}`;
-        }
-      }
+      consumedItem = item;
+      faintedPartyIds = fainted;
     }
 
     // Derive a per-turn RNG from the battle seed so each turn gets a distinct,
@@ -290,7 +299,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const rng = seededRandom((battle.seed ?? cryptoSeed()) ^ (battle.turnCount + 1));
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, rng);
 
-    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar } = resolveTurn(
+    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar, steps: turnSteps, canceledActions } = resolveTurn(
       action,
       battle.playerFamiliar,
       battle.enemyFamiliar,
@@ -298,8 +307,44 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       rng,
     );
 
-    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, action);
-    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyAction);
+    const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
+    const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
+
+    // Captured before the KO relay below can replace battle.playerFamiliar:
+    // state-effect notes attach to the step of whoever acted this turn, even
+    // when that actor did not survive it.
+    const actingPlayerUid = battle.playerFamiliar.uid;
+
+    // Consume the item and apply its state-level effects only if the player's
+    // slot executed: a KO-canceled actor never used the item, so it must not
+    // be eaten nor trigger revive_party/grant_currency. State-level effects:
+    // applied here rather than in the battle engine, which only sees the two
+    // active combatants.
+    if (action.type === ActionType.Item && action.itemId && playerActed && consumedItem) {
+      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
+      if (itemEntry) {
+        itemEntry.quantity -= 1;
+      }
+
+      for (const effect of consumedItem.effects) {
+        if (effect.kind === 'grant_currency') {
+          state.inventory.currency += effect.value;
+          stateEffectNote = `gains ${effect.value} currency`;
+        }
+        if (effect.kind === 'revive_party' && state.dungeon) {
+          for (const id of faintedPartyIds) {
+            const data = getFamiliar(id);
+            if (data) {
+              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
+            }
+          }
+          stateEffectNote = `revives ${faintedPartyIds.length} party member${faintedPartyIds.length === 1 ? '' : 's'}`;
+        }
+      }
+    }
+
+    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, playerActed && action.type === ActionType.Ability ? action.abilityId : undefined);
+    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined);
 
     // Snapshot the turn count before mutating so the battle write below is
     // conditional on the exact row this turn was computed from.
@@ -308,7 +353,34 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // A new turn begins: allow one free swap again (#10).
     battle.swapsThisTurn = 0;
 
-    const outcome = checkBattleOutcome(battle.playerFamiliar, battle.enemyFamiliar);
+    let outcome = checkBattleOutcome(battle.playerFamiliar, battle.enemyFamiliar);
+
+    // Involuntary KO relay: when the active familiar falls but another living
+    // party member remains, that member steps in instead of ending the run.
+    // The engine's mutual-KO rule leaves the player alive at 1 HP, so a Loss
+    // here always implies the enemy survived; without a living backup the Loss
+    // falls through untouched to the dungeon-wipe branch below.
+    let forcedSwap: ForcedSwapInfo | undefined;
+    if (outcome === Outcome.Loss && state.dungeon) {
+      const fallenId = battle.playerFamiliar.familiarData.id;
+      const otherId = state.activeParty.find((id) => id !== fallenId);
+      if (
+        otherId !== undefined &&
+        getFamiliar(otherId) &&
+        (state.dungeon.partyHp[otherId] ?? 0) > 0
+      ) {
+        persistCombatantResources(state.dungeon, battle.playerFamiliar);
+        const incoming = buildIncomingCombatant(state.dungeon, otherId);
+        forcedSwap = {
+          fallenName: battle.playerFamiliar.familiarData.name,
+          incomingName: incoming.familiarData.name,
+        };
+        // Involuntary: replaces the fallen combatant without consuming the
+        // once-per-turn free swap (swapsThisTurn stays as reset above).
+        battle.playerFamiliar = incoming;
+        outcome = Outcome.Continue;
+      }
+    }
 
     if (outcome === Outcome.Win) {
       battle.status = BattleResult.Won;
@@ -365,8 +437,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           }
         }
         if (state.dungeon) {
-          state.dungeon.partyHp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentHp);
-          state.dungeon.partyMp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentMp);
+          persistCombatantResources(state.dungeon, battle.playerFamiliar);
         }
       }
     } else if (outcome === Outcome.Loss) {
@@ -374,8 +445,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       state.dungeon = null;
     } else {
       if (state.dungeon) {
-        state.dungeon.partyHp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentHp);
-        state.dungeon.partyMp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentMp);
+        persistCombatantResources(state.dungeon, battle.playerFamiliar);
       }
     }
 
@@ -386,12 +456,20 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       enemyFamiliar: battle.enemyFamiliar,
       battleOutcome: outcome,
       rewards,
+      steps: turnSteps,
+      canceledActions,
+      forcedSwap,
     };
 
     // State-level item effects resolve outside the engine; surface them in
-    // the same log line the player already reads.
+    // the same log line the player already reads. Appending via the step's
+    // result also updates the compat field, which references the same object
+    // when the player executed.
     if (stateEffectNote) {
-      turnResult.playerAction.description += ` (${stateEffectNote})`;
+      const playerStep = turnResult.steps.find((s) => s.actorUid === actingPlayerUid);
+      if (playerStep) {
+        playerStep.result.description += ` (${stateEffectNote})`;
+      }
     }
 
     // Atomic: state + battle writes must succeed or fail together. Both
@@ -488,18 +566,14 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
     }
 
-    if (state.dungeon) {
-      state.dungeon.partyHp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentHp);
-      state.dungeon.partyMp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentMp);
+    // A KO'd backup cannot be swapped into; this returns before any mutation,
+    // so swapsThisTurn is not consumed by the rejected request.
+    if ((state.dungeon?.partyHp[newFamiliarId] ?? 0) <= 0) {
+      return c.json({ error: 'Cannot swap to a fainted familiar' }, 400);
     }
 
-    const newFamiliar = createBattleFamiliar(newFamiliarId);
-    const resources = getPersistedResources(state.dungeon, newFamiliarId, newFamiliar);
-    newFamiliar.currentHp = resources.currentHp;
-    newFamiliar.currentMp = resources.currentMp;
-    newFamiliar.isAlly = true;
-
-    battle.playerFamiliar = newFamiliar;
+    persistCombatantResources(state.dungeon, battle.playerFamiliar);
+    battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
     const stateStmt = c.env.DB
@@ -574,10 +648,7 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
     }
     const state = loaded.state;
 
-    if (state.dungeon) {
-      state.dungeon.partyHp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentHp);
-      state.dungeon.partyMp[battle.playerFamiliar.familiarData.id] = Math.max(0, battle.playerFamiliar.currentMp);
-    }
+    persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
     const stateStmt = c.env.DB
       .prepare(

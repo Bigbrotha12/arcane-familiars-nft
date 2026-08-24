@@ -18,6 +18,7 @@ interface ExplorationHUDProps {
   onCollectTreasure: () => void
   onFleeEncounter: () => void
   onStartBattle: () => void
+  onSwapClick?: (familiarId: string) => void
 }
 
 function ExplorationHUD({
@@ -26,6 +27,7 @@ function ExplorationHUD({
   onCollectTreasure,
   onFleeEncounter,
   onStartBattle,
+  onSwapClick,
 }: ExplorationHUDProps) {
   if (snapshot.currentScene !== 'exploration' || !snapshot.dungeon) {
     return null
@@ -60,6 +62,8 @@ function ExplorationHUD({
           actions={exitActions}
           logEntries={snapshot.roomLog ?? []}
           party={snapshot.familiars}
+          activeId={snapshot.activeId ?? snapshot.familiars[0]?.id}
+          onSwapClick={onSwapClick}
         />
       )}
 

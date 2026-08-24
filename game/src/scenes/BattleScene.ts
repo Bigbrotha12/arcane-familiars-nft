@@ -23,7 +23,7 @@ interface BattleSceneData {
 }
 
 export class BattleScene extends Phaser.Scene {
-  private readonly ENEMY_ACTION_DELAY_MS = 400;
+  private readonly STEP_DELAY_MS = 700;
   private readonly OUTCOME_DELAY_MS = 800;
   private readonly FLEE_DELAY_MS = 600;
   private layout!: Layout;
@@ -207,16 +207,59 @@ preload(): void {
 
     try {
       const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
-      if (action.type === ActionType.Ability) {
-        const abilityName = getAbility(action.abilityId ?? '')?.name ?? action.abilityId;
-        this.battleUI.addLogMessage(`You use ${abilityName}!`);
-      } else {
-        this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
-      }
-
       const { turnResult, state, turnCount } = result;
       const rewards = turnResult.rewards;
       if (state) this.gameState = state;
+
+      const playerUid = this.battleState.playerFamiliar.uid;
+      let intentAnnounced = false;
+      let abilityVfxPlayed = false;
+
+      for (let i = 0; i < turnResult.steps.length; i++) {
+        const step = turnResult.steps[i];
+        const isPlayerStep = step.actorUid === playerUid;
+
+        if (isPlayerStep && !intentAnnounced) {
+          intentAnnounced = true;
+          if (action.type === ActionType.Ability) {
+            const abilityName = getAbility(action.abilityId ?? '')?.name ?? action.abilityId;
+            this.battleUI.addLogMessage(`You use ${abilityName}!`);
+          } else {
+            this.battleUI.addLogMessage(`You ${BattleScene.ACTION_TYPE_LABELS[action.type]}!`);
+          }
+        }
+
+        this.battleUI.addLogMessage(step.result.description);
+        this.showActionResultVisual(step.result);
+        if (isPlayerStep && action.type === ActionType.Ability && !abilityVfxPlayed) {
+          abilityVfxPlayed = true;
+          const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
+          if (sprites?.abilityEffect) {
+            this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
+          }
+        }
+
+        this.battleState = {
+          ...this.battleState!,
+          playerFamiliar: step.playerAfter,
+          enemyFamiliar: step.enemyAfter,
+        };
+        this.battleUI.updatePlayerDisplay(this.battleState.playerFamiliar);
+        this.battleUI.updateEnemyDisplay(this.battleState.enemyFamiliar);
+        this.emitStateUpdate();
+
+        if (i < turnResult.steps.length - 1) {
+          await this.sleep(this.STEP_DELAY_MS);
+          if (!this.scene || !this.scene.isActive()) return;
+        }
+      }
+
+      for (const canceled of turnResult.canceledActions) {
+        this.battleUI.addLogMessage(canceled.reason);
+        await this.sleep(this.STEP_DELAY_MS);
+        if (!this.scene || !this.scene.isActive()) return;
+      }
+
       this.battleState = {
         ...this.battleState!,
         playerFamiliar: turnResult.playerFamiliar,
@@ -224,37 +267,46 @@ preload(): void {
         turnCount: turnCount ?? this.battleState!.turnCount + 1,
         status: BattleScene.OUTCOME_TO_STATUS[turnResult.battleOutcome],
       };
-      this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
+      // With a forced swap pending, hold the old sprite here — the incoming
+      // species is revealed by the relay block below so it appears together
+      // with the "fell! ... steps in!" line instead of a beat earlier.
+      if (!turnResult.forcedSwap) {
+        this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
+      }
       this.battleUI.updateEnemyDisplay(turnResult.enemyFamiliar);
 
-      this.battleUI.addLogMessage(turnResult.playerAction.description);
-      this.showActionResultVisual(turnResult.playerAction);
-      if (action.type === ActionType.Ability) {
-        const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
-        if (sprites?.abilityEffect) {
-          this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
-        }
-      }
-
-      this.timers.push(this.time.delayedCall(this.ENEMY_ACTION_DELAY_MS, () => {
-        this.battleUI.addLogMessage(turnResult.enemyAction.description);
-        this.showActionResultVisual(turnResult.enemyAction);
-      }));
-
-      const outcome = turnResult.battleOutcome;
       this.emitStateUpdate();
 
-      this.timers.push(this.time.delayedCall(this.OUTCOME_DELAY_MS, () => {
-        if (outcome === Outcome.Win) {
-          this.handleVictory(rewards);
-        } else if (outcome === Outcome.Loss) {
-          this.handleDefeat();
-        } else {
-          this.phase = 'menu';
-        }
-        this.isProcessingAction = false;
+      await this.sleep(this.OUTCOME_DELAY_MS);
+      if (!this.scene || !this.scene.isActive()) return;
+
+      const forcedSwap = turnResult.forcedSwap;
+      if (forcedSwap) {
+        // Server-side KO relay: the fallen familiar was replaced by a living
+        // backup, so announce it, rebuild the player visuals for the incoming
+        // combatant, and keep the battle going.
+        this.battleUI.addLogMessage(`${forcedSwap.fallenName} fell! ${forcedSwap.incomingName} steps in!`);
+        this.activateIncomingFamiliar(turnResult.playerFamiliar);
         this.emitStateUpdate();
-      }));
+
+        await this.sleep(this.STEP_DELAY_MS);
+        if (!this.scene || !this.scene.isActive()) return;
+      }
+
+      const outcome = turnResult.battleOutcome;
+      // forcedSwap is checked before Loss: a relayed swap-in continues the
+      // battle even if the outcome were reported as 'loss'.
+      if (forcedSwap) {
+        this.phase = 'menu';
+      } else if (outcome === Outcome.Win) {
+        this.handleVictory(rewards);
+      } else if (outcome === Outcome.Loss) {
+        this.handleDefeat();
+      } else {
+        this.phase = 'menu';
+      }
+      this.isProcessingAction = false;
+      this.emitStateUpdate();
     } catch (err) {
       const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
       if (recovered) return;
@@ -264,6 +316,13 @@ preload(): void {
       this.isProcessingAction = false;
       this.emitStateUpdate();
     }
+  }
+
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => {
+      const timer = this.time.delayedCall(ms, () => resolve());
+      this.timers.push(timer);
+    });
   }
 
   private async handleFlee(): Promise<void> {
@@ -329,9 +388,8 @@ preload(): void {
     try {
       const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId, this.battleState.turnCount);
       this.battleState = result.battle;
-      this.activeFamiliarIndex = nextIndex;
+      this.activateIncomingFamiliar(result.battle.playerFamiliar);
 
-      this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
       this.battleUI.addLogMessage(`Switched to ${result.battle.playerFamiliar.familiarData.name}!`);
 
       this.isProcessingAction = false;
@@ -346,6 +404,17 @@ preload(): void {
       this.phase = 'menu';
       this.emitStateUpdate();
     }
+  }
+
+  private activateIncomingFamiliar(familiar: BattleFamiliar): void {
+    const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const index = partyIds.indexOf(familiar.familiarData.id);
+    if (index !== -1) {
+      // Keep the active slot in lockstep with whoever is fielded so
+      // emitStateUpdate() rotates the party active-first around them.
+      this.activeFamiliarIndex = index;
+    }
+    this.battleUI.updatePlayerDisplay(familiar);
   }
 
   private recoverFromStaleBattle = async (err: Error & { status?: number }): Promise<boolean> => {
@@ -445,7 +514,9 @@ preload(): void {
     const isDamage = result.effectType === EffectType.Damage
       || result.effectType === EffectType.Debuff
       || result.effectType === EffectType.Dot;
-    const isHeal = result.effectType === EffectType.Heal || result.effectType === EffectType.Hot;
+    const isHeal = result.effectType === EffectType.Heal
+      || result.effectType === EffectType.Hot
+      || result.effectType === EffectType.MpHeal;
     if (!isDamage && !isHeal) return;
     if (!this.battleState) return;
 
@@ -463,7 +534,10 @@ preload(): void {
         this.battleUI.addLogMessage('Critical hit!');
       }
     } else {
-      this.battleUI.showHealNumber(x, y, result.value);
+      // DESIGN.md Info/Special purple for MP restores, so ether-style items
+      // give visible feedback too.
+      const color = result.effectType === EffectType.MpHeal ? '#7C5CFC' : undefined;
+      this.battleUI.showHealNumber(x, y, result.value, color);
     }
   }
 

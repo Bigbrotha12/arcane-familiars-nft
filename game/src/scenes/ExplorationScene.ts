@@ -8,7 +8,7 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData, sortRoomIds } from '../utils/familiarState';
-import type { GameStateSnapshot, FamiliarState, NavigateRoomPayload, DungeonSnapshot, DungeonRoomSnapshot, OverlayModePayload } from '../events';
+import type { GameStateSnapshot, FamiliarState, NavigateRoomPayload, PartySwapPayload, DungeonSnapshot, DungeonRoomSnapshot, OverlayModePayload } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
@@ -32,6 +32,7 @@ export class ExplorationScene extends Phaser.Scene {
   private areaId!: string;
   private layout!: Layout;
   private isProcessing = false;
+  private isSwapping = false;
   private visitedRoomIds: Set<string> = new Set();
   private currentRoomIndex = 0;
   private encounterActive = false;
@@ -51,6 +52,7 @@ export class ExplorationScene extends Phaser.Scene {
   init(data: ExplorationSceneData): void {
     this.areaId = data.areaId;
     this.isProcessing = false;
+    this.isSwapping = false;
     this.dungeon = null;
     this.area = null;
     this.visitedRoomIds = new Set();
@@ -105,6 +107,7 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
     gameEventBus.on(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.on(GameEvent.START_BATTLE, this.handleStartBattle);
+    gameEventBus.on(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
 
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
@@ -381,8 +384,13 @@ export class ExplorationScene extends Phaser.Scene {
         };
       });
 
+    // The HUD Active chip must reflect whoever battle start would field:
+    // party[activeIndex], not blindly party[0] (a KO relay can move the lead).
+    const leadIdx = dungeon.activeIndex ?? 0;
+
     const snapshot: GameStateSnapshot = {
       familiars: party,
+      activeId: party[leadIdx]?.id,
       currency: this.fullGameState?.inventory?.currency ?? 0,
       battleCount: this.fullGameState?.battleCount ?? 0,
       wins: this.fullGameState?.winCount ?? 0,
@@ -457,6 +465,58 @@ export class ExplorationScene extends Phaser.Scene {
     this.startBattle(this.pendingEnemyId);
   };
 
+  private handlePartySwapRequest = (payload: PartySwapPayload): void => {
+    if (this.isSwapping || !this.dungeon) return;
+    const familiarId = payload?.familiarId;
+    if (!familiarId) return;
+
+    const party = this.dungeon.party ?? [];
+    if (!party.includes(familiarId)) {
+      this.explorationUI.addLogMessage('That familiar is not in your party.');
+      this.emitStateUpdate();
+      return;
+    }
+    // Already the lead — the server would short-circuit to a no-op.
+    if (party[0] === familiarId) return;
+
+    this.applyPartySwap(familiarId).catch((err) => {
+      console.error('Party swap error:', err);
+      this.isSwapping = false;
+    });
+  };
+
+  private async applyPartySwap(familiarId: string): Promise<void> {
+    this.isSwapping = true;
+    try {
+      const { state } = await this.gameApi.setActiveFamiliar(familiarId);
+
+      // Adopt the server response wholesale: the endpoint reordered both
+      // activeParty and dungeon.party, and hp/mp stay id-keyed records, so
+      // copying the run roster + resource fields directly cannot diverge from
+      // server truth. Reset activeIndex — battle starts pick
+      // party[activeIndex], and the new lead is now index 0.
+      const dungeon = this.dungeon;
+      if (dungeon) {
+        if (state.dungeon) {
+          dungeon.party = state.dungeon.party;
+          dungeon.partyHp = state.dungeon.partyHp;
+          dungeon.partyMp = state.dungeon.partyMp;
+        }
+        dungeon.activeIndex = 0;
+      }
+
+      this.fullGameState = state;
+      const name = getFamiliar(familiarId)?.name ?? familiarId;
+      this.explorationUI.addLogMessage(`${name} takes the lead.`);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to swap party leader';
+      this.explorationUI.addLogMessage(`Error: ${message}`);
+    } finally {
+      this.isSwapping = false;
+      this.emitStateUpdate();
+    }
+  }
+
   private onShutdown(): void {
     this.cleanupTimers();
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
@@ -465,6 +525,7 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.COLLECT_TREASURE, this.handleCollectTreasure);
     gameEventBus.off(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.off(GameEvent.START_BATTLE, this.handleStartBattle);
+    gameEventBus.off(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
   }
 
   private getRoomIndex(roomId: string): number {

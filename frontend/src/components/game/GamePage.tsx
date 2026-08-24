@@ -87,6 +87,13 @@ export default function GamePage() {
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.START_BATTLE)
   }, [])
 
+  const handlePartySwap = useCallback((familiarId: string) => {
+    gameModuleRef.current?.gameEventBus.emit(
+      gameModuleRef.current.GameEvent.PARTY_SWAP_REQUESTED,
+      { familiarId }
+    )
+  }, [])
+
   const cleanupGame = useCallback(() => {
     if (gameRef.current) {
       if (gameModuleRef.current) {
@@ -313,8 +320,27 @@ export default function GamePage() {
     }
   }, [gameState?.currentScene])
 
+  const hud = gameState ? (
+    <>
+      <BattleHUD
+        snapshot={gameState}
+        outcome={battleOutcome}
+        onAction={handlePlayerAction}
+        onContinue={handleBattleContinue}
+      />
+      <ExplorationHUD
+        snapshot={gameState}
+        onNavigate={handleNavigate}
+        onCollectTreasure={handleCollectTreasure}
+        onFleeEncounter={handleFleeEncounter}
+        onStartBattle={handleStartBattle}
+        onSwapClick={handlePartySwap}
+      />
+    </>
+  ) : null
+
   return (
-    <div className="relative flex-1 flex flex-col bg-[#0A0A0F]">
+    <div className="relative flex-1 flex flex-col min-h-0 bg-[#0A0A0F]">
       <GameToolbar
         gameState={gameState}
         onSave={handleSave}
@@ -322,7 +348,7 @@ export default function GamePage() {
         saving={saving}
       />
 
-      <div ref={containerRef} id="game-container" className="flex-1 relative">
+      <div ref={containerRef} id="game-container" className="flex-1 relative min-h-0 overflow-hidden">
         {gameState && (
           <div
             className="pointer-events-none absolute z-10"
@@ -337,19 +363,16 @@ export default function GamePage() {
                 : { inset: 0 }
             }
           >
-            <BattleHUD
-              snapshot={gameState}
-              outcome={battleOutcome}
-              onAction={handlePlayerAction}
-              onContinue={handleBattleContinue}
-            />
-            <ExplorationHUD
-              snapshot={gameState}
-              onNavigate={handleNavigate}
-              onCollectTreasure={handleCollectTreasure}
-              onFleeEncounter={handleFleeEncounter}
-              onStartBattle={handleStartBattle}
-            />
+            {canvasRect ? (
+              <div
+                className="pointer-events-none absolute left-0 top-0 h-[600px] w-[800px] origin-top-left"
+                style={{ transform: `scale(${canvasRect.width / 800})` }}
+              >
+                {hud}
+              </div>
+            ) : (
+              hud
+            )}
           </div>
         )}
       </div>

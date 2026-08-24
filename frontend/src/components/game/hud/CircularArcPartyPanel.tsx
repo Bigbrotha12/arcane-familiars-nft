@@ -4,7 +4,14 @@
 // positioned almost touching the active arc.
 // Shared status effects rendered as a horizontal line below the inactive arc
 // (up to 10 icons, wraps to a max of 2 lines).
+//
+// Interactive mode (onSwapClick provided): inactive cards become buttons that
+// promote that familiar to party lead (out-of-battle swap) and carry an
+// always-visible "Swap" badge; the active card gains an "Active" chip. Without
+// the callback the panel renders exactly as before (battle HUD passes none).
 
+import { useEffect, useState } from 'react'
+import type { ReactNode } from 'react'
 import type { FamiliarState } from '@/game'
 
 interface StatusEffect {
@@ -17,9 +24,20 @@ interface CircularArcPartyPanelProps {
   party: FamiliarState[]
   activeId?: string
   statusEffects?: StatusEffect[]
+  onSwapClick?: (familiarId: string) => void
 }
 
-function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80, nameOnTop: boolean = false) {
+// Fallback unlock for a swap request that never resolves (e.g. network error,
+// no state update follows). Success clears it immediately via activeId change.
+const SWAP_PENDING_TIMEOUT_MS = 8000
+
+function renderArc(
+  familiar: FamiliarState,
+  isActive: boolean,
+  size: number = 80,
+  nameOnTop: boolean = false,
+  labelAccessory?: ReactNode
+) {
   const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
 
@@ -47,9 +65,18 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
     </span>
   )
 
+  const labelRow = labelAccessory ? (
+    <div className="flex items-center gap-1">
+      {nameLabel}
+      {labelAccessory}
+    </div>
+  ) : (
+    nameLabel
+  )
+
   return (
     <div className="flex flex-col items-center gap-1">
-      {nameOnTop && nameLabel}
+      {nameOnTop && labelRow}
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           <circle
@@ -104,35 +131,101 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
           </span>
         </div>
       </div>
-      {!nameOnTop && nameLabel}
+      {!nameOnTop && labelRow}
     </div>
   )
 }
 
-function CircularArcPartyPanel({ party, activeId, statusEffects = [] }: CircularArcPartyPanelProps) {
-  if (!party.length) return null
+function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClick }: CircularArcPartyPanelProps) {
+  const [swapPendingId, setSwapPendingId] = useState<string | null>(null)
 
-  const resolvedActiveId = activeId ?? party[0].id
+  const interactive = typeof onSwapClick === 'function'
+
+  // Hooks must run regardless of party contents (panel may render empty).
+  const resolvedActiveId = activeId ?? party[0]?.id
+
+  // A state update promoting the requested familiar to lead means success.
+  useEffect(() => {
+    if (swapPendingId !== null && resolvedActiveId === swapPendingId) {
+      setSwapPendingId(null)
+    }
+  }, [resolvedActiveId, swapPendingId])
+
+  // Error fallback: re-enable swapping if no resolution arrives in time.
+  useEffect(() => {
+    if (!swapPendingId) return
+    const timeoutId = window.setTimeout(() => setSwapPendingId(null), SWAP_PENDING_TIMEOUT_MS)
+    return () => window.clearTimeout(timeoutId)
+  }, [swapPendingId])
+
+  if (!party.length || resolvedActiveId === undefined) return null
+
   const active = party.find((f) => f.id === resolvedActiveId) ?? party[0]
   const inactive = party.filter((f) => f.id !== active.id)
 
+  const handleSwap = (familiarId: string) => {
+    if (!interactive || swapPendingId !== null) return
+    setSwapPendingId(familiarId)
+    onSwapClick?.(familiarId)
+  }
+
+  const activeChip = interactive ? (
+    <span
+      className="rounded-full border border-teal/60 bg-teal/15 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-[#F0EFFF]"
+    >
+      Active
+    </span>
+  ) : undefined
+
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-2">
+    <div className="pointer-events-none flex flex-col items-center gap-1">
       {/* Active familiar - larger, name on top, offset left */}
-      <div className="relative -ml-12">
-        {renderArc(active, true, 92, true)}
+      <div className="relative -ml-9">
+        {renderArc(active, true, 64, true, activeChip)}
       </div>
 
-      {/* Inactive familiar - smaller, grayscale, offset right, almost touching */}
-      {inactive.slice(0, 1).map((familiar) => (
-        <div key={familiar.id} className="relative -mr-12 -mt-1">
-          {renderArc(familiar, false, 72)}
-        </div>
-      ))}
+      {/* Inactive familiar(s) - smaller, grayscale, offset right, almost touching.
+          In interactive mode each card is a button promoting it to party lead.
+          Fainted cards keep their Swap badge but dimmed and non-clickable. */}
+      {inactive.map((familiar) => {
+        const isFainted = familiar.hp <= 0
+        const swapBadge = interactive ? (
+          isFainted ? (
+            <span className="rounded-full border border-[#4B5563]/60 bg-[#2D2A5E]/40 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-text-muted">
+              Swap
+            </span>
+          ) : (
+            <span className="rounded-full border border-accent/70 bg-accent/25 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-accent-light transition-colors duration-150 group-hover:border-accent group-hover:bg-accent/40">
+              Swap
+            </span>
+          )
+        ) : undefined
+
+        if (!interactive || isFainted) {
+          return (
+            <div key={familiar.id} className="relative -mr-9 -mt-0.5 opacity-60">
+              {renderArc(familiar, false, 50, false, swapBadge)}
+            </div>
+          )
+        }
+
+        return (
+          <button
+            key={familiar.id}
+            type="button"
+            onClick={() => handleSwap(familiar.id)}
+            disabled={swapPendingId === familiar.id}
+            aria-label={`Make ${familiar.name} the active familiar`}
+            className="group pointer-events-auto relative -mr-9 -mt-0.5 flex cursor-pointer flex-col items-center rounded-md transition duration-150 ease-out hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {renderArc(familiar, false, 50, false, swapBadge)}
+          </button>
+        )
+      })}
 
       {/* Shared status effects - horizontal, below inactive, wraps to 2 lines max */}
       {statusEffects.length > 0 && (
-        <div className="mt-1 flex max-w-[176px] flex-wrap items-center justify-center gap-1">
+        <div className="mt-1 flex max-w-[132px] flex-wrap items-center justify-center gap-1">
           {statusEffects.map((effect) => (
             <div
               key={effect.id}

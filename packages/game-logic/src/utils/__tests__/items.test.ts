@@ -125,9 +125,10 @@ describe("item effects in battle", () => {
     expect(debuff!.type).toBe(EffectType.Debuff);
     expect(debuff!.stat).toBe(StatName.Speed);
     expect(debuff!.value).toBe(0.7);
-    // Player-applied statuses tick down at the end of the application turn
-    // (same semantics as ability debuffs), so 2 turns → 1 remaining.
-    expect(debuff!.turnsRemaining).toBe(1);
+    // Statuses applied during a turn are NOT ticked on the application turn
+    // (symmetric freshness rule), so the debuff keeps its full 2 turns and
+    // first decrements at the end of the NEXT turn.
+    expect(debuff!.turnsRemaining).toBe(2);
     expect(playerResult.description).toContain("-30% enemy Speed");
   });
 

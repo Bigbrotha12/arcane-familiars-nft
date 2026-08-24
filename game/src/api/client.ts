@@ -1,5 +1,16 @@
 import type { GameState, BattleState, BattleAction, BattleTurnResult, DungeonState, Room, Area, Inventory } from '@arcane-familiars/game-logic';
 
+// crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
+// back to getRandomValues so LAN play over plain HTTP still works.
+function randomId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const bytes = crypto.getRandomValues(new Uint8Array(16));
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = [...bytes].map((b) => b.toString(16).padStart(2, '0'));
+  return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
+}
+
 class GameApiClient {
   private baseUrl: string;
   private anonymousId: string;
@@ -10,7 +21,7 @@ class GameApiClient {
     if (stored) {
       this.anonymousId = stored;
     } else {
-      this.anonymousId = crypto.randomUUID();
+      this.anonymousId = randomId();
       localStorage.setItem('af_anonymous_id', this.anonymousId);
     }
   }
@@ -45,6 +56,10 @@ class GameApiClient {
 
   async setParty(activeParty: string[]): Promise<{ success: boolean; state: GameState }> {
     return this.request('POST', '/api/game/state/party', { anonymousId: this.anonymousId, activeParty });
+  }
+
+  async setActiveFamiliar(familiarId: string): Promise<{ success: boolean; state: GameState }> {
+    return this.request('POST', '/api/game/state/party/active', { anonymousId: this.anonymousId, familiarId });
   }
 
   async enterDungeon(areaId: string): Promise<{ dungeon: DungeonState; area: Area }> {

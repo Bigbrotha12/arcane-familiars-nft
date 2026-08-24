@@ -9,9 +9,12 @@ interface ModalProps {
       render over the Phaser canvas (ability/item/exit). Default is the light
       surface-card style used by the landing page. */
   hud?: boolean
+  /** Dense in-game sizing (narrow width, tighter padding/type) for modals
+      that live inside the 800x600 design-space HUD stage. */
+  compact?: boolean
 }
 
-function Modal({ open, onClose, title, children, hud = false }: ModalProps) {
+function Modal({ open, onClose, title, children, hud = false, compact = false }: ModalProps) {
   useEffect(() => {
     if (!open) return
     const handler = (e: KeyboardEvent) => {
@@ -35,16 +38,20 @@ function Modal({ open, onClose, title, children, hud = false }: ModalProps) {
         aria-hidden="true"
       />
       <div
-        className={`relative w-full max-w-md rounded-lg p-lg animate-in fade-in zoom-in-95 duration-200 ${
+        className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
+          compact ? 'max-w-[300px] p-md' : 'max-w-md p-lg'
+        } ${
           hud
             ? 'hud-frame rounded-lg'
             : 'bg-surface-card shadow-card-hover'
         }`}
       >
         {title && (
-          <div className="flex items-center justify-between mb-md">
+          <div className={`flex items-center justify-between ${compact ? 'mb-sm' : 'mb-md'}`}>
             <h2
-              className={`text-xl font-display font-semibold ${
+              className={`font-display font-semibold ${
+                compact ? 'text-sm' : 'text-xl'
+              } ${
                 hud ? 'text-[#F0EFFF]' : 'text-text-primary'
               }`}
             >
@@ -59,7 +66,7 @@ function Modal({ open, onClose, title, children, hud = false }: ModalProps) {
               }`}
               aria-label="Close"
             >
-              <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
+              <svg width="16" height="16" viewBox="0 0 20 20" fill="none">
                 <path d="M15 5L5 15M5 5l10 10" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
               </svg>
             </button>
