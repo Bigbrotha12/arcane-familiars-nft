@@ -122,11 +122,17 @@ function renderArc(
             className="transition-all duration-300"
           />
         </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="font-mono text-xs font-bold tabular-nums drop-shadow-md" style={{ color: textColor }}>
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
+          <span
+            className="font-mono font-bold tabular-nums drop-shadow-md"
+            style={{ color: textColor, fontSize: isActive ? '11px' : '8px' }}
+          >
             {Math.max(0, Math.floor(familiar.hp))}
           </span>
-          <span className="font-mono text-[8px] tabular-nums" style={{ color: subtextColor }}>
+          <span
+            className="font-mono tabular-nums"
+            style={{ color: subtextColor, fontSize: isActive ? '8px' : '6px' }}
+          >
             {Math.max(0, Math.floor(familiar.mp))} MP
           </span>
         </div>

@@ -29,7 +29,7 @@ function CombinedControlsPanel({ actions, logEntries, party, activeId, onSwapCli
               <BattleLog entries={logEntries} />
             </div>
           </div>
-          <div className="relative w-1/4">
+          <div className="relative w-1/4 p-1.5">
             {/* Partial vertical separator */}
             <div className="absolute top-3 bottom-3 left-0 w-[3px] border-l-2 border-double border-[#3B3870]" />
             <div className="flex h-full items-center justify-center">
