@@ -22,25 +22,25 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
   const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal
 
   return (
-    <div className="hud-frame pointer-events-none flex w-[520px] flex-col items-center gap-2 rounded-md px-lg py-md">
-      <div className="flex max-w-full items-center gap-2">
-        <h2 className="truncate font-display text-lg font-bold text-[#F0EFFF]">
+    <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm">
+      <div className="flex max-w-full items-center gap-1.5">
+        <h2 className="truncate font-display text-sm font-bold text-[#F0EFFF]">
           {snapshot.roomName ?? 'Unknown Room'}
         </h2>
         <span
-          className={`rounded-sm px-2 py-0.5 font-display text-[10px] font-semibold uppercase tracking-wider ${typeStyle.className}`}
+          className={`shrink-0 rounded-sm px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider ${typeStyle.className}`}
         >
           {typeStyle.label}
         </span>
       </div>
 
       {snapshot.roomDescription && (
-        <p className="max-w-md text-center font-body text-sm text-[#B8B5E0]">
+        <p className="line-clamp-2 text-center font-body text-xs leading-snug text-[#B8B5E0]">
           {snapshot.roomDescription}
         </p>
       )}
 
-      <p className="font-mono text-[11px] tracking-wider text-[#A5A3C4]">
+      <p className="font-mono text-[9px] tracking-wider text-[#A5A3C4]">
         Room {dungeon.currentRoomIndex + 1}/{dungeon.roomCount}
       </p>
     </div>

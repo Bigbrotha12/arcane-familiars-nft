@@ -267,7 +267,12 @@ preload(): void {
         turnCount: turnCount ?? this.battleState!.turnCount + 1,
         status: BattleScene.OUTCOME_TO_STATUS[turnResult.battleOutcome],
       };
-      this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
+      // With a forced swap pending, hold the old sprite here — the incoming
+      // species is revealed by the relay block below so it appears together
+      // with the "fell! ... steps in!" line instead of a beat earlier.
+      if (!turnResult.forcedSwap) {
+        this.battleUI.updatePlayerDisplay(turnResult.playerFamiliar);
+      }
       this.battleUI.updateEnemyDisplay(turnResult.enemyFamiliar);
 
       this.emitStateUpdate();
@@ -275,8 +280,25 @@ preload(): void {
       await this.sleep(this.OUTCOME_DELAY_MS);
       if (!this.scene || !this.scene.isActive()) return;
 
+      const forcedSwap = turnResult.forcedSwap;
+      if (forcedSwap) {
+        // Server-side KO relay: the fallen familiar was replaced by a living
+        // backup, so announce it, rebuild the player visuals for the incoming
+        // combatant, and keep the battle going.
+        this.battleUI.addLogMessage(`${forcedSwap.fallenName} fell! ${forcedSwap.incomingName} steps in!`);
+        this.activateIncomingFamiliar(turnResult.playerFamiliar);
+        this.emitStateUpdate();
+
+        await this.sleep(this.STEP_DELAY_MS);
+        if (!this.scene || !this.scene.isActive()) return;
+      }
+
       const outcome = turnResult.battleOutcome;
-      if (outcome === Outcome.Win) {
+      // forcedSwap is checked before Loss: a relayed swap-in continues the
+      // battle even if the outcome were reported as 'loss'.
+      if (forcedSwap) {
+        this.phase = 'menu';
+      } else if (outcome === Outcome.Win) {
         this.handleVictory(rewards);
       } else if (outcome === Outcome.Loss) {
         this.handleDefeat();
@@ -366,9 +388,8 @@ preload(): void {
     try {
       const result = await gameApiClient.swapFamiliar(this.battleState.id, newFamiliarId, this.battleState.turnCount);
       this.battleState = result.battle;
-      this.activeFamiliarIndex = nextIndex;
+      this.activateIncomingFamiliar(result.battle.playerFamiliar);
 
-      this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
       this.battleUI.addLogMessage(`Switched to ${result.battle.playerFamiliar.familiarData.name}!`);
 
       this.isProcessingAction = false;
@@ -383,6 +404,17 @@ preload(): void {
       this.phase = 'menu';
       this.emitStateUpdate();
     }
+  }
+
+  private activateIncomingFamiliar(familiar: BattleFamiliar): void {
+    const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const index = partyIds.indexOf(familiar.familiarData.id);
+    if (index !== -1) {
+      // Keep the active slot in lockstep with whoever is fielded so
+      // emitStateUpdate() rotates the party active-first around them.
+      this.activeFamiliarIndex = index;
+    }
+    this.battleUI.updatePlayerDisplay(familiar);
   }
 
   private recoverFromStaleBattle = async (err: Error & { status?: number }): Promise<boolean> => {

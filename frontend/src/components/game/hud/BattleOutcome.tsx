@@ -23,21 +23,21 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="hud-frame flex w-full max-w-sm flex-col items-center gap-6 rounded-md p-xl text-center">
-        <h2 className={`font-display text-3xl font-semibold ${titleColor}`}>{title}</h2>
+      <div className="hud-frame flex w-full max-w-[280px] flex-col items-center gap-4 rounded-md p-lg text-center">
+        <h2 className={`font-display text-2xl font-semibold ${titleColor}`}>{title}</h2>
 
-        <div className="flex flex-col items-center gap-2">
-          <p className="font-body text-sm text-[#B8B5E0]">{flavor}</p>
+        <div className="flex flex-col items-center gap-1.5">
+          <p className="font-body text-xs text-[#B8B5E0]">{flavor}</p>
 
           {isVictory && rewards && (
-            <div className="mt-1 flex flex-col items-center gap-1">
+            <div className="mt-0.5 flex flex-col items-center gap-0.5">
               {rewards.currency > 0 && (
-                <p className="font-mono text-base tabular-nums text-yellow">
+                <p className="font-mono text-sm tabular-nums text-yellow">
                   +{rewards.currency} coins
                 </p>
               )}
               {rewards.items.length > 0 && (
-                <p className="font-body text-sm text-[#F0EFFF]">
+                <p className="font-body text-xs text-[#F0EFFF]">
                   Found: {rewards.items.join(', ')}
                 </p>
               )}
@@ -45,7 +45,7 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
           )}
         </div>
 
-        <Button size="lg" onClick={onContinue}>
+        <Button size="md" onClick={onContinue}>
           Continue
         </Button>
       </div>

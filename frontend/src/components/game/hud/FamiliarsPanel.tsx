@@ -22,13 +22,14 @@ function FamiliarsPanel({ open, party, activeId, onSelect, onClose }: FamiliarsP
         )}
         {party.map((familiar) => {
           const isActive = familiar.id === activeId
+          const isFainted = familiar.hp <= 0
           const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
           return (
             <div key={familiar.id} className="flex flex-col gap-1">
               <Button
                 variant={isActive ? 'primary' : 'secondary'}
                 className="w-full"
-                disabled={isActive}
+                disabled={isActive || isFainted}
                 onClick={() => onSelect(familiar.id)}
               >
                 <span className="flex-1 text-left font-body font-medium">{familiar.name}</span>
@@ -39,6 +40,9 @@ function FamiliarsPanel({ open, party, activeId, onSelect, onClose }: FamiliarsP
               </Button>
               {isActive && (
                 <p className="px-2 text-sm text-text-muted">Currently in battle</p>
+              )}
+              {isFainted && !isActive && (
+                <p className="px-2 text-sm text-text-muted">Fainted</p>
               )}
             </div>
           )

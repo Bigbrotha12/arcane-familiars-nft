@@ -21,14 +21,14 @@ interface ActionBarProps {
   items: ActionBarItem[]
 }
 
-// icon width (1.25rem for the icon span) + 75px for the label
-const MIN_BUTTON_WIDTH = 'min-w-[95px]'
+// icon width (1rem for the icon span) + 56px for the label
+const MIN_BUTTON_WIDTH = 'min-w-[72px]'
 
 function ActionBar({ items }: ActionBarProps) {
   if (items.length === 0) return null
 
   return (
-    <div className="hud-frame pointer-events-auto flex flex-wrap items-center justify-center gap-2 rounded-md p-md">
+    <div className="hud-frame pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-md px-2 py-1.5">
       {items.map(({ key, label, icon, primary = false, disabled = false, onClick }) => (
         <Button
           key={key}
@@ -36,10 +36,10 @@ function ActionBar({ items }: ActionBarProps) {
           variant={primary ? 'primary' : 'secondary'}
           disabled={disabled}
           onClick={onClick}
-          className={`flex-1 ${MIN_BUTTON_WIDTH}`}
+          className={`flex-1 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs`}
         >
           {icon && (
-            <span className="flex w-[1.25rem] shrink-0 items-center justify-center text-base leading-none">
+            <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none">
               {icon}
             </span>
           )}

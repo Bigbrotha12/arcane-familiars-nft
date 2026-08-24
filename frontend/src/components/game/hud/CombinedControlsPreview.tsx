@@ -70,8 +70,8 @@ function CombinedControlsPreview() {
             <ActionBar items={previewActions} />
 
             {/* Row 2 — log (75%) + party (25%) */}
-            <div className="flex min-h-[200px] rounded-md border-[6px] border-double border-[#3B3870] bg-[#1E1B4B]/85">
-              <div className="flex w-3/4 flex-col p-md">
+            <div className="flex min-h-[104px] rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B]/85">
+              <div className="flex w-3/4 flex-col p-sm">
                 <div className="flex flex-1 flex-col [&>div]:flex-1">
                   <BattleLog entries={previewLog} />
                 </div>

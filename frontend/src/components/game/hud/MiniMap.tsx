@@ -14,11 +14,11 @@ interface Position {
   y: number
 }
 
-const COL_W = 18
-const ROW_H = 15
-const ORIGIN_X = 8
-const ORIGIN_Y = 10
-const RADIUS = 3.5
+const COL_W = 13
+const ROW_H = 11
+const ORIGIN_X = 6
+const ORIGIN_Y = 8
+const RADIUS = 2.5
 
 function computeLayout(rooms: DungeonRoomSnapshot[]): {
   positions: Map<string, Position>
@@ -138,7 +138,7 @@ function MiniMap({ dungeon }: MiniMapProps) {
   const rooms = dungeon.rooms
 
   return (
-    <div className="hud-frame pointer-events-none flex flex-col gap-1.5 rounded-md p-sm">
+    <div className="hud-frame pointer-events-none flex flex-col gap-1 rounded-md p-[6px]">
       {rooms.length > 0 && (
         <svg width={width} height={height} viewBox={`0 0 ${width} ${height}`}>
           <g>
@@ -185,16 +185,16 @@ function MiniMap({ dungeon }: MiniMapProps) {
         </svg>
       )}
 
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
         {LEGEND.map(({ key, label }) => {
           const color = NODE_COLORS[key]
           return (
-            <span key={key} className="flex items-center gap-1">
+            <span key={key} className="flex items-center gap-0.5">
               <span
-                className="inline-block h-2 w-2 rounded-full border"
+                className="inline-block h-1.5 w-1.5 rounded-full border"
                 style={{ backgroundColor: color.fill, borderColor: color.stroke }}
               />
-              <span className="font-mono text-[9px] uppercase tracking-wide text-[#A5A3C4]">
+              <span className="font-mono text-[8px] uppercase tracking-wide text-[#A5A3C4]">
                 {label}
               </span>
             </span>

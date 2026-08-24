@@ -72,6 +72,17 @@ export interface CanceledAction {
   reason: string;
 }
 
+/** Involuntary substitution fired by the battle action endpoint when the
+ *  active familiar is KO'd while another living party member remains: the
+ *  next member relays into the battle instead of ending the dungeon run.
+ *  Names only — clients compose their own log/message text. */
+export interface ForcedSwapInfo {
+  /** Display name of the familiar that fell. */
+  fallenName: string;
+  /** Display name of the party member who stepped in. */
+  incomingName: string;
+}
+
 export interface BattleTurnResult {
   playerAction: ActionResult;
   enemyAction: ActionResult;
@@ -83,6 +94,9 @@ export interface BattleTurnResult {
   steps: TurnStep[];
   /** Actions skipped because their actor was KO'd before it could act. */
   canceledActions: CanceledAction[];
+  /** Set when the active familiar was KO'd and a living party member
+   *  involuntarily took its place (battleOutcome is then Continue). */
+  forcedSwap?: ForcedSwapInfo;
 }
 
 export interface BattleRewards {

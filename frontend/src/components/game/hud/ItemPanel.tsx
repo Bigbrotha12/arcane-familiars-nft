@@ -14,18 +14,18 @@ interface ItemPanelProps {
 
 function ItemPanel({ open, items, onSelect, onClose }: ItemPanelProps) {
   return (
-    <Modal open={open} onClose={onClose} title="Select Item" hud>
-      <div className="flex flex-col gap-3">
+    <Modal open={open} onClose={onClose} title="Select Item" hud compact>
+      <div className="flex flex-col gap-2">
         {items.length === 0 && (
-          <p className="font-body text-sm text-text-muted">No items available.</p>
+          <p className="font-body text-xs text-text-muted">No items available.</p>
         )}
         {items.map((item) => {
           const usable = item.usable && item.quantity > 0
           return (
-            <div key={item.id} className="flex flex-col gap-1">
+            <div key={item.id} className="flex flex-col gap-0.5">
               <Button
                 variant={usable ? 'secondary' : 'ghost'}
-                className="w-full"
+                className="w-full px-2 py-1 text-xs"
                 disabled={!usable}
                 onClick={() => onSelect(item.id)}
               >
@@ -33,15 +33,15 @@ function ItemPanel({ open, items, onSelect, onClose }: ItemPanelProps) {
                   <img
                     src={item.iconUrl}
                     alt=""
-                    className="mr-2 h-10 w-10 shrink-0 rounded-md border border-[#E8E4F0] bg-white object-contain"
+                    className="mr-1.5 h-7 w-7 shrink-0 rounded-sm border border-[#E8E4F0] bg-white object-contain"
                   />
                 )}
                 <span className="flex-1 text-left font-body font-medium">{item.name}</span>
-                <span className="font-mono text-xs tabular-nums text-text-secondary">
+                <span className="font-mono text-[10px] tabular-nums text-text-secondary">
                   x{item.quantity}
                 </span>
               </Button>
-              <p className="px-2 text-sm text-text-muted">{item.description}</p>
+              <p className="px-1 text-xs text-text-muted">{item.description}</p>
             </div>
           )
         })}
