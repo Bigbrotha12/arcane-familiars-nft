@@ -11,9 +11,6 @@ jobs:
     name: Frontend (build + type-check)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: frontend
 
     steps:
       - uses: actions/checkout@v4
@@ -21,18 +18,15 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run type-check
-      - run: npm run build
+      - run: npm run frontend:type-check
+      - run: npm run frontend:build
 
   backend:
     name: Backend (build + type-check)
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    defaults:
-      run:
-        working-directory: backend
 
     steps:
       - uses: actions/checkout@v4
@@ -40,7 +34,23 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
-          cache-dependency-path: backend/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run type-check
-      - run: npm run build
+      - run: npm run backend:type-check
+      - run: npm run backend:build
+
+  game-logic:
+    name: Game logic (tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+      - run: npm ci
+      - working-directory: packages/game-logic
+        run: npm test

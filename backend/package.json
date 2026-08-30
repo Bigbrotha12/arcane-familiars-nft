@@ -11,6 +11,8 @@
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
     "db:migrate": "wrangler d1 migrations apply arcane-familiars-dev --local",
+    "db:migrate:remote": "wrangler d1 migrations apply arcane-familiars --env production --remote",
+    "db:migrate:staging": "wrangler d1 migrations apply arcane-familiars-staging --env staging --remote",
     "db:seed": "wrangler d1 execute arcane-familiars-dev --local --file ./seeds/0001_seed_familiars.sql",
     "db:setup": "npm run db:migrate && npm run db:seed"
   },

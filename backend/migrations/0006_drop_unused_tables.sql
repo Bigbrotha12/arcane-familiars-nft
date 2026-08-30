@@ -1,5 +1,5 @@
--- Migration 0005: Drop tables with no application usage
--- Applied via: wrangler d1 migrations apply arcane-familiars --remote
+-- Migration 0006: Drop tables with no application usage
+-- Applied via: wrangler d1 migrations apply arcane-familiars --env production --remote
 
 -- battle_log: written by nothing; battle history is not implemented.
 DROP TABLE IF EXISTS battle_log;
