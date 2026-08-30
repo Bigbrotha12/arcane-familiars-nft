@@ -1,5 +1,5 @@
 -- Migration 0001: Initial schema for Arcane Familiars backend
--- Applied via: wrangler d1 migrations apply arcane-familiars --remote
+-- Applied via: wrangler d1 migrations apply arcane-familiars --env production --remote
 
 -- Familiar type catalog
 CREATE TABLE IF NOT EXISTS familiars (
