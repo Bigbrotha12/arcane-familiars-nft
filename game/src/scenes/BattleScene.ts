@@ -445,7 +445,9 @@ preload(): void {
     const isDamage = result.effectType === EffectType.Damage
       || result.effectType === EffectType.Debuff
       || result.effectType === EffectType.Dot;
-    const isHeal = result.effectType === EffectType.Heal || result.effectType === EffectType.Hot;
+    const isHeal = result.effectType === EffectType.Heal
+      || result.effectType === EffectType.Hot
+      || result.effectType === EffectType.MpHeal;
     if (!isDamage && !isHeal) return;
     if (!this.battleState) return;
 
@@ -463,7 +465,10 @@ preload(): void {
         this.battleUI.addLogMessage('Critical hit!');
       }
     } else {
-      this.battleUI.showHealNumber(x, y, result.value);
+      // DESIGN.md Info/Special purple for MP restores, so ether-style items
+      // give visible feedback too.
+      const color = result.effectType === EffectType.MpHeal ? '#7C5CFC' : undefined;
+      this.battleUI.showHealNumber(x, y, result.value, color);
     }
   }
 
