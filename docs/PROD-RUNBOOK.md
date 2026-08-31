@@ -40,7 +40,7 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
 
 ### Production (gated; runs on `master` merge)
 
-Gated on `if: hashFiles('docs/DEFINITION_OF_PRODUCTION.md')`; the push to `master` is the approval (solo dev — no reviewers/wait timer).
+Gated on the push to `master` (the approval, solo dev — no reviewers/wait timer); a step-level `hashFiles` gate fails the prod job if `docs/DEFINITION_OF_PRODUCTION.md` is missing.
 
 1. **Back up before mutating:** from `backend/`, `npx wrangler d1 export arcane-familiars --env production --remote --output d1-export.sql --skip-confirmation` → attach as a GH Actions artifact (`d1-backup-*`) **and/or** upload to R2 (`d1-backup/<date>.sql`). Without `--output`, the dump goes to stdout, which can't be attached as an artifact. Durable destination, not just the ephemeral runner (R6).
 2. `npm run db:migrate:remote` — applies migrations to `arcane-familiars` (prod).

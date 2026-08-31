@@ -1,6 +1,6 @@
 # Definition of Production
 
-> Gate document for production deployment. Per [PRODUCTION-DEPLOYMENT-GAP-PLAN.md](./PRODUCTION-DEPLOYMENT-GAP-PLAN.md) §5 (M2), the prod deploy job in `.github/workflows/deploy.yml` runs **only** when this file exists (`if: hashFiles('docs/DEFINITION_OF_PRODUCTION.md')`); the push to `master` is the approval (solo dev — no reviewers/wait timer).
+> Gate document for production deployment. Per [PRODUCTION-DEPLOYMENT-GAP-PLAN.md](./PRODUCTION-DEPLOYMENT-GAP-PLAN.md) §5 (M2), the prod deploy job in `.github/workflows/deploy.yml` runs on a push to `master` (the approval) and its first step fails if this file is missing (step-level `hashFiles` gate — `hashFiles` is not valid in job-level `if`).
 
 ## Owner & review
 
