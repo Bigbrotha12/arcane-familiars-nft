@@ -170,7 +170,21 @@ preload(): void {
       this.fullGameState = state;
       const savedFamiliars = state.playerFamiliars || [];
       const validSavedFamiliars = savedFamiliars.filter((id) => FAMILIARS[id]);
-      const familiarIds = validSavedFamiliars.length >= MAX_PARTY_SIZE ? validSavedFamiliars : DEFAULT_FALLBACK_FAMILIARS;
+
+      // If signed in, merge on-chain owned familiars into the selectable pool
+      let availableFamiliars = validSavedFamiliars;
+      try {
+        const ownedFamiliars = await gameApiClient.getOwnedFamiliars();
+        if (ownedFamiliars.length > 0) {
+          const ownedValid = ownedFamiliars.filter((id) => FAMILIARS[id]);
+          const merged = new Set([...availableFamiliars, ...ownedValid]);
+          availableFamiliars = [...merged];
+        }
+      } catch {
+        // Non-fatal — proceed with state familiars only
+      }
+
+      const familiarIds = availableFamiliars.length >= MAX_PARTY_SIZE ? availableFamiliars : DEFAULT_FALLBACK_FAMILIARS;
 
       this.loadingText.setAlpha(0);
       this.createFamiliarCards(familiarIds);

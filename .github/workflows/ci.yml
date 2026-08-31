@@ -24,7 +24,7 @@ jobs:
       - run: npm run frontend:build
 
   backend:
-    name: Backend (build + type-check)
+    name: Backend (build + type-check + test)
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -37,6 +37,7 @@ jobs:
           cache-dependency-path: package-lock.json
       - run: npm ci
       - run: npm run backend:type-check
+      - run: npm run backend:test
       - run: npm run backend:build
 
   game-logic:

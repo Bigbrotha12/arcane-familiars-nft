@@ -11,6 +11,8 @@ function randomId(): string {
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
+const PASSPORT_ID_TOKEN_KEY = 'af_passport_id_token';
+
 class GameApiClient {
   private baseUrl: string;
   private anonymousId: string;
@@ -26,12 +28,31 @@ class GameApiClient {
     }
   }
 
+  private getToken(): string | null {
+    try {
+      return sessionStorage.getItem(PASSPORT_ID_TOKEN_KEY);
+    } catch {
+      return null;
+    }
+  }
+
+  // Guest sessions (no Passport id token in session storage) are still fully
+  // persisted by the backend, keyed by a client-generated anonymous id.
   private async request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
     const options: RequestInit = {
       method,
       headers: { 'Content-Type': 'application/json' },
     };
+
+    const token = this.getToken();
+    if (token) {
+      options.headers = {
+        ...options.headers,
+        'Authorization': `Bearer ${token}`,
+      };
+    }
+
     if (body) options.body = JSON.stringify(body);
 
     let res: Response;
@@ -92,6 +113,18 @@ class GameApiClient {
 
   async swapFamiliar(battleId: string, newFamiliarId: string, expectedTurnCount?: number): Promise<{ battle: BattleState }> {
     return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId, expectedTurnCount });
+  }
+
+  async getOwnedFamiliars(): Promise<string[]> {
+    const token = this.getToken();
+    if (!token) return [];
+
+    try {
+      const result = await this.request<{ familiars: string[]; synced: boolean }>('GET', '/api/game/owned-familiars');
+      return result.familiars || [];
+    } catch {
+      return [];
+    }
   }
 }
 

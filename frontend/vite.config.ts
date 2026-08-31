@@ -1,6 +1,7 @@
 import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import svgr from "vite-plugin-svgr";
+import { nodePolyfills } from "vite-plugin-node-polyfills";
 import path from "path";
 import fs from "fs";
 
@@ -59,6 +60,7 @@ export default defineConfig({
     react(),
     svgr(),
     resolveGameAtAlias(),
+    nodePolyfills({ include: ['crypto', 'buffer', 'process', 'stream', 'util', 'events', 'http', 'https', 'url', 'zlib'] }),
   ],
   resolve: {
     alias: [

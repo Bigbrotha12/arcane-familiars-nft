@@ -9,6 +9,7 @@
     "types": "wrangler types",
     "build": "wrangler deploy --env production --dry-run",
     "cf-typegen": "wrangler types",
+    "test": "vitest run",
     "type-check": "tsc --noEmit",
     "db:migrate": "wrangler d1 migrations apply arcane-familiars-dev --local",
     "db:migrate:remote": "wrangler d1 migrations apply arcane-familiars --env production --remote",
@@ -18,11 +19,16 @@
   },
   "dependencies": {
     "@arcane-familiars/game-logic": "*",
-    "hono": "^4.12.32"
+    "hono": "^4.12.32",
+    "jose": "^6.2.10",
+    "viem": "^2.18.8"
   },
   "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@cloudflare/workers-types": "^5.20260727.1",
+    "miniflare": "^5.20260815.0-alpha",
     "typescript": "^7.0.2",
+    "vitest": "^4.1.11",
     "wrangler": "^4.114.0"
   }
 }

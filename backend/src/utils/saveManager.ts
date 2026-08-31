@@ -4,6 +4,7 @@ import { generateId } from './uuid';
 export interface LoadedState {
   state: GameState;
   version: number;
+  isAnonymous: boolean;
 }
 
 export function createDefaultGameState(anonymousId: string): GameState {
@@ -29,32 +30,47 @@ export function createDefaultGameState(anonymousId: string): GameState {
   };
 }
 
-export async function loadGameState(db: D1Database, anonymousId: string): Promise<LoadedState | null> {
+export async function loadGameState(
+  db: D1Database,
+  anonymousId: string,
+): Promise<LoadedState | null> {
   const row = await db
-    .prepare('SELECT state_json, version FROM game_states WHERE anonymous_id = ?')
+    .prepare('SELECT state_json, version, is_anonymous FROM game_states WHERE anonymous_id = ?')
     .bind(anonymousId)
-    .first<{ state_json: string; version: number }>();
+    .first<{ state_json: string; version: number; is_anonymous: number }>();
 
   if (!row) return null;
-  return { state: JSON.parse(row.state_json) as GameState, version: row.version };
+  return {
+    state: JSON.parse(row.state_json) as GameState,
+    version: row.version,
+    isAnonymous: row.is_anonymous === 1,
+  };
 }
 
 /**
  * Load an existing state or create (and persist) a default one. Uses an
  * idempotent INSERT so concurrent first loads cannot collide.
+ *
+ * Guest sessions (no Passport token) are persisted exactly like signed-in
+ * users, but marked `is_anonymous = 1` so a future cleanup job can purge
+ * stale guest rows.
  */
-export async function getOrCreateGameState(db: D1Database, anonymousId: string): Promise<LoadedState> {
+export async function getOrCreateGameState(
+  db: D1Database,
+  anonymousId: string,
+  isGuest: boolean = false,
+): Promise<LoadedState> {
   const existing = await loadGameState(db, anonymousId);
   if (existing) return existing;
 
   const state = createDefaultGameState(anonymousId);
   await db
     .prepare(
-      `INSERT INTO game_states (anonymous_id, state_json, version, updated_at)
-       VALUES (?, ?, 1, datetime('now'))
+      `INSERT INTO game_states (anonymous_id, state_json, version, updated_at, is_anonymous)
+       VALUES (?, ?, 1, datetime('now'), ?)
        ON CONFLICT(anonymous_id) DO NOTHING`
     )
-    .bind(anonymousId, JSON.stringify(state))
+    .bind(anonymousId, JSON.stringify(state), isGuest ? 1 : 0)
     .run();
 
   const created = await loadGameState(db, anonymousId);

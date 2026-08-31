@@ -24,12 +24,12 @@ import {
   ActionType,
   Outcome,
 } from '@arcane-familiars/game-logic';
-import type { Bindings } from '../types';
-import { loadGameState } from '../utils/saveManager';
+import type { Bindings, Variables } from '../types';
+import { getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
 import { getErrorMessage, readBody } from '../utils/http';
 
-const gameBattleRouter = new Hono<{ Bindings: Bindings }>();
+const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -120,10 +120,8 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, playerFamiliarId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
@@ -231,8 +229,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: 'Battle not found' }, 404);
     }
 
-    const battle: BattleState = JSON.parse(row.battle_json);
+    const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -257,10 +256,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
     const state = loaded.state;
 
     // Validate items BEFORE resolution; actual consumption and state effects
@@ -535,8 +530,9 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Battle not found' }, 404);
     }
 
-    const battle: BattleState = JSON.parse(row.battle_json);
+    const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -555,10 +551,6 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'You can only swap once per turn' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
     const state = loaded.state;
 
     const party = state.activeParty ?? [];
@@ -626,7 +618,8 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
       return c.json({ error: 'Battle not found' }, 404);
     }
 
-    const battle: BattleState = JSON.parse(row.battle_json);
+    const battle = JSON.parse(row.battle_json) as BattleState;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -642,10 +635,6 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     battle.status = BattleResult.Fled;
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
     const state = loaded.state;
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
