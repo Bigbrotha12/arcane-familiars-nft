@@ -1,8 +1,8 @@
-import { describe, it, expect } from "vitest";
-import { env } from "cloudflare:workers";
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import { scheduled } from "../src/index";
-import type { Bindings } from "../src/types";
+import { describe, it, expect } from 'vitest';
+import { env } from 'cloudflare:workers';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { scheduled } from '../src/index';
+import type { Bindings } from '../src/types';
 
 /**
  * Drives the `scheduled` export (cron cleanup) directly against the shared
@@ -15,14 +15,11 @@ function makeEnv(environment: string): Bindings {
 }
 
 async function rowExists(table: string, column: string, value: string): Promise<boolean> {
-  return !!(await env.DB
-    .prepare(`SELECT 1 FROM ${table} WHERE ${column} = ?`)
-    .bind(value)
-    .first());
+  return !!(await env.DB.prepare(`SELECT 1 FROM ${table} WHERE ${column} = ?`).bind(value).first());
 }
 
-describe("scheduled cleanup", () => {
-  it("purges stale guests, orphaned battles, and expired challenges but keeps fresh/authed rows", async () => {
+describe('scheduled cleanup', () => {
+  it('purges stale guests, orphaned battles, and expired challenges but keeps fresh/authed rows', async () => {
     const db = env.DB;
 
     // Stale guest state (older than the 24h TTL).
@@ -89,24 +86,24 @@ describe("scheduled cleanup", () => {
 
     const ctx = createExecutionContext();
     await scheduled(
-      { cron: "0 * * * *", scheduledTime: Date.now(), type: "scheduled" } as ScheduledEvent,
-      makeEnv("production"),
-      ctx,
+      { cron: '0 * * * *', scheduledTime: Date.now(), type: 'scheduled' } as ScheduledEvent,
+      makeEnv('production'),
+      ctx
     );
     await waitOnExecutionContext(ctx);
 
     // Stale guest state purged; fresh guest and authed states kept.
-    expect(await rowExists("game_states", "anonymous_id", "guest-stale")).toBe(false);
-    expect(await rowExists("game_states", "anonymous_id", "guest-fresh")).toBe(true);
-    expect(await rowExists("game_states", "anonymous_id", "authed-old")).toBe(true);
+    expect(await rowExists('game_states', 'anonymous_id', 'guest-stale')).toBe(false);
+    expect(await rowExists('game_states', 'anonymous_id', 'guest-fresh')).toBe(true);
+    expect(await rowExists('game_states', 'anonymous_id', 'authed-old')).toBe(true);
 
     // Both orphan battles purged; the fresh guest's battle kept.
-    expect(await rowExists("active_battles", "battle_id", "battle-stale-guest")).toBe(false);
-    expect(await rowExists("active_battles", "battle_id", "battle-orphan")).toBe(false);
-    expect(await rowExists("active_battles", "battle_id", "battle-fresh")).toBe(true);
+    expect(await rowExists('active_battles', 'battle_id', 'battle-stale-guest')).toBe(false);
+    expect(await rowExists('active_battles', 'battle_id', 'battle-orphan')).toBe(false);
+    expect(await rowExists('active_battles', 'battle_id', 'battle-fresh')).toBe(true);
 
     // Expired challenge purged; fresh challenge kept.
-    expect(await rowExists("wallet_challenges", "sub", "sub-expired")).toBe(false);
-    expect(await rowExists("wallet_challenges", "sub", "sub-fresh")).toBe(true);
+    expect(await rowExists('wallet_challenges', 'sub', 'sub-expired')).toBe(false);
+    expect(await rowExists('wallet_challenges', 'sub', 'sub-fresh')).toBe(true);
   });
 });

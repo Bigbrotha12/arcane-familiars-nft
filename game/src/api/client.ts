@@ -1,4 +1,13 @@
-import type { GameState, BattleState, BattleAction, BattleTurnResult, DungeonState, Room, Area, Inventory } from '@arcane-familiars/game-logic';
+import type {
+  GameState,
+  BattleState,
+  BattleAction,
+  BattleTurnResult,
+  DungeonState,
+  Room,
+  Area,
+  Inventory,
+} from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
 // back to getRandomValues so LAN play over plain HTTP still works.
@@ -49,7 +58,7 @@ class GameApiClient {
     if (token) {
       options.headers = {
         ...options.headers,
-        'Authorization': `Bearer ${token}`,
+        Authorization: `Bearer ${token}`,
       };
     }
 
@@ -59,7 +68,7 @@ class GameApiClient {
     try {
       res = await fetch(url, options);
     } catch (err) {
-      throw new Error(`Network error: ${(err as Error).message}`);
+      throw new Error(`Network error: ${(err as Error).message}`, { cause: err });
     }
 
     if (!res.ok) {
@@ -87,12 +96,18 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/enter', { anonymousId: this.anonymousId, areaId });
   }
 
-  async exploreRoom(roomId: string): Promise<{ room: Room; encounter: boolean; enemy: string | null; treasure: boolean; treasureItem: string | null }> {
+  async exploreRoom(
+    roomId: string
+  ): Promise<{ room: Room; encounter: boolean; enemy: string | null; treasure: boolean; treasureItem: string | null }> {
     return this.request('POST', '/api/game/dungeon/explore', { anonymousId: this.anonymousId, roomId });
   }
 
   async collectTreasure(roomId: string, itemId: string): Promise<{ success: boolean; inventory: Inventory }> {
-    return this.request('POST', '/api/game/dungeon/collect-treasure', { anonymousId: this.anonymousId, roomId, itemId });
+    return this.request('POST', '/api/game/dungeon/collect-treasure', {
+      anonymousId: this.anonymousId,
+      roomId,
+      itemId,
+    });
   }
 
   async exitDungeon(): Promise<{ success: boolean }> {
@@ -103,16 +118,41 @@ class GameApiClient {
     return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId });
   }
 
-  async battleAction(battleId: string, action: BattleAction, expectedTurnCount?: number): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
-    return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action, expectedTurnCount });
+  async battleAction(
+    battleId: string,
+    action: BattleAction,
+    expectedTurnCount?: number
+  ): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
+    return this.request('POST', '/api/game/battle/action', {
+      anonymousId: this.anonymousId,
+      battleId,
+      action,
+      expectedTurnCount,
+    });
   }
 
-  async fleeBattle(battleId: string, expectedTurnCount?: number): Promise<{ success: boolean; message: string; battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId, expectedTurnCount });
+  async fleeBattle(
+    battleId: string,
+    expectedTurnCount?: number
+  ): Promise<{ success: boolean; message: string; battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/flee', {
+      anonymousId: this.anonymousId,
+      battleId,
+      expectedTurnCount,
+    });
   }
 
-  async swapFamiliar(battleId: string, newFamiliarId: string, expectedTurnCount?: number): Promise<{ battle: BattleState }> {
-    return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId, expectedTurnCount });
+  async swapFamiliar(
+    battleId: string,
+    newFamiliarId: string,
+    expectedTurnCount?: number
+  ): Promise<{ battle: BattleState }> {
+    return this.request('POST', '/api/game/battle/swap', {
+      anonymousId: this.anonymousId,
+      battleId,
+      newFamiliarId,
+      expectedTurnCount,
+    });
   }
 
   async getOwnedFamiliars(): Promise<string[]> {

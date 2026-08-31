@@ -60,7 +60,7 @@ function ensureBattleUids(battle: BattleState): void {
 function getPersistedResources(
   dungeon: GameState['dungeon'],
   familiarId: string,
-  familiar: BattleFamiliar,
+  familiar: BattleFamiliar
 ): { currentHp: number; currentMp: number } {
   const maxHp = familiar.familiarData.stats.maxHp;
   const maxMp = familiar.familiarData.stats.maxMp;
@@ -157,7 +157,6 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     }
 
     const battleSeed = cryptoSeed();
-    const rng = seededRandom(battleSeed);
 
     let enemyFamiliar: BattleFamiliar;
     if (baseEnemy.isBoss) {
@@ -210,7 +209,12 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
 gameBattleRouter.post('/game/battle/action', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; battleId: string; action: BattleAction; expectedTurnCount?: number }>(c);
+    const body = await readBody<{
+      anonymousId: string;
+      battleId: string;
+      action: BattleAction;
+      expectedTurnCount?: number;
+    }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
@@ -220,8 +224,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, battleId, action' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
       .bind(battleId, anonymousId)
       .first<{ battle_json: string }>();
 
@@ -277,9 +282,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       // Validate state-level effects BEFORE consuming, so a failed use does
       // not eat the item.
       const revive = item.effects.find((e) => e.kind === 'revive_party');
-      const fainted = revive && state.dungeon
-        ? state.dungeon.party.filter((id) => (state.dungeon?.partyHp[id] ?? 0) <= 0)
-        : [];
+      const fainted =
+        revive && state.dungeon ? state.dungeon.party.filter((id) => (state.dungeon?.partyHp[id] ?? 0) <= 0) : [];
       if (revive && fainted.length === 0) {
         return c.json({ error: 'No fainted party members to revive' }, 400);
       }
@@ -294,13 +298,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const rng = seededRandom((battle.seed ?? cryptoSeed()) ^ (battle.turnCount + 1));
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, rng);
 
-    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar, steps: turnSteps, canceledActions } = resolveTurn(
-      action,
-      battle.playerFamiliar,
-      battle.enemyFamiliar,
-      enemyAction,
-      rng,
-    );
+    const {
+      playerResult,
+      enemyResult,
+      updatedPlayerFamiliar,
+      updatedEnemyFamiliar,
+      steps: turnSteps,
+      canceledActions,
+    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng);
 
     const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
     const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
@@ -338,8 +343,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, playerActed && action.type === ActionType.Ability ? action.abilityId : undefined);
-    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined);
+    battle.playerFamiliar = updateCooldowns(
+      updatedPlayerFamiliar,
+      playerActed && action.type === ActionType.Ability ? action.abilityId : undefined
+    );
+    battle.enemyFamiliar = updateCooldowns(
+      updatedEnemyFamiliar,
+      enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined
+    );
 
     // Snapshot the turn count before mutating so the battle write below is
     // conditional on the exact row this turn was computed from.
@@ -359,11 +370,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     if (outcome === Outcome.Loss && state.dungeon) {
       const fallenId = battle.playerFamiliar.familiarData.id;
       const otherId = state.activeParty.find((id) => id !== fallenId);
-      if (
-        otherId !== undefined &&
-        getFamiliar(otherId) &&
-        (state.dungeon.partyHp[otherId] ?? 0) > 0
-      ) {
+      if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
         const incoming = buildIncomingCombatant(state.dungeon, otherId);
         forcedSwap = {
@@ -471,31 +478,25 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // statements are conditional on the rows read above, so a stale writer
     // matches 0 rows and neither commit (D1 batch does not roll back a
     // 0-row match on its own).
-    const stateStmt = c.env.DB
-      .prepare(
-        `UPDATE game_states
+    const stateStmt = c.env.DB.prepare(
+      `UPDATE game_states
          SET state_json = ?, version = version + 1, updated_at = datetime('now')
          WHERE anonymous_id = ? AND version = ?`
-      )
-      .bind(JSON.stringify(state), anonymousId, loaded.version);
+    ).bind(JSON.stringify(state), anonymousId, loaded.version);
 
     const battleStmt =
       outcome !== Outcome.Continue
-        ? c.env.DB
-            .prepare(
-              `DELETE FROM active_battles
+        ? c.env.DB.prepare(
+            `DELETE FROM active_battles
                WHERE battle_id = ? AND anonymous_id = ?
                  AND json_extract(battle_json, '$.turnCount') = ?`
-            )
-            .bind(battleId, anonymousId, turnBefore)
-        : c.env.DB
-            .prepare(
-              `UPDATE active_battles
+          ).bind(battleId, anonymousId, turnBefore)
+        : c.env.DB.prepare(
+            `UPDATE active_battles
                SET battle_json = ?, updated_at = datetime('now')
                WHERE battle_id = ? AND anonymous_id = ?
                  AND json_extract(battle_json, '$.turnCount') = ?`
-            )
-            .bind(JSON.stringify(battle), battleId, anonymousId, turnBefore);
+          ).bind(JSON.stringify(battle), battleId, anonymousId, turnBefore);
 
     const results = await c.env.DB.batch([stateStmt, battleStmt]);
     if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
@@ -511,7 +512,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
 
 gameBattleRouter.post('/game/battle/swap', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; battleId: string; newFamiliarId: string; expectedTurnCount?: number }>(c);
+    const body = await readBody<{
+      anonymousId: string;
+      battleId: string;
+      newFamiliarId: string;
+      expectedTurnCount?: number;
+    }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
@@ -521,8 +527,9 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, battleId, newFamiliarId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
       .bind(battleId, anonymousId)
       .first<{ battle_json: string }>();
 
@@ -568,22 +575,18 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
-    const stateStmt = c.env.DB
-      .prepare(
-        `UPDATE game_states
+    const stateStmt = c.env.DB.prepare(
+      `UPDATE game_states
          SET state_json = ?, version = version + 1, updated_at = datetime('now')
          WHERE anonymous_id = ? AND version = ?`
-      )
-      .bind(JSON.stringify(state), anonymousId, loaded.version);
+    ).bind(JSON.stringify(state), anonymousId, loaded.version);
 
-    const battleStmt = c.env.DB
-      .prepare(
-        `UPDATE active_battles
+    const battleStmt = c.env.DB.prepare(
+      `UPDATE active_battles
          SET battle_json = ?, updated_at = datetime('now')
          WHERE battle_id = ? AND anonymous_id = ?
            AND json_extract(battle_json, '$.turnCount') = ?`
-      )
-      .bind(JSON.stringify(battle), battleId, anonymousId, battle.turnCount);
+    ).bind(JSON.stringify(battle), battleId, anonymousId, battle.turnCount);
 
     const results = await c.env.DB.batch([stateStmt, battleStmt]);
     if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
@@ -609,8 +612,9 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, battleId' }, 400);
     }
 
-    const row = await c.env.DB
-      .prepare('SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
       .bind(battleId, anonymousId)
       .first<{ battle_json: string }>();
 
@@ -639,21 +643,17 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
-    const stateStmt = c.env.DB
-      .prepare(
-        `UPDATE game_states
+    const stateStmt = c.env.DB.prepare(
+      `UPDATE game_states
          SET state_json = ?, version = version + 1, updated_at = datetime('now')
          WHERE anonymous_id = ? AND version = ?`
-      )
-      .bind(JSON.stringify(state), anonymousId, loaded.version);
+    ).bind(JSON.stringify(state), anonymousId, loaded.version);
 
-    const battleStmt = c.env.DB
-      .prepare(
-        `DELETE FROM active_battles
+    const battleStmt = c.env.DB.prepare(
+      `DELETE FROM active_battles
          WHERE battle_id = ? AND anonymous_id = ?
            AND json_extract(battle_json, '$.turnCount') = ?`
-      )
-      .bind(battleId, anonymousId, battle.turnCount);
+    ).bind(battleId, anonymousId, battle.turnCount);
 
     const results = await c.env.DB.batch([stateStmt, battleStmt]);
     if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {

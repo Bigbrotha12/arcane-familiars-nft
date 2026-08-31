@@ -18,12 +18,19 @@
     "backend:dev": "npm run dev --prefix backend",
     "backend:build": "npm run build --prefix backend",
     "backend:type-check": "npm run type-check --prefix backend",
-    "backend:test": "npm run test --prefix backend"
+    "backend:test": "npm run test --prefix backend",
+    "lint": "eslint . && prettier --check .",
+    "lint:fix": "eslint . --fix && prettier --write ."
   },
   "dependencies": {
     "@openzeppelin/contracts": "^4.8.2"
   },
   "devDependencies": {
-    "concurrently": "^10.0.5"
+    "@eslint/js": "^10.0.1",
+    "concurrently": "^10.0.5",
+    "eslint": "^10.9.1",
+    "eslint-config-prettier": "^10.1.8",
+    "prettier": "^3.9.6",
+    "typescript-eslint": "^8.69.0"
   }
 }

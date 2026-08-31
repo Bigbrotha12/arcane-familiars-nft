@@ -17,7 +17,7 @@ export function getErrorMessage(err: unknown): string {
  * never trusted over the verified token-derived key.
  */
 export async function readBody<T extends Record<string, unknown>>(
-  c: Context<{ Bindings: Bindings; Variables: Variables }>,
+  c: Context<{ Bindings: Bindings; Variables: Variables }>
 ): Promise<T | null> {
   try {
     const body: unknown = await c.req.json();

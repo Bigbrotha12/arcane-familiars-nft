@@ -2,20 +2,20 @@ const steps = [
   { step: '1', title: 'Connect Your Wallet', desc: 'Link MetaMask or WalletConnect to get started.' },
   { step: '2', title: 'Summon a Familiar', desc: 'Mint your first familiar NFT and discover its unique traits.' },
   { step: '3', title: 'Level Up & Learn', desc: 'Battle creatures to earn XP and unlock powerful abilities.' },
-  { step: '4', title: 'Trade & Earn', desc: 'Sell your familiars on the marketplace or keep building your dream team.' },
-]
+  {
+    step: '4',
+    title: 'Trade & Earn',
+    desc: 'Sell your familiars on the marketplace or keep building your dream team.',
+  },
+];
 
 function HowItWorks() {
   return (
     <section className="py-3xl">
       <div className="max-w-content mx-auto px-lg">
         <div className="text-center mb-xl">
-          <h2 className="text-3xl md:text-4xl font-display font-semibold text-text-primary">
-            How It Works
-          </h2>
-          <p className="mt-sm text-text-secondary font-body max-w-lg mx-auto">
-            Your journey in four simple steps.
-          </p>
+          <h2 className="text-3xl md:text-4xl font-display font-semibold text-text-primary">How It Works</h2>
+          <p className="mt-sm text-text-secondary font-body max-w-lg mx-auto">Your journey in four simple steps.</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-lg">
@@ -31,7 +31,7 @@ function HowItWorks() {
         </div>
       </div>
     </section>
-  )
+  );
 }
 
-export default HowItWorks
+export default HowItWorks;

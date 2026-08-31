@@ -10,8 +10,7 @@ export class BootScene extends Phaser.Scene {
     super({ key: 'BootScene' });
   }
 
-  init(): void {
-  }
+  init(): void {}
 
   create(): void {
     const { width, height } = this.scale;

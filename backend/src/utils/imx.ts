@@ -105,7 +105,10 @@ const KNOWN_FAMILIAR_IDS: Set<string> = new Set([
 const NAME_TO_SPECIES: Record<string, string> = {};
 for (const id of KNOWN_FAMILIAR_IDS) {
   // Create a human-readable name from the camelCase id, e.g. "whiteDog" → "White Dog"
-  const humanName = id.replace(/([A-Z])/g, ' $1').trim().toLowerCase();
+  const humanName = id
+    .replace(/([A-Z])/g, ' $1')
+    .trim()
+    .toLowerCase();
   NAME_TO_SPECIES[humanName] = id;
 }
 
@@ -234,7 +237,7 @@ export async function getOwnedFamiliars(
   walletAddress: string,
   collectionContract: string,
   environment: string,
-  bindings: IMXClientBindings,
+  bindings: IMXClientBindings
 ): Promise<string[]> {
   const baseURL = getIMXBaseURL(environment, bindings);
   const chainName = getChainName(environment);
@@ -276,7 +279,7 @@ export async function getUserAssets(
   address: string,
   collection: string,
   environment: string,
-  bindings: IMXClientBindings,
+  bindings: IMXClientBindings
 ): Promise<IMXAssetsResponse> {
   const baseURL = getIMXBaseURL(environment, bindings);
   const chainName = getChainName(environment);
@@ -329,7 +332,7 @@ export async function getUserAssets(
 export async function getUserBalances(
   _address: string,
   _environment: string,
-  _bindings: IMXClientBindings,
+  _bindings: IMXClientBindings
 ): Promise<unknown> {
   // The zkEVM Indexer does not expose an ERC-20 balance endpoint.
   // Return an empty result matching the previous response intent.

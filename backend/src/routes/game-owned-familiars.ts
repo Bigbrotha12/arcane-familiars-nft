@@ -28,8 +28,7 @@ ownedFamiliarsRouter.get('/game/owned-familiars', async (c) => {
   }
 
   try {
-    const row = await c.env.DB
-      .prepare('SELECT wallet_address FROM wallet_bindings WHERE sub = ?')
+    const row = await c.env.DB.prepare('SELECT wallet_address FROM wallet_bindings WHERE sub = ?')
       .bind(accountKey)
       .first<{ wallet_address: string }>();
 
@@ -43,18 +42,13 @@ ownedFamiliarsRouter.get('/game/owned-familiars', async (c) => {
     }
 
     const env = c.env.ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-    const collection = env === 'production'
-      ? c.env.COLLECTION_CONTRACT_MAINNET
-      : c.env.COLLECTION_CONTRACT_SANDBOX;
+    const collection = env === 'production' ? c.env.COLLECTION_CONTRACT_MAINNET : c.env.COLLECTION_CONTRACT_SANDBOX;
 
     const species = await getOwnedFamiliars(wallet, collection, env, c.env);
     return c.json({ familiars: species, synced: true }, 200);
   } catch (error: unknown) {
     console.error('owned-familiars sync error:', getErrorMessage(error));
-    return c.json(
-      { familiars: [], synced: false, error: getErrorMessage(error) },
-      200,
-    );
+    return c.json({ familiars: [], synced: false, error: getErrorMessage(error) }, 200);
   }
 });
 

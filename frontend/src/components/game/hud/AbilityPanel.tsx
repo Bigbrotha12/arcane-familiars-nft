@@ -1,24 +1,22 @@
 // Modal list of the active familiar's abilities with MP costs. Selecting an
 // ability calls onSelect(abilityId); entries with insufficient MP are disabled.
 
-import Modal from '@/components/ui/Modal'
-import Button from '@/components/ui/Button'
-import type { AbilityOption } from '@/game'
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
+import type { AbilityOption } from '@/game';
 
 interface AbilityPanelProps {
-  open: boolean
-  abilities: AbilityOption[]
-  onSelect: (abilityId: string) => void
-  onClose: () => void
+  open: boolean;
+  abilities: AbilityOption[];
+  onSelect: (abilityId: string) => void;
+  onClose: () => void;
 }
 
 function AbilityPanel({ open, abilities, onSelect, onClose }: AbilityPanelProps) {
   return (
     <Modal open={open} onClose={onClose} title="Select Ability" hud compact>
       <div className="flex flex-col gap-2">
-        {abilities.length === 0 && (
-          <p className="font-body text-xs text-text-muted">No abilities available.</p>
-        )}
+        {abilities.length === 0 && <p className="font-body text-xs text-text-muted">No abilities available.</p>}
         {abilities.map((ability) => (
           <div key={ability.id} className="flex flex-col gap-0.5">
             <Button
@@ -35,7 +33,7 @@ function AbilityPanel({ open, abilities, onSelect, onClose }: AbilityPanelProps)
         ))}
       </div>
     </Modal>
-  )
+  );
 }
 
-export default AbilityPanel
+export default AbilityPanel;

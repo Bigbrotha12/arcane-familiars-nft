@@ -1,85 +1,81 @@
 {
-	"$schema": "node_modules/wrangler/config-schema.json",
-	"name": "arcane-familiars-backend",
-	"main": "src/index.ts",
-	"compatibility_date": "2026-07-01",
-	"compatibility_flags": [
-		"nodejs_compat"
-	],
-	// Local development uses its own D1 database (dev only, never remote).
-	// Production uses [env.production] below, so `wrangler dev` and
-	// `wrangler d1 ... --local` can never touch the production database.
-	"triggers": {
-		"crons": [
-			"0 * * * *"
-		]
-	},
-	"d1_databases": [
-		{
-			"binding": "DB",
-			"database_name": "arcane-familiars-dev",
-			"database_id": "65ee5652-56ec-42c9-b4a1-4953fc30d4d8",
-			"migrations_dir": "./migrations"
-		}
-	],
-	"vars": {
-		"ENVIRONMENT": "development",
-		"IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-		"IMX_API_MAINNET": "https://api.immutable.com",
-		"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-		"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-		// Real Passport Hub client ID. If a separate sandbox/production client is
-		// ever created, update the corresponding env section below instead of this default.
-		"IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-		"IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-		"IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json"
-	},
-	"env": {
-		"production": {
-			"vars": {
-				"ENVIRONMENT": "production",
-				"IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-				"IMX_API_MAINNET": "https://api.immutable.com",
-				"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-				"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-			// Production Passport Hub client ID.
-			"IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-				"IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-				"IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json"
-			},
-			"d1_databases": [
-				{
-					"binding": "DB",
-					"database_name": "arcane-familiars",
-					"database_id": "02b17405-7ed9-4976-a3ef-d97efacf3b73",
-					"migrations_dir": "./migrations",
-					"remote": true
-				}
-			]
-		},
-		// Staging uses its own D1 database `arcane-familiars-staging` (created via
-		// `wrangler d1 create arcane-familiars-staging`, authenticated). Remote only.
-		"staging": {
-			"vars": {
-				"ENVIRONMENT": "staging",
-				"IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-				"IMX_API_MAINNET": "https://api.immutable.com",
-				"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-				"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-				// Staging Passport Hub client ID (same as production for now).
-			"IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-				"IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-				"IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json"
-			},
-			"d1_databases": [
-				{
-					"binding": "DB",
-					"database_name": "arcane-familiars-staging",
-					"database_id": "e9c91f6d-ced2-4590-b6e5-4ff03eddf704",
-					"migrations_dir": "./migrations",
-					"remote": true
-				}
-			]
-		}
-	}
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "arcane-familiars-backend",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-07-01",
+  "compatibility_flags": ["nodejs_compat"],
+  // Local development uses its own D1 database (dev only, never remote).
+  // Production uses [env.production] below, so `wrangler dev` and
+  // `wrangler d1 ... --local` can never touch the production database.
+  "triggers": {
+    "crons": ["0 * * * *"],
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "arcane-familiars-dev",
+      "database_id": "65ee5652-56ec-42c9-b4a1-4953fc30d4d8",
+      "migrations_dir": "./migrations",
+    },
+  ],
+  "vars": {
+    "ENVIRONMENT": "development",
+    "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
+    "IMX_API_MAINNET": "https://api.immutable.com",
+    "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+    "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
+    // Real Passport Hub client ID. If a separate sandbox/production client is
+    // ever created, update the corresponding env section below instead of this default.
+    "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
+    "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
+    "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
+  },
+  "env": {
+    "production": {
+      "vars": {
+        "ENVIRONMENT": "production",
+        "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
+        "IMX_API_MAINNET": "https://api.immutable.com",
+        "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+        "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
+        // Production Passport Hub client ID.
+        "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
+        "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
+        "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "arcane-familiars",
+          "database_id": "02b17405-7ed9-4976-a3ef-d97efacf3b73",
+          "migrations_dir": "./migrations",
+          "remote": true,
+        },
+      ],
+    },
+    // Staging uses its own D1 database `arcane-familiars-staging` (created via
+    // `wrangler d1 create arcane-familiars-staging`, authenticated). Remote only.
+    "staging": {
+      "vars": {
+        "ENVIRONMENT": "staging",
+        "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
+        "IMX_API_MAINNET": "https://api.immutable.com",
+        "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+        "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
+        // Staging Passport Hub client ID (same as production for now).
+        "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
+        "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
+        "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "arcane-familiars-staging",
+          "database_id": "e9c91f6d-ced2-4590-b6e5-4ff03eddf704",
+          "migrations_dir": "./migrations",
+          "remote": true,
+        },
+      ],
+    },
+  },
 }

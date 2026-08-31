@@ -16,20 +16,20 @@ import ownedFamiliarsRouter from './routes/game-owned-familiars';
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // CORS — allow all origins in development; restrict to known frontends in prod.
-const PROD_ORIGINS = [
-  'https://arcane-familiars.pages.dev',
-  'https://arcane-familiars-staging.pages.dev',
-];
+const PROD_ORIGINS = ['https://arcane-familiars.pages.dev', 'https://arcane-familiars-staging.pages.dev'];
 
-app.use('/api/*', cors({
-  origin: (origin, c) => {
-    if (c.env.ENVIRONMENT === 'development') return origin || '*';
-    if (origin && PROD_ORIGINS.includes(origin)) return origin;
-    return null;
-  },
-  allowHeaders: ['Content-Type', 'Authorization'],
-  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-}));
+app.use(
+  '/api/*',
+  cors({
+    origin: (origin, c) => {
+      if (c.env.ENVIRONMENT === 'development') return origin || '*';
+      if (origin && PROD_ORIGINS.includes(origin)) return origin;
+      return null;
+    },
+    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  })
+);
 
 // Rate-limit ALL /api/* traffic (guests and authenticated users) BEFORE the
 // auth middleware, so the limiter cannot be bypassed and abuse of any
@@ -80,7 +80,7 @@ const MAX_CLEANUP_ROUNDS = 20;
 
 // Scheduled cleanup (cron trigger): purge stale guest saves, orphaned battles,
 // and expired wallet challenges so the tables don't grow without bound.
-export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext): Promise<void> {
+export async function scheduled(event: ScheduledEvent, env: Bindings): Promise<void> {
   const summary: Record<string, number> = {};
 
   // 1. Stale guest game states (24h TTL). SQLite has no DELETE ... LIMIT, so
@@ -88,14 +88,13 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
   try {
     let deleted = 0;
     for (let round = 0; round < MAX_CLEANUP_ROUNDS; round++) {
-      const res = await env.DB
-        .prepare(
-          `DELETE FROM game_states WHERE rowid IN (
+      const res = await env.DB.prepare(
+        `DELETE FROM game_states WHERE rowid IN (
              SELECT rowid FROM game_states
              WHERE is_anonymous = 1 AND updated_at < datetime('now', '-1 day')
              LIMIT ?
            )`
-        )
+      )
         .bind(CLEANUP_CHUNK_SIZE)
         .run();
       deleted += res.meta.changes ?? 0;
@@ -112,14 +111,13 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
   try {
     let deleted = 0;
     for (let round = 0; round < MAX_CLEANUP_ROUNDS; round++) {
-      const res = await env.DB
-        .prepare(
-          `DELETE FROM active_battles WHERE battle_id IN (
+      const res = await env.DB.prepare(
+        `DELETE FROM active_battles WHERE battle_id IN (
              SELECT battle_id FROM active_battles
              WHERE anonymous_id NOT IN (SELECT anonymous_id FROM game_states)
              LIMIT ?
            )`
-        )
+      )
         .bind(CLEANUP_CHUNK_SIZE)
         .run();
       deleted += res.meta.changes ?? 0;
@@ -136,8 +134,7 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
   //    so a TTL change can never silently shrink the margin.
   try {
     const challengeCutoffSeconds = CHALLENGE_TTL_SECONDS + 300;
-    const res = await env.DB
-      .prepare(`DELETE FROM wallet_challenges WHERE created_at < datetime('now', ?)`)
+    const res = await env.DB.prepare(`DELETE FROM wallet_challenges WHERE created_at < datetime('now', ?)`)
       .bind(`-${challengeCutoffSeconds} seconds`)
       .run();
     summary.expiredChallenges = res.meta.changes ?? 0;
@@ -156,12 +153,12 @@ export async function scheduled(event: ScheduledEvent, env: Bindings, ctx: Execu
   // Legacy: dungeon_runs is no longer written by the app, but keep purging old
   // rows so the table doesn't grow if it ever gets populated again.
   try {
-    const finished = await env.DB
-      .prepare(`DELETE FROM dungeon_runs WHERE ended_at IS NOT NULL AND ended_at < datetime('now', '-7 day')`)
-      .run();
-    const stale = await env.DB
-      .prepare(`DELETE FROM dungeon_runs WHERE ended_at IS NULL AND started_at < datetime('now', '-7 day')`)
-      .run();
+    const finished = await env.DB.prepare(
+      `DELETE FROM dungeon_runs WHERE ended_at IS NOT NULL AND ended_at < datetime('now', '-7 day')`
+    ).run();
+    const stale = await env.DB.prepare(
+      `DELETE FROM dungeon_runs WHERE ended_at IS NULL AND started_at < datetime('now', '-7 day')`
+    ).run();
     summary.dungeonRuns = (finished.meta.changes ?? 0) + (stale.meta.changes ?? 0);
   } catch (err) {
     console.error('scheduled: dungeon_runs cleanup failed', err);

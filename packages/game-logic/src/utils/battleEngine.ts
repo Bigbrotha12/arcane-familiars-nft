@@ -1,4 +1,13 @@
-import { type BattleAction, type BattleFamiliar, type ActionResult, type StatusEffect, type TurnStep, type CanceledAction, ActionType, Outcome } from '@/types/battle';
+import {
+  type BattleAction,
+  type BattleFamiliar,
+  type ActionResult,
+  type StatusEffect,
+  type TurnStep,
+  type CanceledAction,
+  ActionType,
+  Outcome,
+} from '@/types/battle';
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
 import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
@@ -23,9 +32,10 @@ export function calculateDamage(
   defender: BattleFamiliar,
   abilityMultiplier: number,
   scalingStat: ScalingStat,
-  rng: () => number,
+  rng: () => number
 ): { damage: number; isCritical: boolean } {
-  const offensiveStat = scalingStat === ScalingStat.Arcane ? attacker.familiarData.stats.arcane : attacker.familiarData.stats.attack;
+  const offensiveStat =
+    scalingStat === ScalingStat.Arcane ? attacker.familiarData.stats.arcane : attacker.familiarData.stats.attack;
   const attackerStat = getEffectiveStat(offensiveStat, attacker.statusEffects, toStatName(scalingStat));
   const defenderStat = getEffectiveStat(defender.familiarData.stats.defense, defender.statusEffects, StatName.Defense);
 
@@ -59,10 +69,7 @@ export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEf
     }
   }
 
-  updated.currentHp = Math.min(
-    familiar.familiarData.stats.maxHp,
-    Math.max(0, familiar.currentHp + hpChange),
-  );
+  updated.currentHp = Math.min(familiar.familiarData.stats.maxHp, Math.max(0, familiar.currentHp + hpChange));
 
   updated.statusEffects = updated.statusEffects
     .map((e) => (skip?.has(e) ? e : { ...e, turnsRemaining: e.turnsRemaining - 1 }))
@@ -84,7 +91,7 @@ export function resolveTurn(
   playerFamiliar: BattleFamiliar,
   enemyFamiliar: BattleFamiliar,
   enemyAction: BattleAction,
-  rng: () => number,
+  rng: () => number
 ): {
   playerResult: ActionResult;
   enemyResult: ActionResult;
@@ -95,13 +102,27 @@ export function resolveTurn(
 } {
   // Initiative is locked in before any action executes: speed effects applied
   // during this turn only influence the NEXT turn's ordering.
-  const playerSpeed = getEffectiveStat(playerFamiliar.familiarData.stats.speed, playerFamiliar.statusEffects, StatName.Speed);
-  const enemySpeed = getEffectiveStat(enemyFamiliar.familiarData.stats.speed, enemyFamiliar.statusEffects, StatName.Speed);
+  const playerSpeed = getEffectiveStat(
+    playerFamiliar.familiarData.stats.speed,
+    playerFamiliar.statusEffects,
+    StatName.Speed
+  );
+  const enemySpeed = getEffectiveStat(
+    enemyFamiliar.familiarData.stats.speed,
+    enemyFamiliar.statusEffects,
+    StatName.Speed
+  );
 
   const ordered: Array<{ who: 'player' | 'enemy'; action: BattleAction }> =
     playerSpeed >= enemySpeed
-      ? [{ who: 'player', action: playerAction }, { who: 'enemy', action: enemyAction }]
-      : [{ who: 'enemy', action: enemyAction }, { who: 'player', action: playerAction }];
+      ? [
+          { who: 'player', action: playerAction },
+          { who: 'enemy', action: enemyAction },
+        ]
+      : [
+          { who: 'enemy', action: enemyAction },
+          { who: 'player', action: playerAction },
+        ];
 
   let playerCurrent = playerFamiliar;
   let enemyCurrent = enemyFamiliar;
@@ -192,13 +213,10 @@ export function resolveTurn(
   };
 }
 
-function applyActionResult(
-  familiar: BattleFamiliar,
-  result: ActionResult,
-): BattleFamiliar {
+function applyActionResult(familiar: BattleFamiliar, result: ActionResult): BattleFamiliar {
   if (result.targetId !== familiar.uid) return familiar;
 
-  let updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
+  const updated = { ...familiar, statusEffects: [...familiar.statusEffects] };
 
   // Apply damage/healing
   if (result.effectType === EffectType.Damage || result.effectType === EffectType.Dot) {
@@ -231,7 +249,7 @@ function applyActionResult(
   // own buff while stripping pre-existing Debuffs/Dots.
   if (result.cleanse) {
     updated.statusEffects = updated.statusEffects.filter(
-      (e) => e.type !== EffectType.Dot && e.type !== EffectType.Debuff,
+      (e) => e.type !== EffectType.Dot && e.type !== EffectType.Debuff
     );
   }
 
@@ -265,10 +283,13 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
         break;
       }
       case 'heal_percentage': {
-        const healed = Math.max(0, Math.min(
-          source.familiarData.stats.maxHp - source.currentHp,
-          Math.floor((source.familiarData.stats.maxHp * effect.percentage) / 100),
-        ));
+        const healed = Math.max(
+          0,
+          Math.min(
+            source.familiarData.stats.maxHp - source.currentHp,
+            Math.floor((source.familiarData.stats.maxHp * effect.percentage) / 100)
+          )
+        );
         hpHeal += healed;
         descriptions.push(`restores ${healed} HP`);
         break;
@@ -291,7 +312,9 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
           value: effect.value,
           turnsRemaining: effect.turns,
         };
-        descriptions.push(`+${Math.round((effect.value - 1) * 100)}% ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`);
+        descriptions.push(
+          `+${Math.round((effect.value - 1) * 100)}% ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`
+        );
         break;
       }
       case 'debuff': {
@@ -302,7 +325,9 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
           value: effect.value,
           turnsRemaining: effect.turns,
         };
-        descriptions.push(`-${Math.round((1 - effect.value) * 100)}% enemy ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`);
+        descriptions.push(
+          `-${Math.round((1 - effect.value) * 100)}% enemy ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`
+        );
         break;
       }
       case 'cure_status':
@@ -316,9 +341,10 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
     }
   }
 
-  const description = descriptions.length > 0
-    ? `${source.familiarData.name} uses ${item.name}: ${descriptions.join(', ')}`
-    : `${source.familiarData.name} uses ${item.name}`;
+  const description =
+    descriptions.length > 0
+      ? `${source.familiarData.name} uses ${item.name}: ${descriptions.join(', ')}`
+      : `${source.familiarData.name} uses ${item.name}`;
 
   if (damage > 0 || enemyStatus) {
     return {
@@ -333,9 +359,9 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
 
   if (hpHeal > 0 || mpHeal > 0 || selfStatus) {
     return {
-      effectType: hpHeal > 0 ? EffectType.Heal : (selfStatus ? EffectType.Buff : EffectType.MpHeal),
+      effectType: hpHeal > 0 ? EffectType.Heal : selfStatus ? EffectType.Buff : EffectType.MpHeal,
       targetId: source.uid,
-      value: hpHeal > 0 ? hpHeal : (selfStatus ? selfStatus.value : mpHeal),
+      value: hpHeal > 0 ? hpHeal : selfStatus ? selfStatus.value : mpHeal,
       isCritical: false,
       description,
       // mpValue is the SECONDARY channel: only set when the primary effect is
@@ -360,7 +386,7 @@ function executeAction(
   action: BattleAction,
   source: BattleFamiliar,
   target: BattleFamiliar,
-  rng: () => number,
+  rng: () => number
 ): ActionResult {
   let actualTarget: BattleFamiliar;
 
@@ -369,7 +395,7 @@ function executeAction(
   } else if (action.type === ActionType.Ability && action.abilityId) {
     const ability = getAbility(action.abilityId);
     if (ability) {
-      actualTarget = (ability.target === Target.Self || ability.target === Target.Ally) ? source : target;
+      actualTarget = ability.target === Target.Self || ability.target === Target.Ally ? source : target;
     } else {
       actualTarget = action.targetId === source.uid ? source : target;
     }
@@ -460,19 +486,21 @@ function executeAbility(
   ability: AbilityData,
   source: BattleFamiliar,
   target: BattleFamiliar,
-  rng: () => number,
+  rng: () => number
 ): ActionResult {
   if (ability.effectType === EffectType.Damage) {
     const { damage, isCritical } = calculateDamage(source, target, ability.multiplier, ability.scalingStat, rng);
 
     const statusEffects = ability.statusEffect
-      ? [{
-        abilityId: ability.id,
-        type: ability.statusEffect.type,
-        stat: ability.statusEffect.stat,
-        value: ability.statusEffect.value,
-        turnsRemaining: ability.statusEffect.duration,
-      }]
+      ? [
+          {
+            abilityId: ability.id,
+            type: ability.statusEffect.type,
+            stat: ability.statusEffect.stat,
+            value: ability.statusEffect.value,
+            turnsRemaining: ability.statusEffect.duration,
+          },
+        ]
       : undefined;
 
     return {
@@ -489,13 +517,15 @@ function executeAbility(
     const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier);
 
     const statusEffects = ability.statusEffect
-      ? [{
-        abilityId: ability.id,
-        type: ability.statusEffect.type,
-        stat: ability.statusEffect.stat,
-        value: ability.statusEffect.value,
-        turnsRemaining: ability.statusEffect.duration,
-      }]
+      ? [
+          {
+            abilityId: ability.id,
+            type: ability.statusEffect.type,
+            stat: ability.statusEffect.stat,
+            value: ability.statusEffect.value,
+            turnsRemaining: ability.statusEffect.duration,
+          },
+        ]
       : undefined;
 
     return {
@@ -510,13 +540,15 @@ function executeAbility(
 
   if (ability.effectType === EffectType.Buff) {
     const statusEffects = ability.statusEffect
-      ? [{
-        abilityId: ability.id,
-        type: ability.statusEffect.type,
-        stat: ability.statusEffect.stat,
-        value: ability.statusEffect.value,
-        turnsRemaining: ability.statusEffect.duration,
-      }]
+      ? [
+          {
+            abilityId: ability.id,
+            type: ability.statusEffect.type,
+            stat: ability.statusEffect.stat,
+            value: ability.statusEffect.value,
+            turnsRemaining: ability.statusEffect.duration,
+          },
+        ]
       : undefined;
 
     return {
@@ -541,10 +573,7 @@ function executeAbility(
 /**
  * Check the battle outcome based on current HP values.
  */
-export function checkBattleOutcome(
-  playerFamiliar: BattleFamiliar,
-  enemyFamiliar: BattleFamiliar,
-): Outcome {
+export function checkBattleOutcome(playerFamiliar: BattleFamiliar, enemyFamiliar: BattleFamiliar): Outcome {
   if (enemyFamiliar.currentHp <= 0) return Outcome.Win;
   if (playerFamiliar.currentHp <= 0) return Outcome.Loss;
   return Outcome.Continue;

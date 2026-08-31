@@ -38,7 +38,7 @@ export interface RateLimitOptions {
  * increment. That is an accepted soft limit; no transactions/batches.
  */
 export function createRateLimitMiddleware(
-  opts: RateLimitOptions = {},
+  opts: RateLimitOptions = {}
 ): (c: GameContext, next: Next) => Promise<Response | void> {
   const windowMs = opts.windowMs ?? WINDOW_MS;
   const maxRequests = opts.maxRequests ?? MAX_REQUESTS;
@@ -55,14 +55,12 @@ export function createRateLimitMiddleware(
       const now = Date.now();
       const key = await rateLimitKey(c);
 
-      const row = await c.env.DB
-        .prepare('SELECT window_start, count FROM rate_limits WHERE key = ?')
+      const row = await c.env.DB.prepare('SELECT window_start, count FROM rate_limits WHERE key = ?')
         .bind(key)
         .first<{ window_start: number; count: number }>();
 
       if (!row) {
-        await c.env.DB
-          .prepare('INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)')
+        await c.env.DB.prepare('INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)')
           .bind(key, now)
           .run();
         return next();
@@ -70,10 +68,7 @@ export function createRateLimitMiddleware(
 
       // Window expired → start a fresh window counting this request.
       if (now - row.window_start >= windowMs) {
-        await c.env.DB
-          .prepare('UPDATE rate_limits SET window_start = ?, count = 1 WHERE key = ?')
-          .bind(now, key)
-          .run();
+        await c.env.DB.prepare('UPDATE rate_limits SET window_start = ?, count = 1 WHERE key = ?').bind(now, key).run();
         return next();
       }
 
@@ -85,8 +80,7 @@ export function createRateLimitMiddleware(
         });
       }
 
-      await c.env.DB
-        .prepare("UPDATE rate_limits SET count = count + 1, updated_at = datetime('now') WHERE key = ?")
+      await c.env.DB.prepare("UPDATE rate_limits SET count = count + 1, updated_at = datetime('now') WHERE key = ?")
         .bind(key)
         .run();
       return next();
@@ -105,10 +99,7 @@ export const rateLimitMiddleware = createRateLimitMiddleware();
  * table is tiny (one row per active client IP), so a single DELETE suffices.
  * Returns the number of rows deleted.
  */
-export async function cleanupRateLimits(
-  db: D1Database,
-  windowMs: number = WINDOW_MS,
-): Promise<number> {
+export async function cleanupRateLimits(db: D1Database, windowMs: number = WINDOW_MS): Promise<number> {
   const res = await db
     .prepare('DELETE FROM rate_limits WHERE window_start < ?')
     .bind(Date.now() - windowMs)

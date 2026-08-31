@@ -13,9 +13,7 @@ assetsRouter.get('/v1/assets/:address', async (c) => {
   }
 
   const env = c.env.ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-  const collection = env === 'production'
-    ? c.env.COLLECTION_CONTRACT_MAINNET
-    : c.env.COLLECTION_CONTRACT_SANDBOX;
+  const collection = env === 'production' ? c.env.COLLECTION_CONTRACT_MAINNET : c.env.COLLECTION_CONTRACT_SANDBOX;
 
   try {
     const data = await getUserAssets(address.toLowerCase(), collection, env, c.env);

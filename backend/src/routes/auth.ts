@@ -25,8 +25,7 @@ authRouter.get('/auth/me', async (c) => {
     return c.json({ authenticated: false });
   }
 
-  const row = await c.env.DB
-    .prepare('SELECT wallet_address FROM wallet_bindings WHERE sub = ?')
+  const row = await c.env.DB.prepare('SELECT wallet_address FROM wallet_bindings WHERE sub = ?')
     .bind(result.sub)
     .first<{ wallet_address: string }>();
 
@@ -95,8 +94,9 @@ authRouter.post('/auth/adopt', async (c) => {
   try {
     // Only guest-marked rows are adoptable; an authenticated player's save is
     // never handed to another identity.
-    const guest = await c.env.DB
-      .prepare('SELECT anonymous_id FROM game_states WHERE anonymous_id = ? AND is_anonymous = 1')
+    const guest = await c.env.DB.prepare(
+      'SELECT anonymous_id FROM game_states WHERE anonymous_id = ? AND is_anonymous = 1'
+    )
       .bind(anonymousId)
       .first();
 
@@ -106,8 +106,7 @@ authRouter.post('/auth/adopt', async (c) => {
 
     // Policy lock: if the account already has a saved game, keep it and leave
     // the guest row untouched.
-    const account = await c.env.DB
-      .prepare('SELECT anonymous_id FROM game_states WHERE anonymous_id = ?')
+    const account = await c.env.DB.prepare('SELECT anonymous_id FROM game_states WHERE anonymous_id = ?')
       .bind(sub)
       .first();
     if (account) {
@@ -119,8 +118,9 @@ authRouter.post('/auth/adopt', async (c) => {
     // first result alone cannot guarantee the save moved before we migrate
     // battles/runs. A single-statement UPDATE is unambiguous: changes === 1
     // means the guest row existed and now belongs to the account.
-    const move = await c.env.DB
-      .prepare('UPDATE game_states SET anonymous_id = ?, is_anonymous = 0 WHERE anonymous_id = ?')
+    const move = await c.env.DB.prepare(
+      'UPDATE game_states SET anonymous_id = ?, is_anonymous = 0 WHERE anonymous_id = ?'
+    )
       .bind(sub, anonymousId)
       .run();
 
@@ -134,12 +134,8 @@ authRouter.post('/auth/adopt', async (c) => {
     // Save moved; migrate any in-progress battle and dungeon run in one
     // batch. A 0-row match here is fine (no battle/run in progress).
     await c.env.DB.batch([
-      c.env.DB
-        .prepare('UPDATE active_battles SET anonymous_id = ? WHERE anonymous_id = ?')
-        .bind(sub, anonymousId),
-      c.env.DB
-        .prepare('UPDATE dungeon_runs SET anonymous_id = ? WHERE anonymous_id = ?')
-        .bind(sub, anonymousId),
+      c.env.DB.prepare('UPDATE active_battles SET anonymous_id = ? WHERE anonymous_id = ?').bind(sub, anonymousId),
+      c.env.DB.prepare('UPDATE dungeon_runs SET anonymous_id = ? WHERE anonymous_id = ?').bind(sub, anonymousId),
     ]);
 
     return c.json({ adopted: true, sub });
@@ -247,7 +243,12 @@ authRouter.post('/auth/wallet', async (c) => {
 
   const { walletAddress, signature, nonce, message } = body as Record<string, unknown>;
 
-  if (typeof walletAddress !== 'string' || typeof signature !== 'string' || typeof nonce !== 'string' || typeof message !== 'string') {
+  if (
+    typeof walletAddress !== 'string' ||
+    typeof signature !== 'string' ||
+    typeof nonce !== 'string' ||
+    typeof message !== 'string'
+  ) {
     return c.json({ error: 'Missing required fields: walletAddress, signature, nonce, message' }, 400);
   }
 
@@ -257,8 +258,7 @@ authRouter.post('/auth/wallet', async (c) => {
   }
 
   // Load and consume the pending challenge for this sub.
-  const challenge = await c.env.DB
-    .prepare('SELECT nonce, message, created_at FROM wallet_challenges WHERE sub = ?')
+  const challenge = await c.env.DB.prepare('SELECT nonce, message, created_at FROM wallet_challenges WHERE sub = ?')
     .bind(sub)
     .first<{ nonce: string; message: string; created_at: string }>();
 
@@ -312,7 +312,9 @@ authRouter.post('/auth/wallet', async (c) => {
        VALUES (?, ?, datetime('now'), datetime('now'))
        ON CONFLICT(sub) DO UPDATE SET wallet_address = excluded.wallet_address,
                                       verified_at = datetime('now')`
-    ).bind(sub, walletAddress).run();
+    )
+      .bind(sub, walletAddress)
+      .run();
   } catch (err: unknown) {
     // SQLite UNIQUE constraint violation on wallet_address
     const msg = err instanceof Error ? err.message : String(err);

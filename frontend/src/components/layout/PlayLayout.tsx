@@ -1,44 +1,44 @@
-import { useCallback, useEffect, useState } from 'react'
-import { Outlet } from 'react-router-dom'
-import Nav from '@/components/layout/Nav'
-import PassportLogin from '@/components/auth/PassportLogin'
-import { isLoggedIn } from '@/lib/immutable'
-import { readIdToken, clearIdToken } from '@/lib/token'
+import { useCallback, useEffect, useState } from 'react';
+import { Outlet } from 'react-router-dom';
+import Nav from '@/components/layout/Nav';
+import PassportLogin from '@/components/auth/PassportLogin';
+import { isLoggedIn } from '@/lib/immutable';
+import { readIdToken, clearIdToken } from '@/lib/token';
 
 export default function PlayLayout() {
-  const [signedIn, setSignedIn] = useState<boolean>(() => readIdToken() !== null)
+  const [signedIn, setSignedIn] = useState<boolean>(() => readIdToken() !== null);
 
   const refreshAuth = useCallback(async () => {
-    const tokenPresent = readIdToken() !== null
+    const tokenPresent = readIdToken() !== null;
     if (tokenPresent) {
       try {
-        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787'
+        const backendUrl = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
         const res = await fetch(`${backendUrl}/api/auth/me`, {
           headers: { Authorization: `Bearer ${readIdToken()}` },
-        })
-        const data = (await res.json()) as { authenticated: boolean }
+        });
+        const data = (await res.json()) as { authenticated: boolean };
         if (!data.authenticated) {
-          clearIdToken()
-          setSignedIn(false)
-          return
+          clearIdToken();
+          setSignedIn(false);
+          return;
         }
       } catch {
         // Network error — treat as demo mode, don't block play
       }
-      setSignedIn(true)
-      return
+      setSignedIn(true);
+      return;
     }
     try {
-      const loggedIn = await isLoggedIn()
-      setSignedIn(loggedIn)
+      const loggedIn = await isLoggedIn();
+      setSignedIn(loggedIn);
     } catch {
-      setSignedIn(false)
+      setSignedIn(false);
     }
-  }, [])
+  }, []);
 
   useEffect(() => {
-    refreshAuth()
-  }, [refreshAuth])
+    refreshAuth();
+  }, [refreshAuth]);
 
   return (
     <div className="h-screen flex flex-col bg-surface-primary overflow-hidden">
@@ -58,5 +58,5 @@ export default function PlayLayout() {
         </div>
       )}
     </div>
-  )
+  );
 }

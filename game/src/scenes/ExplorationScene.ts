@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
-import type { DungeonState, Area, Room, FamiliarData } from '@arcane-familiars/game-logic';
-import { AREAS, RoomType, getFamiliar, Directions, Affinity } from '@arcane-familiars/game-logic';
+import type { DungeonState, Area, Room } from '@arcane-familiars/game-logic';
+import { AREAS, RoomType, getFamiliar, Directions } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI } from '../ui/ExplorationUI';
 import { Layout } from '../ui/layout';
@@ -8,7 +8,13 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData, sortRoomIds } from '../utils/familiarState';
-import type { GameStateSnapshot, FamiliarState, NavigateRoomPayload, PartySwapPayload, DungeonSnapshot, DungeonRoomSnapshot, OverlayModePayload } from '../events';
+import type {
+  GameStateSnapshot,
+  FamiliarState,
+  NavigateRoomPayload,
+  PartySwapPayload,
+  DungeonRoomSnapshot,
+} from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 
 interface ExplorationSceneData {
@@ -63,9 +69,8 @@ export class ExplorationScene extends Phaser.Scene {
     this.pendingEnemyId = null;
     this.pendingTreasureItemId = data.pendingTreasureItemId ?? null;
     this.lastBattleOutcome = data.lastBattleOutcome;
-    this.enemiesDefeated = data.lastBattleOutcome === 'victory'
-      ? (data.enemiesDefeated ?? 0) + 1
-      : (data.enemiesDefeated ?? 0);
+    this.enemiesDefeated =
+      data.lastBattleOutcome === 'victory' ? (data.enemiesDefeated ?? 0) + 1 : (data.enemiesDefeated ?? 0);
     this.resumeActiveIndex = data.activeIndex;
   }
 
@@ -87,11 +92,13 @@ export class ExplorationScene extends Phaser.Scene {
 
     const area = AREAS[this.areaId];
     if (!area) {
-      this.add.text(this.layout.x(400), this.layout.y(300), `Unknown area: ${this.areaId}`, {
-        fontSize: this.layout.font(16),
-        fontFamily: 'DM Sans',
-        color: '#EF4444',
-      }).setOrigin(0.5);
+      this.add
+        .text(this.layout.x(400), this.layout.y(300), `Unknown area: ${this.areaId}`, {
+          fontSize: this.layout.font(16),
+          fontFamily: 'DM Sans',
+          color: '#EF4444',
+        })
+        .setOrigin(0.5);
       return;
     }
 
@@ -123,7 +130,7 @@ export class ExplorationScene extends Phaser.Scene {
         this.dungeon = state.dungeon;
         this.areaId = state.dungeon.areaId;
         this.area = AREAS[this.areaId];
-        
+
         if (!this.area) {
           this.explorationUI.addLogMessage(`Unknown area: ${this.areaId}`);
           return;
@@ -219,26 +226,32 @@ export class ExplorationScene extends Phaser.Scene {
           this.pendingTreasureItemId = result.treasureItem;
         }
         this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
-        this.timers.push(this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
-          this.encounterActive = true;
-          this.pendingEnemyId = result.enemy!;
-          this.isProcessing = false;
-          this.emitStateUpdate();
-        }));
+        this.timers.push(
+          this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
+            this.encounterActive = true;
+            this.pendingEnemyId = result.enemy!;
+            this.isProcessing = false;
+            this.emitStateUpdate();
+          })
+        );
       } else if (result.treasure && result.treasureItem) {
         this.pendingTreasureItemId = result.treasureItem;
         this.explorationUI.addLogMessage(`You find something in ${result.room.name}.`);
-        this.timers.push(this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
-          this.treasureActive = true;
-          this.isProcessing = false;
-          this.emitStateUpdate();
-        }));
+        this.timers.push(
+          this.time.delayedCall(this.TREASURE_DELAY_MS, () => {
+            this.treasureActive = true;
+            this.isProcessing = false;
+            this.emitStateUpdate();
+          })
+        );
       } else {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
         this.emitStateUpdate();
-        this.timers.push(this.time.delayedCall(this.EXITS_DELAY_MS, () => {
-          this.isProcessing = false;
-        }));
+        this.timers.push(
+          this.time.delayedCall(this.EXITS_DELAY_MS, () => {
+            this.isProcessing = false;
+          })
+        );
         return;
       }
     } catch (err) {
@@ -428,7 +441,14 @@ export class ExplorationScene extends Phaser.Scene {
   };
 
   private handleNavigateRoom = (payload: NavigateRoomPayload): void => {
-    if (this.isProcessing || this.encounterActive || this.treasureActive || this.pendingEnemyId !== null || !this.dungeon) return;
+    if (
+      this.isProcessing ||
+      this.encounterActive ||
+      this.treasureActive ||
+      this.pendingEnemyId !== null ||
+      !this.dungeon
+    )
+      return;
     const currentRoom = this.dungeon.rooms[this.dungeon.currentRoomId];
     if (!currentRoom) return;
     if (!currentRoom.exits.some((e) => e.roomId === payload.roomId)) {

@@ -4,14 +4,14 @@ export enum Affinity {
   Fire,
   Water,
   Earth,
-  Wind
+  Wind,
 }
 
 export enum Rarity {
   Common,
   Uncommon,
   Rare,
-  Legendary
+  Legendary,
 }
 
 export interface FamiliarStats {

@@ -12,10 +12,22 @@ export const TREASURE_POOL: Room['treasurePool'] = Object.values(ITEMS)
   .map((item) => ({ itemId: item.id, weight: item.dropWeight as number }));
 
 const ROOM_NAMES = [
-  'Twilight Path', 'Crystal Alcove', 'Mossy Chamber', 'Stone Corridor',
-  'Glowing Grotto', 'Ancient Hall', 'Silent Passage', 'Whispering Den',
-  'Hidden Nook', 'Dusty Vault', 'Tangled Grove', 'Moonlit Clearing',
-  'Echoing Tunnel', 'Fading Trail', 'Shadowed Bend', 'Rumbling Shaft',
+  'Twilight Path',
+  'Crystal Alcove',
+  'Mossy Chamber',
+  'Stone Corridor',
+  'Glowing Grotto',
+  'Ancient Hall',
+  'Silent Passage',
+  'Whispering Den',
+  'Hidden Nook',
+  'Dusty Vault',
+  'Tangled Grove',
+  'Moonlit Clearing',
+  'Echoing Tunnel',
+  'Fading Trail',
+  'Shadowed Bend',
+  'Rumbling Shaft',
 ];
 
 const ROOM_DESCRIPTIONS = [
@@ -37,8 +49,8 @@ export enum Directions {
   Northeast,
   Northwest,
   Southeast,
-  Southwest
-};
+  Southwest,
+}
 
 /**
  * Generate a dungeon for the given area using a seeded RNG.

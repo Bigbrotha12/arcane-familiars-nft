@@ -56,12 +56,12 @@ const router = createBrowserRouter([
     path: '/preview',
     element: <FamiliarStatusPreview />,
   },
-])
+]);
 
 export default function App(): JSX.Element {
   return (
     <StrictMode>
       <RouterProvider router={router} />
     </StrictMode>
-  )
+  );
 }

@@ -17,9 +17,7 @@ export function createDefaultGameState(anonymousId: string): GameState {
     activeParty: [],
     inventory: {
       currency: 100,
-      items: [
-        { itemId: 'potion_small', quantity: 3 },
-      ],
+      items: [{ itemId: 'potion_small', quantity: 3 }],
     },
     dungeon: null,
     unlockedAreas: ['verdantMeadow'],
@@ -30,10 +28,7 @@ export function createDefaultGameState(anonymousId: string): GameState {
   };
 }
 
-export async function loadGameState(
-  db: D1Database,
-  anonymousId: string,
-): Promise<LoadedState | null> {
+export async function loadGameState(db: D1Database, anonymousId: string): Promise<LoadedState | null> {
   const row = await db
     .prepare('SELECT state_json, version, is_anonymous FROM game_states WHERE anonymous_id = ?')
     .bind(anonymousId)
@@ -58,7 +53,7 @@ export async function loadGameState(
 export async function getOrCreateGameState(
   db: D1Database,
   anonymousId: string,
-  isGuest: boolean = false,
+  isGuest: boolean = false
 ): Promise<LoadedState> {
   const existing = await loadGameState(db, anonymousId);
   if (existing) return existing;
@@ -89,7 +84,7 @@ export async function saveGameStateIfVersion(
   db: D1Database,
   anonymousId: string,
   state: GameState,
-  expectedVersion: number,
+  expectedVersion: number
 ): Promise<boolean> {
   state.lastSaved = Date.now();
   const stateJson = JSON.stringify(state);

@@ -30,10 +30,16 @@ export default class ErrorBoundary extends Component<Props, State> {
           <h1 className="text-2xl font-display font-semibold mb-md" style={{ color: 'var(--error)' }}>
             Arcane Familiars — Render Error
           </h1>
-          <pre className="p-lg rounded-md overflow-auto text-sm mb-md" style={{ background: 'var(--bg-secondary)', color: 'var(--warning)' }}>
+          <pre
+            className="p-lg rounded-md overflow-auto text-sm mb-md"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--warning)' }}
+          >
             {this.state.error?.message}
           </pre>
-          <pre className="p-lg rounded-md overflow-auto text-xs" style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}>
+          <pre
+            className="p-lg rounded-md overflow-auto text-xs"
+            style={{ background: 'var(--bg-secondary)', color: 'var(--text-muted)' }}
+          >
             {this.state.error?.stack}
           </pre>
           <p className="mt-lg" style={{ color: 'var(--text-muted)' }}>

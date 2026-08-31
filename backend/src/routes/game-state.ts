@@ -98,8 +98,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
-    const activeBattle = await c.env.DB
-      .prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
       .bind(anonymousId)
       .first();
     if (activeBattle) {

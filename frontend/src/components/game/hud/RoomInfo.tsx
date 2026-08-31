@@ -1,10 +1,10 @@
 // Room info panel: room name, type badge, description, area progress.
 // Anchored top-center; non-interactive chrome.
 
-import type { GameStateSnapshot } from '@/game'
+import type { GameStateSnapshot } from '@/game';
 
 interface RoomInfoProps {
-  snapshot: GameStateSnapshot
+  snapshot: GameStateSnapshot;
 }
 
 const ROOM_TYPE_STYLES: Record<string, { label: string; className: string }> = {
@@ -12,14 +12,14 @@ const ROOM_TYPE_STYLES: Record<string, { label: string; className: string }> = {
   Normal: { label: 'ROOM', className: 'bg-[#A5A3C4]/20 text-[#A5A3C4]' },
   Deadend: { label: 'DEAD END', className: 'bg-[#6366A1]/20 text-[#6366A1]' },
   Boss: { label: 'BOSS', className: 'bg-error/20 text-error' },
-}
+};
 
 function RoomInfo({ snapshot }: RoomInfoProps) {
-  const dungeon = snapshot.dungeon
-  if (!dungeon) return null
+  const dungeon = snapshot.dungeon;
+  if (!dungeon) return null;
 
-  const roomType = snapshot.roomType ?? 'Normal'
-  const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal
+  const roomType = snapshot.roomType ?? 'Normal';
+  const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal;
 
   return (
     <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm">
@@ -44,7 +44,7 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
         Room {dungeon.currentRoomIndex + 1}/{dungeon.roomCount}
       </p>
     </div>
-  )
+  );
 }
 
-export default RoomInfo
+export default RoomInfo;

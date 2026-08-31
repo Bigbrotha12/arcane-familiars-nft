@@ -1,5 +1,3 @@
-import type { GameState } from '@arcane-familiars/game-logic';
-
 export interface Bindings {
   DB: D1Database;
   ENVIRONMENT: string;

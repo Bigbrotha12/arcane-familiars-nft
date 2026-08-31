@@ -10,26 +10,26 @@
 // always-visible "Swap" badge; the active card gains an "Active" chip. Without
 // the callback the panel renders exactly as before (battle HUD passes none).
 
-import { useEffect, useState } from 'react'
-import type { ReactNode } from 'react'
-import type { FamiliarState } from '@/game'
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { FamiliarState } from '@/game';
 
 interface StatusEffect {
-  id: string
-  icon: string
-  duration?: number
+  id: string;
+  icon: string;
+  duration?: number;
 }
 
 interface CircularArcPartyPanelProps {
-  party: FamiliarState[]
-  activeId?: string
-  statusEffects?: StatusEffect[]
-  onSwapClick?: (familiarId: string) => void
+  party: FamiliarState[];
+  activeId?: string;
+  statusEffects?: StatusEffect[];
+  onSwapClick?: (familiarId: string) => void;
 }
 
 // Fallback unlock for a swap request that never resolves (e.g. network error,
 // no state update follows). Success clears it immediately via activeId change.
-const SWAP_PENDING_TIMEOUT_MS = 8000
+const SWAP_PENDING_TIMEOUT_MS = 8000;
 
 function renderArc(
   familiar: FamiliarState,
@@ -38,32 +38,26 @@ function renderArc(
   nameOnTop: boolean = false,
   labelAccessory?: ReactNode
 ) {
-  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
+  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
 
   // Grayscale for inactive
-  const hpColor = isActive
-    ? (hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444')
-    : '#6B7280'
-  const mpColor = isActive ? '#7C5CFC' : '#4B5563'
-  const textColor = isActive ? '#F0EFFF' : '#9CA3AF'
-  const subtextColor = isActive ? '#B8B5E0' : '#6B7280'
+  const hpColor = isActive ? (hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444') : '#6B7280';
+  const mpColor = isActive ? '#7C5CFC' : '#4B5563';
+  const textColor = isActive ? '#F0EFFF' : '#9CA3AF';
+  const subtextColor = isActive ? '#B8B5E0' : '#6B7280';
 
-  const strokeWidth = isActive ? 6 : 5
-  const radius = (size - strokeWidth) / 2
-  const circumference = 2 * Math.PI * radius
+  const strokeWidth = isActive ? 6 : 5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
 
-  const hpOffset = circumference * (1 - hpRatio)
-  const mpOffset = circumference * (1 - mpRatio)
+  const hpOffset = circumference * (1 - hpRatio);
 
   const nameLabel = (
-    <span
-      className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md"
-      style={{ color: textColor }}
-    >
+    <span className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md" style={{ color: textColor }}>
       {familiar.name}
     </span>
-  )
+  );
 
   const labelRow = labelAccessory ? (
     <div className="flex items-center gap-1">
@@ -72,7 +66,7 @@ function renderArc(
     </div>
   ) : (
     nameLabel
-  )
+  );
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -129,72 +123,65 @@ function renderArc(
           >
             {Math.max(0, Math.floor(familiar.hp))}
           </span>
-          <span
-            className="font-mono tabular-nums"
-            style={{ color: subtextColor, fontSize: isActive ? '8px' : '6px' }}
-          >
+          <span className="font-mono tabular-nums" style={{ color: subtextColor, fontSize: isActive ? '8px' : '6px' }}>
             {Math.max(0, Math.floor(familiar.mp))} MP
           </span>
         </div>
       </div>
       {!nameOnTop && labelRow}
     </div>
-  )
+  );
 }
 
 function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClick }: CircularArcPartyPanelProps) {
-  const [swapPendingId, setSwapPendingId] = useState<string | null>(null)
+  const [swapPendingId, setSwapPendingId] = useState<string | null>(null);
 
-  const interactive = typeof onSwapClick === 'function'
+  const interactive = typeof onSwapClick === 'function';
 
   // Hooks must run regardless of party contents (panel may render empty).
-  const resolvedActiveId = activeId ?? party[0]?.id
+  const resolvedActiveId = activeId ?? party[0]?.id;
 
   // A state update promoting the requested familiar to lead means success.
   useEffect(() => {
     if (swapPendingId !== null && resolvedActiveId === swapPendingId) {
-      setSwapPendingId(null)
+      setSwapPendingId(null);
     }
-  }, [resolvedActiveId, swapPendingId])
+  }, [resolvedActiveId, swapPendingId]);
 
   // Error fallback: re-enable swapping if no resolution arrives in time.
   useEffect(() => {
-    if (!swapPendingId) return
-    const timeoutId = window.setTimeout(() => setSwapPendingId(null), SWAP_PENDING_TIMEOUT_MS)
-    return () => window.clearTimeout(timeoutId)
-  }, [swapPendingId])
+    if (!swapPendingId) return;
+    const timeoutId = window.setTimeout(() => setSwapPendingId(null), SWAP_PENDING_TIMEOUT_MS);
+    return () => window.clearTimeout(timeoutId);
+  }, [swapPendingId]);
 
-  if (!party.length || resolvedActiveId === undefined) return null
+  if (!party.length || resolvedActiveId === undefined) return null;
 
-  const active = party.find((f) => f.id === resolvedActiveId) ?? party[0]
-  const inactive = party.filter((f) => f.id !== active.id)
+  const active = party.find((f) => f.id === resolvedActiveId) ?? party[0];
+  const inactive = party.filter((f) => f.id !== active.id);
 
   const handleSwap = (familiarId: string) => {
-    if (!interactive || swapPendingId !== null) return
-    setSwapPendingId(familiarId)
-    onSwapClick?.(familiarId)
-  }
+    if (!interactive || swapPendingId !== null) return;
+    setSwapPendingId(familiarId);
+    onSwapClick?.(familiarId);
+  };
 
   const activeChip = interactive ? (
-    <span
-      className="rounded-full border border-teal/60 bg-teal/15 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-[#F0EFFF]"
-    >
+    <span className="rounded-full border border-teal/60 bg-teal/15 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-[#F0EFFF]">
       Active
     </span>
-  ) : undefined
+  ) : undefined;
 
   return (
     <div className="pointer-events-none flex flex-col items-center gap-1">
       {/* Active familiar - larger, name on top, offset left */}
-      <div className="relative -ml-9">
-        {renderArc(active, true, 64, true, activeChip)}
-      </div>
+      <div className="relative -ml-9">{renderArc(active, true, 64, true, activeChip)}</div>
 
       {/* Inactive familiar(s) - smaller, grayscale, offset right, almost touching.
           In interactive mode each card is a button promoting it to party lead.
           Fainted cards keep their Swap badge but dimmed and non-clickable. */}
       {inactive.map((familiar) => {
-        const isFainted = familiar.hp <= 0
+        const isFainted = familiar.hp <= 0;
         const swapBadge = interactive ? (
           isFainted ? (
             <span className="rounded-full border border-[#4B5563]/60 bg-[#2D2A5E]/40 px-1.5 py-px font-display text-[9px] font-semibold leading-tight text-text-muted">
@@ -205,14 +192,14 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
               Swap
             </span>
           )
-        ) : undefined
+        ) : undefined;
 
         if (!interactive || isFainted) {
           return (
             <div key={familiar.id} className="relative -mr-9 -mt-0.5 opacity-60">
               {renderArc(familiar, false, 50, false, swapBadge)}
             </div>
-          )
+          );
         }
 
         return (
@@ -226,7 +213,7 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
           >
             {renderArc(familiar, false, 50, false, swapBadge)}
           </button>
-        )
+        );
       })}
 
       {/* Shared status effects - horizontal, below inactive, wraps to 2 lines max */}
@@ -249,7 +236,7 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default CircularArcPartyPanel
+export default CircularArcPartyPanel;

@@ -1,57 +1,47 @@
-import { useEffect, ReactNode } from 'react'
+import { useEffect, ReactNode } from 'react';
 
 interface ModalProps {
-  open: boolean
-  onClose: () => void
-  title?: string
-  children: ReactNode
+  open: boolean;
+  onClose: () => void;
+  title?: string;
+  children: ReactNode;
   /** Dark, solid, double-outlined frame — used for in-game HUD modals that
       render over the Phaser canvas (ability/item/exit). Default is the light
       surface-card style used by the landing page. */
-  hud?: boolean
+  hud?: boolean;
   /** Dense in-game sizing (narrow width, tighter padding/type) for modals
       that live inside the 800x600 design-space HUD stage. */
-  compact?: boolean
+  compact?: boolean;
 }
 
 function Modal({ open, onClose, title, children, hud = false, compact = false }: ModalProps) {
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const handler = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose()
-    }
-    document.addEventListener('keydown', handler)
-    document.body.style.overflow = 'hidden'
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', handler);
+    document.body.style.overflow = 'hidden';
     return () => {
-      document.removeEventListener('keydown', handler)
-      document.body.style.overflow = ''
-    }
-  }, [open, onClose])
+      document.removeEventListener('keydown', handler);
+      document.body.style.overflow = '';
+    };
+  }, [open, onClose]);
 
-  if (!open) return null
+  if (!open) return null;
 
   return (
     <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-md">
-      <div
-        className="absolute inset-0 bg-black/40 backdrop-blur-sm"
-        onClick={onClose}
-        aria-hidden="true"
-      />
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
       <div
         className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
           compact ? 'max-w-[300px] p-md' : 'max-w-md p-lg'
-        } ${
-          hud
-            ? 'hud-frame rounded-lg'
-            : 'bg-surface-card shadow-card-hover'
-        }`}
+        } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'}`}
       >
         {title && (
           <div className={`flex items-center justify-between ${compact ? 'mb-sm' : 'mb-md'}`}>
             <h2
-              className={`font-display font-semibold ${
-                compact ? 'text-sm' : 'text-xl'
-              } ${
+              className={`font-display font-semibold ${compact ? 'text-sm' : 'text-xl'} ${
                 hud ? 'text-[#F0EFFF]' : 'text-text-primary'
               }`}
             >
@@ -60,9 +50,7 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
             <button
               onClick={onClose}
               className={`p-1 transition-colors ${
-                hud
-                  ? 'text-[#A5A3C4] hover:text-[#F0EFFF]'
-                  : 'text-text-muted hover:text-text-primary'
+                hud ? 'text-[#A5A3C4] hover:text-[#F0EFFF]' : 'text-text-muted hover:text-text-primary'
               }`}
               aria-label="Close"
             >
@@ -75,7 +63,7 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
         {children}
       </div>
     </div>
-  )
+  );
 }
 
-export default Modal
+export default Modal;

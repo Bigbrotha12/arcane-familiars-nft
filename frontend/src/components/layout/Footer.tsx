@@ -1,4 +1,4 @@
-import { Link } from 'react-router-dom'
+import { Link } from 'react-router-dom';
 
 function Footer() {
   const links = [
@@ -6,15 +6,13 @@ function Footer() {
     { label: 'Terms of Service', href: '#' },
     { label: 'White Paper', href: '#' },
     { label: 'Documentation', href: '#' },
-  ]
+  ];
 
   return (
     <footer className="bg-surface-alt border-t border-border mt-auto">
       <div className="max-w-content mx-auto px-lg py-xl">
         <div className="flex flex-col md:flex-row items-center justify-between gap-md">
-          <span className="text-lg font-display font-semibold text-text-primary">
-            Arcane Familiars
-          </span>
+          <span className="text-lg font-display font-semibold text-text-primary">Arcane Familiars</span>
 
           <div className="flex items-center gap-6">
             {links.map((link) => (
@@ -34,7 +32,7 @@ function Footer() {
         </div>
       </div>
     </footer>
-  )
+  );
 }
 
-export default Footer
+export default Footer;

@@ -20,10 +20,7 @@ function getJwks(uri: string): ReturnType<typeof createRemoteJWKSet> {
  * account key (the `sub` claim) on success, or null on any validation failure.
  * Never throws on an invalid token.
  */
-export async function verifyIdToken(
-  token: string,
-  env: Bindings,
-): Promise<{ sub: string } | null> {
+export async function verifyIdToken(token: string, env: Bindings): Promise<{ sub: string } | null> {
   try {
     const { payload } = await jwtVerify(token, getJwks(env.IMMUTABLE_JWKS_URI), {
       issuer: env.IMMUTABLE_AUTH_ISSUER,

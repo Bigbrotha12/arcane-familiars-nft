@@ -24,4 +24,3 @@ export interface GameState {
   winCount: number;
   lastSaved: number;
 }
-

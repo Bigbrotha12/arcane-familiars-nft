@@ -46,12 +46,12 @@ const COLORS = {
   TITLE: '#7C5CFC',
   SUBTITLE: '#A5A3C4',
   LABEL: '#6366A1',
-  CARD_BG: 0x1E1B4B,
-  CARD_BORDER: 0x3B3870,
-  CARD_HOVER: 0x2D2A5E,
-  SELECTED_BORDER: 0x7C5CFC,
-  BUTTON_DISABLED: 0x3B3870,
-  BUTTON_ENABLED: 0x7C5CFC,
+  CARD_BG: 0x1e1b4b,
+  CARD_BORDER: 0x3b3870,
+  CARD_HOVER: 0x2d2a5e,
+  SELECTED_BORDER: 0x7c5cfc,
+  BUTTON_DISABLED: 0x3b3870,
+  BUTTON_ENABLED: 0x7c5cfc,
   TEXT_DISABLED: '#6366A1',
   TEXT_ENABLED: '#F0EFFF',
   TEXT_HOVER: '#F0EFFF',
@@ -104,7 +104,7 @@ export class PartySelectScene extends Phaser.Scene {
     this.areaId = data.areaId;
   }
 
-preload(): void {
+  preload(): void {
     preloadFamiliarPortraits(this);
   }
 
@@ -120,41 +120,57 @@ preload(): void {
 
     const gen = this._sceneGeneration;
 
-    this.add.text(this.layout.x(400), this.layout.y(30), 'Select Your Party', {
-      fontSize: this.layout.font(28),
-      fontFamily: 'Fredoka',
-      fontStyle: '600',
-      color: COLORS.TITLE,
-    }).setOrigin(0.5);
+    this.add
+      .text(this.layout.x(400), this.layout.y(30), 'Select Your Party', {
+        fontSize: this.layout.font(28),
+        fontFamily: 'Fredoka',
+        fontStyle: '600',
+        color: COLORS.TITLE,
+      })
+      .setOrigin(0.5);
 
-    this.instructionText = this.add.text(this.layout.x(400), this.layout.y(60), 'Choose 2 Familiars', {
-      fontSize: this.layout.font(14),
-      fontFamily: 'DM Sans',
-      color: COLORS.SUBTITLE,
-    }).setOrigin(0.5);
+    this.instructionText = this.add
+      .text(this.layout.x(400), this.layout.y(60), 'Choose 2 Familiars', {
+        fontSize: this.layout.font(14),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5);
 
-    this.loadingText = this.add.text(this.layout.x(400), this.layout.y(300), 'Loading...', {
-      fontSize: this.layout.font(18),
-      fontFamily: 'DM Sans',
-      color: COLORS.SUBTITLE,
-    }).setOrigin(0.5);
+    this.loadingText = this.add
+      .text(this.layout.x(400), this.layout.y(300), 'Loading...', {
+        fontSize: this.layout.font(18),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5);
 
     const confirmY = this.layout.y(600 - LAYOUT.CONFIRM_BUTTON_Y_OFFSET);
 
-    this.confirmBg = this.add.rectangle(this.layout.x(400), confirmY, this.layout.s(LAYOUT.CONFIRM_BUTTON_WIDTH), this.layout.s(LAYOUT.CONFIRM_BUTTON_HEIGHT), COLORS.BUTTON_DISABLED);
+    this.confirmBg = this.add.rectangle(
+      this.layout.x(400),
+      confirmY,
+      this.layout.s(LAYOUT.CONFIRM_BUTTON_WIDTH),
+      this.layout.s(LAYOUT.CONFIRM_BUTTON_HEIGHT),
+      COLORS.BUTTON_DISABLED
+    );
     this.confirmBg.setStrokeStyle(this.layout.s(LAYOUT.CARD_STROKE_WIDTH), COLORS.BUTTON_DISABLED);
 
-    this.confirmText = this.add.text(this.layout.x(400), confirmY, 'Confirm Party', {
-      fontSize: this.layout.font(14),
-      fontFamily: 'DM Sans',
-      color: COLORS.TEXT_DISABLED,
-    }).setOrigin(0.5);
+    this.confirmText = this.add
+      .text(this.layout.x(400), confirmY, 'Confirm Party', {
+        fontSize: this.layout.font(14),
+        fontFamily: 'DM Sans',
+        color: COLORS.TEXT_DISABLED,
+      })
+      .setOrigin(0.5);
 
-    this.backText = this.add.text(this.layout.x(LAYOUT.BACK_MARGIN), confirmY, '< Back', {
-      fontSize: this.layout.font(14),
-      fontFamily: 'DM Sans',
-      color: COLORS.SUBTITLE,
-    }).setInteractive({ useHandCursor: true });
+    this.backText = this.add
+      .text(this.layout.x(LAYOUT.BACK_MARGIN), confirmY, '< Back', {
+        fontSize: this.layout.font(14),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setInteractive({ useHandCursor: true });
 
     this.backText.on('pointerdown', () => {
       this.scene.start(SCENE_KEYS.WORLD_MAP);
@@ -221,11 +237,14 @@ preload(): void {
       this.loadingText.setColor(COLORS.ERROR);
       this.loadingText.setAlpha(1);
 
-      const goBackText = this.add.text(this.layout.x(400), this.layout.y(300) + this.layout.s(40), '< Go Back', {
-        fontSize: this.layout.font(16),
-        fontFamily: 'DM Sans',
-        color: COLORS.SUBTITLE,
-      }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+      const goBackText = this.add
+        .text(this.layout.x(400), this.layout.y(300) + this.layout.s(40), '< Go Back', {
+          fontSize: this.layout.font(16),
+          fontFamily: 'DM Sans',
+          color: COLORS.SUBTITLE,
+        })
+        .setOrigin(0.5)
+        .setInteractive({ useHandCursor: true });
 
       goBackText.on('pointerdown', () => {
         this.scene.start(SCENE_KEYS.WORLD_MAP);
@@ -242,31 +261,50 @@ preload(): void {
       const familiar = FAMILIARS[id];
       const x = startX + index * this.layout.s(LAYOUT.CARD_WIDTH + LAYOUT.CARD_GAP);
 
-      const bg = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT), COLORS.CARD_BG);
+      const bg = this.add.rectangle(
+        0,
+        0,
+        this.layout.s(LAYOUT.CARD_WIDTH),
+        this.layout.s(LAYOUT.CARD_HEIGHT),
+        COLORS.CARD_BG
+      );
       const border = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT));
       border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
       border.setFillStyle(COLORS.CARD_BG);
 
       const container = this.add.container(x, this.layout.y(LAYOUT.CARD_Y), [border, bg]);
 
-      const portrait = this.add.image(0, -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70), familiarTextureKey(id));
+      const portrait = this.add.image(
+        0,
+        -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70),
+        familiarTextureKey(id)
+      );
       portrait.setDisplaySize(this.layout.s(110), this.layout.s(110));
       portrait.setDepth(1);
 
       const offsetY = -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(LAYOUT.NAME_OFFSET_Y) + this.layout.s(120);
 
-      const nameText = this.add.text(0, offsetY, familiar.name, {
-        fontSize: this.layout.font(16),
-        fontFamily: 'Fredoka',
-        fontStyle: '600',
-        color: COLORS.TITLE,
-      }).setOrigin(0.5, 0);
+      const nameText = this.add
+        .text(0, offsetY, familiar.name, {
+          fontSize: this.layout.font(16),
+          fontFamily: 'Fredoka',
+          fontStyle: '600',
+          color: COLORS.TITLE,
+        })
+        .setOrigin(0.5, 0);
 
-      const affinityText = this.add.text(0, offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y), Affinity[familiar.affinity] ?? String(familiar.affinity), {
-        fontSize: this.layout.font(11),
-        fontFamily: 'DM Sans',
-        color: COLORS.SUBTITLE,
-      }).setOrigin(0.5, 0);
+      const affinityText = this.add
+        .text(
+          0,
+          offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y),
+          Affinity[familiar.affinity] ?? String(familiar.affinity),
+          {
+            fontSize: this.layout.font(11),
+            fontFamily: 'DM Sans',
+            color: COLORS.SUBTITLE,
+          }
+        )
+        .setOrigin(0.5, 0);
 
       const statsStr =
         `HP: ${familiar.stats.hp}\n` +
@@ -275,13 +313,15 @@ preload(): void {
         `SPD: ${familiar.stats.speed}\n` +
         `ARC: ${familiar.stats.arcane}`;
 
-      const statsText = this.add.text(0, offsetY + this.layout.s(LAYOUT.STATS_OFFSET_Y), statsStr, {
-        fontSize: this.layout.font(11),
-        fontFamily: 'JetBrains Mono',
-        fontStyle: '500',
-        color: COLORS.SUBTITLE,
-        align: 'left',
-      }).setOrigin(0.5, 0);
+      const statsText = this.add
+        .text(0, offsetY + this.layout.s(LAYOUT.STATS_OFFSET_Y), statsStr, {
+          fontSize: this.layout.font(11),
+          fontFamily: 'JetBrains Mono',
+          fontStyle: '500',
+          color: COLORS.SUBTITLE,
+          align: 'left',
+        })
+        .setOrigin(0.5, 0);
 
       const abilityNames = familiar.abilities
         .map((aId) => {
@@ -290,19 +330,23 @@ preload(): void {
         })
         .join(', ');
 
-      const abilitiesLabel = this.add.text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_LABEL_OFFSET_Y), 'Abilities:', {
-        fontSize: this.layout.font(11),
-        fontFamily: 'DM Sans',
-        color: COLORS.LABEL,
-      }).setOrigin(0.5, 0);
+      const abilitiesLabel = this.add
+        .text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_LABEL_OFFSET_Y), 'Abilities:', {
+          fontSize: this.layout.font(11),
+          fontFamily: 'DM Sans',
+          color: COLORS.LABEL,
+        })
+        .setOrigin(0.5, 0);
 
-      const abilitiesText = this.add.text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_TEXT_OFFSET_Y), abilityNames, {
-        fontSize: this.layout.font(10),
-        fontFamily: 'DM Sans',
-        color: COLORS.SUBTITLE,
-        wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
-        align: 'center',
-      }).setOrigin(0.5, 0);
+      const abilitiesText = this.add
+        .text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_TEXT_OFFSET_Y), abilityNames, {
+          fontSize: this.layout.font(10),
+          fontFamily: 'DM Sans',
+          color: COLORS.SUBTITLE,
+          wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
+          align: 'center',
+        })
+        .setOrigin(0.5, 0);
 
       container.add([portrait, nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
 
@@ -358,7 +402,10 @@ preload(): void {
   private updateConfirmButton(): void {
     const ready = this.selectedIds.length === MAX_PARTY_SIZE;
     this.confirmBg.setFillStyle(ready ? COLORS.BUTTON_ENABLED : COLORS.BUTTON_DISABLED);
-    this.confirmBg.setStrokeStyle(this.layout.s(LAYOUT.CARD_STROKE_WIDTH), ready ? COLORS.BUTTON_ENABLED : COLORS.BUTTON_DISABLED);
+    this.confirmBg.setStrokeStyle(
+      this.layout.s(LAYOUT.CARD_STROKE_WIDTH),
+      ready ? COLORS.BUTTON_ENABLED : COLORS.BUTTON_DISABLED
+    );
     this.confirmText.setColor(ready ? COLORS.TEXT_ENABLED : COLORS.TEXT_DISABLED);
 
     if (this.confirmBg.input) {
@@ -411,17 +458,22 @@ preload(): void {
 
   private showSaveErrorWithGoBack(): void {
     this._hasShownTerminalError = true;
-    const errorText = this.add.text(this.layout.x(400), this.layout.y(300) + this.layout.s(60), 'Could not save party', {
-      fontSize: this.layout.font(14),
-      fontFamily: 'DM Sans',
-      color: COLORS.ERROR,
-    }).setOrigin(0.5);
+    this.add
+      .text(this.layout.x(400), this.layout.y(300) + this.layout.s(60), 'Could not save party', {
+        fontSize: this.layout.font(14),
+        fontFamily: 'DM Sans',
+        color: COLORS.ERROR,
+      })
+      .setOrigin(0.5);
 
-    const goBackText = this.add.text(this.layout.x(400), this.layout.y(300) + this.layout.s(90), '< Go Back', {
-      fontSize: this.layout.font(14),
-      fontFamily: 'DM Sans',
-      color: COLORS.SUBTITLE,
-    }).setOrigin(0.5).setInteractive({ useHandCursor: true });
+    const goBackText = this.add
+      .text(this.layout.x(400), this.layout.y(300) + this.layout.s(90), '< Go Back', {
+        fontSize: this.layout.font(14),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
 
     goBackText.on('pointerdown', () => {
       this.scene.start(SCENE_KEYS.WORLD_MAP);
@@ -437,8 +489,8 @@ preload(): void {
       battleCount: this.fullGameState?.battleCount ?? 0,
       wins: this.fullGameState?.winCount ?? 0,
       currentScene: 'party_select',
-    }
-    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+    };
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }
 
   private handleSave = async (): Promise<void> => {

@@ -14,15 +14,15 @@ import type { FAMILIARS } from '@arcane-familiars/game-logic';
 export const PLACEHOLDER_FAMILIAR_ID = 'whiteDog';
 
 export interface SpriteSheetConfig {
-  file: string;            // path under /assets/sprites/ for effects, under /assets/sprites/familiars/<id>/ for idle
+  file: string; // path under /assets/sprites/ for effects, under /assets/sprites/familiars/<id>/ for idle
   frameWidth: number;
   frameHeight: number;
   frameRate: number;
 }
 
 export interface FamiliarSpriteConfig {
-  idle?: SpriteSheetConfig;          // right-facing; left variant is a sibling file with _left suffix before extension
-  left?: boolean;                    // whether the `_left` idle sheet exists (default true, per asset spec)
+  idle?: SpriteSheetConfig; // right-facing; left variant is a sibling file with _left suffix before extension
+  left?: boolean; // whether the `_left` idle sheet exists (default true, per asset spec)
   abilityEffect?: keyof typeof EFFECT_SPRITES;
 }
 
@@ -34,9 +34,18 @@ export const EFFECT_SPRITES = {
 
 // Partial keyed by familiar ids: sprite art is optional per familiar, so only familiars with art get entries (no empty configs).
 export const FAMILIAR_SPRITES: Partial<Record<keyof typeof FAMILIARS, FamiliarSpriteConfig>> = {
-  aquaSprite: { idle: { file: 'idle/aquaSprite_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'cast_water' },
-  whiteDog: { idle: { file: 'idle/whiteDog_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'cast_light' },
-  yellowFighter: { idle: { file: 'idle/yellowFighter_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 }, abilityEffect: 'fire_attack' },
+  aquaSprite: {
+    idle: { file: 'idle/aquaSprite_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 },
+    abilityEffect: 'cast_water',
+  },
+  whiteDog: {
+    idle: { file: 'idle/whiteDog_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 },
+    abilityEffect: 'cast_light',
+  },
+  yellowFighter: {
+    idle: { file: 'idle/yellowFighter_idle.png', frameWidth: 64, frameHeight: 64, frameRate: 24 },
+    abilityEffect: 'fire_attack',
+  },
 };
 
 export function getFamiliarSprites(id: string): FamiliarSpriteConfig | undefined {

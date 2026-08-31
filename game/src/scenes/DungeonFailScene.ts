@@ -51,14 +51,16 @@ export class DungeonFailScene extends Phaser.Scene {
     const BUTTON_HEIGHT = layout.s(40);
     const DIVIDER_WIDTH = layout.s(200);
 
-    this.add.rectangle(width / 2, height / 2, width, height, 0x0A0A0F);
+    this.add.rectangle(width / 2, height / 2, width, height, 0x0a0a0f);
 
-    const skull = this.add.text(width / 2, height * SKULL_Y_RATIO, '☠', {
-      fontSize: layout.font(64),
-      fontFamily: 'Fredoka',
-      fontStyle: '600',
-      color: '#EF4444',
-    }).setOrigin(0.5);
+    const skull = this.add
+      .text(width / 2, height * SKULL_Y_RATIO, '☠', {
+        fontSize: layout.font(64),
+        fontFamily: 'Fredoka',
+        fontStyle: '600',
+        color: '#EF4444',
+      })
+      .setOrigin(0.5);
 
     const skullTween = this.tweens.add({
       targets: skull,
@@ -72,61 +74,73 @@ export class DungeonFailScene extends Phaser.Scene {
     this.events.on('shutdown', this.cleanupTweens, this);
     this.events.on('destroy', this.cleanupTweens, this);
 
-    this.add.text(width / 2, height * TITLE_Y_RATIO, 'Defeated', {
-      fontSize: layout.font(36),
-      fontFamily: 'Fredoka',
-      fontStyle: '600',
-      color: '#EF4444',
-    }).setOrigin(0.5);
+    this.add
+      .text(width / 2, height * TITLE_Y_RATIO, 'Defeated', {
+        fontSize: layout.font(36),
+        fontFamily: 'Fredoka',
+        fontStyle: '600',
+        color: '#EF4444',
+      })
+      .setOrigin(0.5);
 
-    this.add.text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen...', {
-      fontSize: layout.font(16),
-      fontFamily: 'DM Sans',
-      fontStyle: '400',
-      color: '#A5A3C4',
-    }).setOrigin(0.5);
+    this.add
+      .text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen...', {
+        fontSize: layout.font(16),
+        fontFamily: 'DM Sans',
+        fontStyle: '400',
+        color: '#A5A3C4',
+      })
+      .setOrigin(0.5);
 
-    this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, layout.s(1), 0x3B3870);
+    this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, layout.s(1), 0x3b3870);
 
-    this.add.text(width / 2, height * ROOMS_STAT_Y_RATIO, `Rooms Explored: ${this.roomsExplored}`, {
-      fontSize: layout.font(14),
-      fontFamily: 'JetBrains Mono',
-      fontStyle: '500',
-      color: '#A5A3C4',
-    }).setOrigin(0.5);
+    this.add
+      .text(width / 2, height * ROOMS_STAT_Y_RATIO, `Rooms Explored: ${this.roomsExplored}`, {
+        fontSize: layout.font(14),
+        fontFamily: 'JetBrains Mono',
+        fontStyle: '500',
+        color: '#A5A3C4',
+      })
+      .setOrigin(0.5);
 
-    this.add.text(width / 2, height * ENEMIES_STAT_Y_RATIO, `Enemies Defeated: ${this.enemiesDefeated}`, {
-      fontSize: layout.font(14),
-      fontFamily: 'JetBrains Mono',
-      fontStyle: '500',
-      color: '#A5A3C4',
-    }).setOrigin(0.5);
+    this.add
+      .text(width / 2, height * ENEMIES_STAT_Y_RATIO, `Enemies Defeated: ${this.enemiesDefeated}`, {
+        fontSize: layout.font(14),
+        fontFamily: 'JetBrains Mono',
+        fontStyle: '500',
+        color: '#A5A3C4',
+      })
+      .setOrigin(0.5);
 
-    const btnBg = this.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x7C5CFC);
+    const btnBg = this.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x7c5cfc);
 
-    const btnText = this.add.text(0, 0, 'Return to World Map', {
-      fontSize: layout.font(14),
-      fontFamily: 'DM Sans',
-      fontStyle: '600',
-      color: '#F0EFFF',
-    }).setOrigin(0.5);
+    const btnText = this.add
+      .text(0, 0, 'Return to World Map', {
+        fontSize: layout.font(14),
+        fontFamily: 'DM Sans',
+        fontStyle: '600',
+        color: '#F0EFFF',
+      })
+      .setOrigin(0.5);
 
     const button = this.add.container(width / 2, height * BUTTON_Y_RATIO, [btnBg, btnText]);
     button.setSize(BUTTON_WIDTH, BUTTON_HEIGHT);
     button.setInteractive({ useHandCursor: true });
 
-    const errorText = this.add.text(width / 2, height * BUTTON_Y_RATIO + layout.s(ERROR_Y_OFFSET), '', {
-      fontSize: layout.font(12),
-      fontFamily: 'DM Sans',
-      fontStyle: '400',
-      color: '#EF4444',
-    }).setOrigin(0.5);
+    const errorText = this.add
+      .text(width / 2, height * BUTTON_Y_RATIO + layout.s(ERROR_Y_OFFSET), '', {
+        fontSize: layout.font(12),
+        fontFamily: 'DM Sans',
+        fontStyle: '400',
+        color: '#EF4444',
+      })
+      .setOrigin(0.5);
 
     button.on('pointerover', () => {
-      if (!this.isExiting) btnBg.setFillStyle(0x6A4AE8);
+      if (!this.isExiting) btnBg.setFillStyle(0x6a4ae8);
     });
     button.on('pointerout', () => {
-      if (!this.isExiting) btnBg.setFillStyle(0x7C5CFC);
+      if (!this.isExiting) btnBg.setFillStyle(0x7c5cfc);
     });
     button.on('pointerdown', () => this.handleExit(btnBg, btnText, errorText));
 
@@ -140,7 +154,7 @@ export class DungeonFailScene extends Phaser.Scene {
   private async handleExit(
     btnBg: Phaser.GameObjects.Rectangle,
     btnText: Phaser.GameObjects.Text,
-    errorText: Phaser.GameObjects.Text,
+    errorText: Phaser.GameObjects.Text
   ): Promise<void> {
     if (this.isExiting) return;
     this.isExiting = true;
@@ -168,8 +182,8 @@ export class DungeonFailScene extends Phaser.Scene {
       battleCount: 0,
       wins: 0,
       currentScene: 'dungeon_fail',
-    }
-    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot)
+    };
+    gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }
 
   private handleSave = async (): Promise<void> => {
