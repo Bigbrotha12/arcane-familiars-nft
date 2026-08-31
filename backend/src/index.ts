@@ -15,6 +15,7 @@ const app = new Hono<{ Bindings: Bindings }>();
 // CORS — allow all origins in development; restrict to known frontends in prod.
 const PROD_ORIGINS = [
   'https://arcane-familiars.pages.dev',
+  'https://arcane-familiars-staging.pages.dev',
 ];
 
 app.use('/api/*', cors({

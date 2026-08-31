@@ -1,0 +1,172 @@
+# Deployment pipeline — staging-first, gated production.
+#
+# Gates:
+#  - Staging deploys on every push to `master` (and on manual workflow_dispatch).
+#  - Production runs ONLY after staging succeeds AND:
+#      1. docs/DEFINITION_OF_PRODUCTION.md is present (hashFiles gate),
+#      2. the push to `master` is the approval (solo dev; no reviewers/wait timer).
+#    On workflow_dispatch the prod job is skipped entirely (event_name != 'push').
+#    `environment: production` scopes the job's secrets/vars; no protection rules.
+#
+# Secrets required (GitHub Actions secrets, see docs/PRODUCTION-DEPLOYMENT-GAP-PLAN.md §6):
+#  - CLOUDFLARE_API_TOKEN  (Workers + Pages + D1 write + R2 write)
+#  - CLOUDFLARE_API_EMAIL
+#  - CLOUDFLARE_ACCOUNT_ID
+# Repo variables (non-secret, GitHub repo settings):
+#  - CF_WORKERS_SUBDOMAIN  (required) the account's workers.dev subdomain, e.g. `acct` from https://acct.workers.dev
+#  - BACKUP_R2_BUCKET     (optional) if set, the pre-migration D1 dump is also uploaded to R2
+#
+# Preconditions (user-created, see docs/PROD-RUNBOOK.md and plan §6):
+#  - Staging Worker env in backend/wrangler.jsonc (env.staging, D1 `arcane-familiars-staging`).
+#  - Staging Pages project `arcane-familiars-staging` and prod Pages project `arcane-familiars`.
+#  - Prod D1 `arcane-familiars` exists and its id matches backend/wrangler.jsonc.
+#
+# Both Pages deploys use --branch=production (production branch of each Pages project).
+
+name: Deploy
+
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy-staging:
+    name: Deploy staging (Worker + D1 + Pages)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    environment: staging
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_EMAIL: ${{ secrets.CLOUDFLARE_API_EMAIL }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Sanity check (Worker bundles)
+        working-directory: backend
+        run: npx wrangler deploy --env staging --dry-run
+
+      - name: Preflight (staging D1 must be real, not placeholder)
+        working-directory: backend
+        run: |
+          if grep -q '00000000-0000-0000-0000-000000000000' wrangler.jsonc; then
+            echo "::error::Staging D1 database_id is still the placeholder. Run 'wrangler d1 create arcane-familiars-staging' and set the returned id in backend/wrangler.jsonc (see docs/PROD-RUNBOOK.md)."
+            exit 1
+          fi
+
+      - name: Apply staging migrations
+        working-directory: backend
+        run: npm run db:migrate:staging
+
+      - name: Deploy staging Worker
+        working-directory: backend
+        run: npx wrangler deploy --env staging
+
+      - name: Capture staging Worker URL
+        id: staging-worker-url
+        uses: ./.github/actions/capture-worker-url
+        with:
+          worker: arcane-familiars-backend
+          env: staging
+          subdomain: ${{ vars.CF_WORKERS_SUBDOMAIN }}
+
+      - name: Verify staging Worker health
+        run: curl -fsS --retry 3 --retry-connrefused "${{ steps.staging-worker-url.outputs.worker-url }}/api/health" > /dev/null
+
+      - name: Build frontend (staging backend URL)
+        working-directory: frontend
+        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" npm run build
+
+      - name: Deploy staging Pages
+        working-directory: frontend
+        run: npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=production
+
+  deploy-prod:
+    name: Deploy production (Worker + D1 + Pages)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [deploy-staging]
+    if: github.event_name == 'push' && hashFiles('docs/DEFINITION_OF_PRODUCTION.md') != ''
+    environment: production
+    permissions:
+      actions: write
+      contents: read
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_API_EMAIL: ${{ secrets.CLOUDFLARE_API_EMAIL }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      BACKUP_R2_BUCKET: ${{ vars.BACKUP_R2_BUCKET }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: package-lock.json
+
+      - run: npm ci
+
+      - name: Pre-migration D1 backup
+        id: d1-backup
+        working-directory: backend
+        run: |
+          TS="$(date +%Y%m%d-%H%M%S)"
+          npx wrangler d1 export arcane-familiars --env production --remote --output d1-export.sql --skip-confirmation
+          echo "BACKUP_TS=${TS}" >> "$GITHUB_ENV"
+          echo "BACKUP_TS=${TS}" >> "$GITHUB_OUTPUT"
+
+      - name: Upload D1 backup artifact (durable)
+        uses: actions/upload-artifact@v4
+        with:
+          name: d1-backup-${{ steps.d1-backup.outputs.BACKUP_TS }}
+          path: backend/d1-export.sql
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Upload D1 backup to R2 (if bucket configured)
+        if: env.BACKUP_R2_BUCKET != ''
+        working-directory: backend
+        run: npx wrangler r2 object put "${BACKUP_R2_BUCKET}/d1-backup/${BACKUP_TS}.sql" --file d1-export.sql
+
+      - name: Apply production migrations
+        working-directory: backend
+        run: npm run db:migrate:remote
+
+      - name: Deploy production Worker
+        working-directory: backend
+        run: npx wrangler deploy --env production
+
+      - name: Capture production Worker URL
+        id: prod-worker-url
+        uses: ./.github/actions/capture-worker-url
+        with:
+          worker: arcane-familiars-backend
+          env: production
+          subdomain: ${{ vars.CF_WORKERS_SUBDOMAIN }}
+
+      - name: Verify production Worker health
+        run: curl -fsS --retry 3 --retry-connrefused "${{ steps.prod-worker-url.outputs.worker-url }}/api/health" > /dev/null
+
+      - name: Build frontend (production backend URL)
+        working-directory: frontend
+        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" npm run build
+
+      - name: Deploy production Pages
+        working-directory: frontend
+        run: npx wrangler pages deploy dist --project-name=arcane-familiars --branch=production
