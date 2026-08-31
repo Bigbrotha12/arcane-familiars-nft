@@ -49,8 +49,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
@@ -120,13 +120,13 @@ jobs:
       BACKUP_R2_BUCKET: ${{ vars.BACKUP_R2_BUCKET }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Gate - Definition of Production must exist
         if: hashFiles('docs/DEFINITION_OF_PRODUCTION.md') == ''
         run: |
           echo "::error::docs/DEFINITION_OF_PRODUCTION.md is missing; the production deploy gate requires it (see docs/PROD-RUNBOOK.md)."
           exit 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
