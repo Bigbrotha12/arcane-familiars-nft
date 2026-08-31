@@ -2,9 +2,9 @@
 #
 # Gates:
 #  - Staging deploys on every push to `master` (and on manual workflow_dispatch).
-#  - Production runs ONLY after staging succeeds AND:
-#      1. docs/DEFINITION_OF_PRODUCTION.md is present (hashFiles gate),
-#      2. the push to `master` is the approval (solo dev; no reviewers/wait timer).
+#  - Production runs after staging succeeds on a push to `master` (the approval).
+#    A step-level hashFiles gate fails the prod job if docs/DEFINITION_OF_PRODUCTION.md
+#    is missing (hashFiles is only valid at step level, not job-level `if`).
 #    On workflow_dispatch the prod job is skipped entirely (event_name != 'push').
 #    `environment: production` scopes the job's secrets/vars; no protection rules.
 #
@@ -101,7 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     needs: [deploy-staging]
-    if: github.event_name == 'push' && hashFiles('docs/DEFINITION_OF_PRODUCTION.md') != ''
+    if: github.event_name == 'push'
     environment: production
     permissions:
       actions: write
@@ -114,6 +114,11 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+      - name: Gate - Definition of Production must exist
+        if: hashFiles('docs/DEFINITION_OF_PRODUCTION.md') == ''
+        run: |
+          echo "::error::docs/DEFINITION_OF_PRODUCTION.md is missing; the production deploy gate requires it (see docs/PROD-RUNBOOK.md)."
+          exit 1
       - uses: actions/setup-node@v4
         with:
           node-version: 22
