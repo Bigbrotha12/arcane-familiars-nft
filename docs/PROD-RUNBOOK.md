@@ -19,7 +19,7 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
 - [ ] Worker secrets via `wrangler secret put --env production` (e.g. `JWT_SECRET` when WS2 lands).
 - [ ] GitHub `production` environment exists (created automatically on first use) — it scopes the prod job's secrets/vars; **no protection rules required** (solo dev: the push to `master` is the approval).
 - [ ] Staging D1 `arcane-familiars-staging` created via `wrangler d1 create arcane-familiars-staging`; fill the returned `database_id` into the `backend/wrangler.jsonc` staging placeholder (`00000000-…`, line 59).
-- [ ] Staging Pages project `arcane-familiars-staging` created.
+- [ ] Pages projects `arcane-familiars` + `arcane-familiars-staging` — **auto-created** by the deploy workflow (`.github/actions/ensure-pages-project`) on first deploy; nothing to pre-create.
 - [ ] Optional `BACKUP_R2_BUCKET` + R2 bucket with lifecycle rules (14 daily + 12 monthly) for durable backups.
 - [ ] Record URLs (plan §6):
   - Prod Worker URL (API base for `VITE_BACKEND_URL`): `arcane-familiars-backend-production.<subdomain>.workers.dev`
