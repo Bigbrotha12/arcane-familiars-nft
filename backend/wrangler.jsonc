@@ -42,7 +42,7 @@
 				{
 					"binding": "DB",
 					"database_name": "arcane-familiars",
-					"database_id": "8e8bce41-464a-42ba-97cc-bfd95b269e36",
+					"database_id": "02b17405-7ed9-4976-a3ef-d97efacf3b73",
 					"migrations_dir": "./migrations",
 					"remote": true
 				}
