@@ -87,7 +87,7 @@ jobs:
           subdomain: ${{ vars.CF_WORKERS_SUBDOMAIN }}
 
       - name: Verify staging Worker health
-        run: curl -fsS --retry 3 --retry-connrefused "${{ steps.staging-worker-url.outputs.worker-url }}/api/health" > /dev/null
+        run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.staging-worker-url.outputs.worker-url }}/api/health" > /dev/null
 
       - name: Build frontend (staging backend URL)
         working-directory: frontend
@@ -173,7 +173,7 @@ jobs:
           subdomain: ${{ vars.CF_WORKERS_SUBDOMAIN }}
 
       - name: Verify production Worker health
-        run: curl -fsS --retry 3 --retry-connrefused "${{ steps.prod-worker-url.outputs.worker-url }}/api/health" > /dev/null
+        run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.prod-worker-url.outputs.worker-url }}/api/health" > /dev/null
 
       - name: Build frontend (production backend URL)
         working-directory: frontend
