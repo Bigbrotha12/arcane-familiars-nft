@@ -35,7 +35,7 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
 1. `npm run db:migrate:staging` — applies migrations to `arcane-familiars-staging` **before** deploy (R8).
 2. From `backend/`: `npx wrangler deploy --env staging`.
 3. Build the frontend with the staging Worker URL: `VITE_BACKEND_URL=https://<staging-worker-url> npm run frontend:build`.
-4. From `frontend/`: `npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=production` (direct upload).
+4. From `frontend/`: `npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=staging` (direct upload; the staging project's production branch is `staging`).
 5. Verify the staging SPA against the staging backend and that deep links resolve.
 
 ### Production (gated; runs on `master` merge)

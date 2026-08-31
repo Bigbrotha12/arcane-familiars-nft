@@ -21,7 +21,8 @@
 #  - Staging Pages project `arcane-familiars-staging` and prod Pages project `arcane-familiars`.
 #  - Prod D1 `arcane-familiars` exists and its id matches backend/wrangler.jsonc.
 #
-# Both Pages deploys use --branch=production (production branch of each Pages project).
+# Pages projects: staging uses `staging` as its production branch, prod uses `production`
+# (the deploy --branch must match each project's configured production branch).
 
 name: Deploy
 
@@ -96,10 +97,11 @@ jobs:
         uses: ./.github/actions/ensure-pages-project
         with:
           project-name: arcane-familiars-staging
+          production-branch: staging
 
       - name: Deploy staging Pages
         working-directory: frontend
-        run: npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=production
+        run: npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=staging
 
   deploy-prod:
     name: Deploy production (Worker + D1 + Pages)
