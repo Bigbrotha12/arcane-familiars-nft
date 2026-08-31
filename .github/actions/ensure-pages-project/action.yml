@@ -5,6 +5,10 @@ inputs:
   project-name:
     description: Pages project name
     required: true
+  production-branch:
+    description: The project's production branch (must match the deploy --branch)
+    required: false
+    default: production
 
 runs:
   using: composite
@@ -13,8 +17,8 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "Ensuring Pages project '${{ inputs.project-name }}' exists..."
-        if npx wrangler pages project create "${{ inputs.project-name }}" --production-branch=production 2>&1; then
+        echo "Ensuring Pages project '${{ inputs.project-name }}' exists (production branch: '${{ inputs.production-branch }}')..."
+        if npx wrangler pages project create "${{ inputs.project-name }}" --production-branch="${{ inputs.production-branch }}" 2>&1; then
           echo "Pages project '${{ inputs.project-name }}' created."
         else
           echo "::warning::'wrangler pages project create' failed (expected if the project already exists); the deploy step will validate it."
