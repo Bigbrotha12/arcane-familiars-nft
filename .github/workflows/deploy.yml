@@ -92,6 +92,11 @@ jobs:
         working-directory: frontend
         run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" npm run build
 
+      - name: Ensure staging Pages project
+        uses: ./.github/actions/ensure-pages-project
+        with:
+          project-name: arcane-familiars-staging
+
       - name: Deploy staging Pages
         working-directory: frontend
         run: npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=production
@@ -171,6 +176,11 @@ jobs:
       - name: Build frontend (production backend URL)
         working-directory: frontend
         run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" npm run build
+
+      - name: Ensure production Pages project
+        uses: ./.github/actions/ensure-pages-project
+        with:
+          project-name: arcane-familiars
 
       - name: Deploy production Pages
         working-directory: frontend
