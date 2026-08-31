@@ -25,11 +25,35 @@ import {
   Outcome,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { getOrCreateGameState } from '../utils/saveManager';
+import { conditionalStateUpdate, getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
-import { getErrorMessage, readBody } from '../utils/http';
+import { internalError, readBody } from '../utils/http';
 
 const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Anti-farming: max completed battles (win or loss) per UTC calendar day per
+// account (WS4 step 18). Fleeing does not count.
+const MAX_BATTLES_PER_DAY = 20;
+
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function secondsUntilUtcMidnight(): number {
+  const now = new Date();
+  const nextMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.ceil((nextMidnight - now.getTime()) / 1000);
+}
+
+// Roll the day if needed, then count this completed battle toward the cap.
+function countCompletedBattle(state: GameState): void {
+  const day = todayUtc();
+  if (state.battlesDayUtc !== day) {
+    state.battlesDayUtc = day;
+    state.battlesToday = 0;
+  }
+  state.battlesToday = (state.battlesToday ?? 0) + 1;
+}
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -125,6 +149,21 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const state = loaded.state;
 
+    // Daily battle cap: reject the start before any state/battle validation so
+    // the 403 fires even against a minimal state (testable) and no battle row or
+    // state write happens when the cap is exhausted.
+    const today = todayUtc();
+    const usedToday = state.battlesDayUtc === today ? (state.battlesToday ?? 0) : 0;
+    if (usedToday >= MAX_BATTLES_PER_DAY) {
+      return c.json(
+        {
+          error: `Daily battle limit reached (${MAX_BATTLES_PER_DAY}). Available again at ${today}T00:00:00Z`,
+        },
+        403,
+        { 'Retry-After': String(secondsUntilUtcMidnight()) }
+      );
+    }
+
     const party = state.activeParty ?? [];
     if (!party.includes(playerFamiliarId)) {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
@@ -202,8 +241,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     return c.json({ battle });
   } catch (error: unknown) {
-    console.error('Start battle error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to start battle' }, 500);
+    return internalError(c, error, 'Start battle');
   }
 });
 
@@ -262,6 +300,23 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     const state = loaded.state;
+
+    // Anti-farming re-check: the guard at start is check-then-act, so a player
+    // at the cap could race `start` + `action` and let a battle that should
+    // never have started commit a cap increment. Re-check before resolution so
+    // the counter cannot exceed MAX_BATTLES_PER_DAY; a legitimate completion
+    // (19 -> win -> 20) is unaffected because this runs before the increment.
+    const today = todayUtc();
+    const usedToday = state.battlesDayUtc === today ? (state.battlesToday ?? 0) : 0;
+    if (usedToday >= MAX_BATTLES_PER_DAY) {
+      return c.json(
+        {
+          error: `Daily battle limit reached (${MAX_BATTLES_PER_DAY}). Available again at ${today}T00:00:00Z`,
+        },
+        403,
+        { 'Retry-After': String(secondsUntilUtcMidnight()) }
+      );
+    }
 
     // Validate items BEFORE resolution; actual consumption and state effects
     // happen after resolveTurn, only if the player's slot executed (a slower
@@ -393,6 +448,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let rewards: BattleRewards | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
+      countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
 
       const room = state.dungeon?.rooms[state.dungeon.currentRoomId];
@@ -444,6 +500,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
+      countCompletedBattle(state);
       state.dungeon = null;
     } else {
       if (state.dungeon) {
@@ -478,11 +535,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // statements are conditional on the rows read above, so a stale writer
     // matches 0 rows and neither commit (D1 batch does not roll back a
     // 0-row match on its own).
-    const stateStmt = c.env.DB.prepare(
-      `UPDATE game_states
-         SET state_json = ?, version = version + 1, updated_at = datetime('now')
-         WHERE anonymous_id = ? AND version = ?`
-    ).bind(JSON.stringify(state), anonymousId, loaded.version);
+    const stateStmt = conditionalStateUpdate(
+      c.env.DB,
+      state,
+      anonymousId,
+      loaded.version,
+      battleId,
+      turnBefore
+    );
 
     const battleStmt =
       outcome !== Outcome.Continue
@@ -505,8 +565,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
 
     return c.json({ turnResult, state, turnCount: battle.turnCount });
   } catch (error: unknown) {
-    console.error('Battle action error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to process battle action' }, 500);
+    return internalError(c, error, 'Battle action');
   }
 });
 
@@ -575,11 +634,14 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
-    const stateStmt = c.env.DB.prepare(
-      `UPDATE game_states
-         SET state_json = ?, version = version + 1, updated_at = datetime('now')
-         WHERE anonymous_id = ? AND version = ?`
-    ).bind(JSON.stringify(state), anonymousId, loaded.version);
+    const stateStmt = conditionalStateUpdate(
+      c.env.DB,
+      state,
+      anonymousId,
+      loaded.version,
+      battleId,
+      battle.turnCount
+    );
 
     const battleStmt = c.env.DB.prepare(
       `UPDATE active_battles
@@ -595,8 +657,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
 
     return c.json({ battle });
   } catch (error: unknown) {
-    console.error('Swap familiar error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to swap familiar' }, 500);
+    return internalError(c, error, 'Swap familiar');
   }
 });
 
@@ -643,11 +704,14 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
-    const stateStmt = c.env.DB.prepare(
-      `UPDATE game_states
-         SET state_json = ?, version = version + 1, updated_at = datetime('now')
-         WHERE anonymous_id = ? AND version = ?`
-    ).bind(JSON.stringify(state), anonymousId, loaded.version);
+    const stateStmt = conditionalStateUpdate(
+      c.env.DB,
+      state,
+      anonymousId,
+      loaded.version,
+      battleId,
+      battle.turnCount
+    );
 
     const battleStmt = c.env.DB.prepare(
       `DELETE FROM active_battles
@@ -662,8 +726,7 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     return c.json({ success: true, message: 'Successfully fled from battle', battle });
   } catch (error: unknown) {
-    console.error('Flee battle error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to flee from battle' }, 500);
+    return internalError(c, error, 'Flee battle');
   }
 });
 

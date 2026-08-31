@@ -3,6 +3,7 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables } from './types';
 import { authMiddleware } from './middleware/auth';
 import { cleanupRateLimits, rateLimitMiddleware } from './middleware/rateLimit';
+import { generateId } from './utils/uuid';
 import assetsRouter from './routes/assets';
 import balancesRouter from './routes/balances';
 import authRouter, { CHALLENGE_TTL_SECONDS } from './routes/auth';
@@ -14,6 +15,16 @@ import gameBattleRouter from './routes/game-battle';
 import ownedFamiliarsRouter from './routes/game-owned-familiars';
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Request-id: every request gets an id for log/error correlation, and the
+// response carries it as X-Request-Id so the client can report it. Mounted
+// before everything so all downstream handlers and onError can read it.
+app.use('*', async (c, next) => {
+  const requestId = generateId();
+  c.set('requestId', requestId);
+  await next();
+  c.header('X-Request-Id', requestId);
+});
 
 // CORS — allow all origins in development; restrict to known frontends in prod.
 const PROD_ORIGINS = ['https://arcane-familiars.pages.dev', 'https://arcane-familiars-staging.pages.dev'];
@@ -28,6 +39,7 @@ app.use(
     },
     allowHeaders: ['Content-Type', 'Authorization'],
     allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    exposeHeaders: ['X-Request-Id'],
   })
 );
 
@@ -71,8 +83,10 @@ app.notFound((c) => {
 
 // Error handler
 app.onError((err, c) => {
-  console.error('Unhandled error:', err);
-  return c.json({ error: 'Internal server error' }, 500);
+  const requestId = c.get('requestId');
+  console.error(`[${requestId}] Unhandled error:`, err);
+  c.header('X-Request-Id', requestId);
+  return c.json({ error: 'Internal server error', requestId }, 500);
 });
 
 const CLEANUP_CHUNK_SIZE = 500;

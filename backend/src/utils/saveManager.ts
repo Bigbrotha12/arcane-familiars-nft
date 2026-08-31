@@ -98,3 +98,31 @@ export async function saveGameStateIfVersion(
     .run();
   return result.meta.changes === 1;
 }
+
+/**
+ * Conditional state write used by battle routes: the UPDATE matches only when
+ * BOTH the state row is at `expectedVersion` AND the battle row still exists
+ * with `battleTurnCount` (via its persisted turnCount). The battle write in
+ * the same D1 batch is conditional on the same battle row, so both statements
+ * match-or-both-no-op — a stale battle row can no longer commit a state write
+ * (which would leak cap increments/rewards). Returns the prepared statement;
+ * the caller batches it with the battle statement.
+ */
+export function conditionalStateUpdate(
+  db: D1Database,
+  state: GameState,
+  anonymousId: string,
+  expectedVersion: number,
+  battleId: string,
+  battleTurnCount: number
+): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE game_states
+         SET state_json = ?, version = version + 1, updated_at = datetime('now')
+         WHERE anonymous_id = ? AND version = ?
+           AND (SELECT json_extract(battle_json, '$.turnCount') FROM active_battles
+                WHERE battle_id = ? AND anonymous_id = ?) = ?`
+    )
+    .bind(JSON.stringify(state), anonymousId, expectedVersion, battleId, anonymousId, battleTurnCount);
+}

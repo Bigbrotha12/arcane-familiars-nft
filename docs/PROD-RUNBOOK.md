@@ -65,6 +65,12 @@ The D1 export is a **full-dump SQL**. Restore = **create a new D1 database and a
 
 The `d1-backup-*` GitHub artifacts (and R2 `d1-backup/` objects) contain **full player game-state dumps**. Confirm the R2 bucket/objects stay **private**, and treat artifacts as sensitive: repo read access implies access to backups.
 
+## Identity & guest access (WS2 step 13 superseded)
+
+Prod allows **anonymous guest trial play** by product decision — no wallet sign-in is required before `/api/game/*` works. Guests are keyed by a client-generated UUID (`af_anonymous_id`, localStorage), persisted as `is_anonymous = 1`, and purged after 24h inactivity (cron).
+
+On Passport sign-in, `POST /api/auth/adopt` re-keys a guest state to the wallet `sub` (session restore; the WS4 cap counters carry across). **Caveat:** adopt does not prove UUID ownership — anyone who knows a guest UUID can adopt it. Accepted for a non-monetized slice; re-review at monetization (plan §2.A / §2.L / WS2 step 13).
+
 ## Alert rule (manual, per L7/R13 — WS5 step 20)
 
 Cloudflare dashboard alerts are manual, not code. Create the rule once, in the dashboard:
@@ -76,11 +82,10 @@ Cloudflare dashboard alerts are manual, not code. Create the rule once, in the d
 5. Configure the **notification channel** (email/webhook) and save.
 6. Record the rule in the incident SLA: time-to-alert ≤ 15 min ([DEFINITION_OF_PRODUCTION.md](./DEFINITION_OF_PRODUCTION.md)).
 
-## Anti-farming deferred re-review (WS4 step 18, R18)
+## Anti-farming — daily battle cap (WS4 step 18, R18)
 
-> Placeholder — if the anti-farming cap (daily battle/currency cap or energy system) is **deferred**, record the owner + dated re-review item here:
-
-- **Decision:** (to be filled on deferral)
-- **Owner:** (to be filled)
-- **Re-review date:** (to be filled)
-- **Accepted risk:** unbounded currency farming is explicitly accepted until the re-review date.
+- **Decision:** daily battle cap implemented — max **20 completed battles (win or loss) per UTC calendar day per account**, enforced server-side at `POST /api/game/battle/start` (403 + Retry-After to UTC midnight) and incremented in `battle/action` on Win/Loss; fleeing does not count. The counter lives in `state_json` (`battlesToday`/`battlesDayUtc`, `YYYY-MM-DD` UTC day) and resets automatically when the UTC day changes.
+- **Enforcement boundary / accepted risk:** hard per-account cap for authenticated (Passport) users; **per-browser-profile for guests** — clearing site data resets the anonymous id and grants a fresh cap the same day (accepted; identity is client-generated for guests). The guest purge (24h inactivity cron) also resets the cap for guests.
+- **Owner:** Bigbrotha12 (repo owner).
+- **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization/NFT link (per plan P1 sequencing); suggested re-review date: at monetization planning.
+- **Race guard (F1):** the state+battle writes are both conditional (version + battle-row turnCount), so a stale writer cannot commit a cap increment (match-or-both-no-op). Additionally, `battle/action` re-checks the cap after loading state and before resolution, which closes the start check-then-act race — a concurrent `start` + `action` at 19/20 cannot slip a 21st increment, and the counter cannot exceed 20.

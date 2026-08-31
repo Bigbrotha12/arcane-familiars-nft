@@ -7,6 +7,17 @@ export function getErrorMessage(err: unknown): string {
 }
 
 /**
+ * Standard 500 response with request-id correlation. Logs the error with the
+ * request id, returns a JSON body carrying the id so clients/support can
+ * correlate. Use in every route catch block.
+ */
+export function internalError(c: Context<{ Bindings: Bindings; Variables: Variables }>, err: unknown, context: string): Response {
+  const requestId = c.get('requestId');
+  console.error(`[${requestId}] ${context} error:`, getErrorMessage(err));
+  return c.json({ error: 'Internal server error', requestId }, 500);
+}
+
+/**
  * Parse a JSON request body as an object, returning null on empty/malformed
  * bodies so routes can respond 400 instead of bubbling a 500.
  *

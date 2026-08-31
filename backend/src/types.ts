@@ -13,4 +13,5 @@ export interface Bindings {
 export interface Variables {
   accountKey?: string;
   isGuest?: boolean;
+  requestId?: string;
 }

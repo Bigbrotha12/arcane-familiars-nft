@@ -22,5 +22,9 @@ export interface GameState {
   defeatedBosses: string[];
   battleCount: number;
   winCount: number;
+  /** Number of battles completed (won or lost) today, for the daily battle cap. */
+  battlesToday?: number;
+  /** UTC calendar day (YYYY-MM-DD) the battlesToday counter applies to. */
+  battlesDayUtc?: string;
   lastSaved: number;
 }

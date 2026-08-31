@@ -16,7 +16,7 @@ import {
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
-import { getErrorMessage, readBody } from '../utils/http';
+import { internalError, readBody } from '../utils/http';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -86,8 +86,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     return c.json({ dungeon, area });
   } catch (error: unknown) {
-    console.error('Enter dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to enter dungeon' }, 500);
+    return internalError(c, error, 'Enter dungeon');
   }
 });
 
@@ -185,8 +184,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
 
     return c.json({ room, encounter, enemy, treasure, treasureItem });
   } catch (error: unknown) {
-    console.error('Explore room error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to explore room' }, 500);
+    return internalError(c, error, 'Explore room');
   }
 });
 
@@ -246,8 +244,7 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     return c.json({ success: true, inventory: state.inventory });
   } catch (error: unknown) {
-    console.error('Collect treasure error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to collect treasure' }, 500);
+    return internalError(c, error, 'Collect treasure');
   }
 });
 
@@ -283,8 +280,7 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     return c.json({ success: true });
   } catch (error: unknown) {
-    console.error('Exit dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to exit dungeon' }, 500);
+    return internalError(c, error, 'Exit dungeon');
   }
 });
 
