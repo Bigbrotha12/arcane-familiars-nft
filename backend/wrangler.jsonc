@@ -32,13 +32,37 @@
 	"env": {
 		"production": {
 			"vars": {
-				"ENVIRONMENT": "production"
+				"ENVIRONMENT": "production",
+				"IMX_API_SANDBOX": "https://api.sandbox.x.immutable.com",
+				"IMX_API_MAINNET": "https://api.x.immutable.com",
+				"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+				"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c"
 			},
 			"d1_databases": [
 				{
 					"binding": "DB",
 					"database_name": "arcane-familiars",
 					"database_id": "8e8bce41-464a-42ba-97cc-bfd95b269e36",
+					"migrations_dir": "./migrations",
+					"remote": true
+				}
+			]
+		},
+		// Staging uses its own D1 database `arcane-familiars-staging` (created via
+		// `wrangler d1 create arcane-familiars-staging`, authenticated). Remote only.
+		"staging": {
+			"vars": {
+				"ENVIRONMENT": "staging",
+				"IMX_API_SANDBOX": "https://api.sandbox.x.immutable.com",
+				"IMX_API_MAINNET": "https://api.x.immutable.com",
+				"COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
+				"COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c"
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "arcane-familiars-staging",
+					"database_id": "e9c91f6d-ced2-4590-b6e5-4ff03eddf704",
 					"migrations_dir": "./migrations",
 					"remote": true
 				}
