@@ -12,6 +12,21 @@ import BossOverlay from './BossOverlay';
 import type { ActionBarItem } from './ActionBar';
 import type { GameStateSnapshot } from '@/game';
 
+const DIRECTION_ICONS: Record<string, string> = {
+  north: '▲',
+  south: '▼',
+  east: '►',
+  west: '◄',
+  northeast: '▲►',
+  northwest: '▲◄',
+  southeast: '▼►',
+  southwest: '▼◄',
+};
+
+function getDirectionIcon(direction: string): string | null {
+  return DIRECTION_ICONS[direction] ?? null;
+}
+
 interface ExplorationHUDProps {
   snapshot: GameStateSnapshot;
   onNavigate: (roomId: string) => void;
@@ -42,6 +57,7 @@ function ExplorationHUD({
     .map((exit) => ({
       key: exit.roomId,
       label: exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1),
+      icon: getDirectionIcon(exit.direction),
       onClick: () => onNavigate(exit.roomId),
     }));
 
