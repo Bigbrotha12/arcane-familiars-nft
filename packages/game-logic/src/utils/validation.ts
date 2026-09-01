@@ -30,7 +30,10 @@ export function validateBattleAction(action: BattleAction, battleState: BattleSt
         return { valid: false, error: `Unknown ability: ${action.abilityId}` };
       }
       if (battleState.playerFamiliar.currentMp < ability.mpCost) {
-        return { valid: false, error: `Not enough MP. Need ${ability.mpCost}, have ${battleState.playerFamiliar.currentMp}` };
+        return {
+          valid: false,
+          error: `Not enough MP. Need ${ability.mpCost}, have ${battleState.playerFamiliar.currentMp}`,
+        };
       }
       const cooldown = battleState.playerFamiliar.cooldowns[action.abilityId] || 0;
       if (cooldown > 0) {

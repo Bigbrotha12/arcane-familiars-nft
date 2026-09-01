@@ -1,10 +1,10 @@
 import { Hono } from 'hono';
 import { validateParty } from '@arcane-familiars/game-logic';
-import type { Bindings } from '../types';
+import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
-import { getErrorMessage, readBody } from '../utils/http';
+import { internalError, readBody } from '../utils/http';
 
-const gameStateRouter = new Hono<{ Bindings: Bindings }>();
+const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 gameStateRouter.post('/game/state/load', async (c) => {
   try {
@@ -14,11 +14,11 @@ gameStateRouter.post('/game/state/load', async (c) => {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const { state } = await getOrCreateGameState(c.env.DB, anonymousId);
+    const isGuest = c.get('isGuest') ?? false;
+    const { state } = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     return c.json({ state });
   } catch (error: unknown) {
-    console.error('Load state error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to load game state' }, 500);
+    return internalError(c, error, 'Load state');
   }
 });
 
@@ -41,7 +41,8 @@ gameStateRouter.post('/game/state/party', async (c) => {
       return c.json({ error: 'Missing required field: activeParty' }, 400);
     }
 
-    const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
     const validation = validateParty(activeParty, state.playerFamiliars);
@@ -62,8 +63,7 @@ gameStateRouter.post('/game/state/party', async (c) => {
 
     return c.json({ success: true, state });
   } catch (error: unknown) {
-    console.error('Set party error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to set party' }, 500);
+    return internalError(c, error, 'Set party');
   }
 });
 
@@ -92,11 +92,11 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
       return c.json({ error: 'Missing required field: familiarId' }, 400);
     }
 
-    const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
-    const activeBattle = await c.env.DB
-      .prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
       .bind(anonymousId)
       .first();
     if (activeBattle) {
@@ -157,8 +157,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
 
     return c.json({ success: true, state });
   } catch (error: unknown) {
-    console.error('Set active familiar error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to set active familiar' }, 500);
+    return internalError(c, error, 'Set active familiar');
   }
 });
 

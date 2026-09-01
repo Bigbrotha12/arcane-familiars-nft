@@ -1,34 +1,36 @@
-import { Link } from 'react-router-dom'
-import Button from '@/components/ui/Button'
+import { Link } from 'react-router-dom';
+import Button from '@/components/ui/Button';
 
 interface NavProps {
-  onConnectWallet?: () => void
-  connected?: boolean
-  address?: string
+  onConnectWallet?: () => void;
+  connected?: boolean;
+  address?: string;
 }
 
 function Nav({ onConnectWallet, connected, address }: NavProps) {
-  const displayAddress = address
-    ? `${address.slice(0, 6)}...${address.slice(-4)}`
-    : ''
+  const displayAddress = address ? `${address.slice(0, 6)}...${address.slice(-4)}` : '';
 
   return (
     <nav className="sticky top-0 z-40 bg-surface-primary/90 backdrop-blur-md border-b border-border">
       <div className="max-w-content mx-auto flex items-center justify-between px-lg py-3">
         <Link to="/" className="flex items-center gap-2">
-          <span className="text-xl font-display font-semibold text-text-primary">
-            Arcane Familiars
-          </span>
+          <span className="text-xl font-display font-semibold text-text-primary">Arcane Familiars</span>
         </Link>
 
         <div className="hidden md:flex items-center gap-6">
           <Link to="/" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
             Home
           </Link>
-          <Link to="/play/game" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
+          <Link
+            to="/play/game"
+            className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm"
+          >
             Play
           </Link>
-          <Link to="/app/collection" className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm">
+          <Link
+            to="/app/collection"
+            className="text-text-secondary hover:text-text-primary transition-colors font-body text-sm"
+          >
             Collection
           </Link>
         </div>
@@ -46,7 +48,7 @@ function Nav({ onConnectWallet, connected, address }: NavProps) {
         </div>
       </div>
     </nav>
-  )
+  );
 }
 
-export default Nav
+export default Nav;

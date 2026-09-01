@@ -4,10 +4,10 @@
 // Uses the real ActionBar / BattleLog / CircularArcPartyPanel components so the
 // review is faithful to what gets implemented.
 
-import type { FamiliarState } from '@/game'
-import ActionBar, { type ActionBarItem } from './ActionBar'
-import BattleLog from './BattleLog'
-import CircularArcPartyPanel from './CircularArcPartyPanel'
+import type { FamiliarState } from '@/game';
+import ActionBar, { type ActionBarItem } from './ActionBar';
+import BattleLog from './BattleLog';
+import CircularArcPartyPanel from './CircularArcPartyPanel';
 
 const previewParty: FamiliarState[] = [
   {
@@ -36,7 +36,7 @@ const previewParty: FamiliarState[] = [
     arcane: 22,
     affinity: 'fire',
   },
-]
+];
 
 const previewActions: ActionBarItem[] = [
   { key: 'attack', label: 'Attack', icon: '⚔️', primary: true, onClick: () => {} },
@@ -46,11 +46,9 @@ const previewActions: ActionBarItem[] = [
   { key: 'swap', label: 'Swap', icon: '🔄', onClick: () => {} },
   { key: 'familiars', label: 'Familiars', icon: '🐾', onClick: () => {} },
   { key: 'run', label: 'Run', icon: '🏃', onClick: () => {} },
-]
+];
 
-const previewLog = [
-  'Lumina attacked the shadow cat for 12 damage!',
-]
+const previewLog = ['Lumina attacked the shadow cat for 12 damage!'];
 
 function CombinedControlsPreview() {
   return (
@@ -88,7 +86,7 @@ function CombinedControlsPreview() {
         </div>
       </section>
     </div>
-  )
+  );
 }
 
-export default CombinedControlsPreview
+export default CombinedControlsPreview;

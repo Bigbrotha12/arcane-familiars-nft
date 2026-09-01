@@ -2,11 +2,11 @@
 // 1. Compact Card (solid, double border, positioned left of enemy, right of player)
 // 2. Circular Arc party panel - E1 variation (selected)
 
-import type { FamiliarState } from '@/game'
-import FamiliarStatusCompact from './FamiliarStatusCompact'
-import CompactCardInContext from './CompactCardInContext'
-import CircularArcVariations from './CircularArcVariations'
-import CombinedControlsPreview from './CombinedControlsPreview'
+import type { FamiliarState } from '@/game';
+import FamiliarStatusCompact from './FamiliarStatusCompact';
+import CompactCardInContext from './CompactCardInContext';
+import CircularArcVariations from './CircularArcVariations';
+import CombinedControlsPreview from './CombinedControlsPreview';
 
 const previewFamiliar: FamiliarState = {
   id: 'whiteDog',
@@ -20,7 +20,7 @@ const previewFamiliar: FamiliarState = {
   speed: 15,
   arcane: 20,
   affinity: 'light',
-}
+};
 
 const fullStatusEffects = [
   { id: 'burn', icon: '🔥', duration: 2 },
@@ -33,14 +33,12 @@ const fullStatusEffects = [
   { id: 'haste', icon: '💨', duration: 2 },
   { id: 'blind', icon: '🌑', duration: 3 },
   { id: 'rage', icon: '💢', duration: 1 },
-]
+];
 
 function FamiliarStatusPreview() {
   return (
     <div className="min-h-screen bg-[#0A0A0F] p-8">
-      <h1 className="mb-8 font-display text-2xl font-semibold text-[#F0EFFF]">
-        FamiliarStatusCard Design Preview
-      </h1>
+      <h1 className="mb-8 font-display text-2xl font-semibold text-[#F0EFFF]">FamiliarStatusCard Design Preview</h1>
 
       <div className="space-y-12">
         <section>
@@ -72,8 +70,9 @@ function FamiliarStatusPreview() {
             B. Circular Arc Party Panel (E1 Selected)
           </h2>
           <p className="mb-4 text-sm text-[#A5A3C4]">
-            2 familiars. Active familiar larger with name on top. Inactive familiar smaller with grayscale and name below.
-            Status effects (up to 10) displayed horizontally below inactive member. Arcs positioned close together.
+            2 familiars. Active familiar larger with name on top. Inactive familiar smaller with grayscale and name
+            below. Status effects (up to 10) displayed horizontally below inactive member. Arcs positioned close
+            together.
           </p>
           <CircularArcVariations />
         </section>
@@ -81,7 +80,7 @@ function FamiliarStatusPreview() {
         <CombinedControlsPreview />
       </div>
     </div>
-  )
+  );
 }
 
-export default FamiliarStatusPreview
+export default FamiliarStatusPreview;

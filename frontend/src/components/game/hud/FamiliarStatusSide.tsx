@@ -1,24 +1,22 @@
 // Side panel design — vertical HP/MP bars on the side of the sprite,
 // status icons stacked vertically. Compact horizontally.
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 interface FamiliarStatusSideProps {
-  familiar: FamiliarState
-  position: 'left' | 'right'
-  statusEffects?: Array<{ id: string; icon: string; duration?: number }>
+  familiar: FamiliarState;
+  position: 'left' | 'right';
+  statusEffects?: Array<{ id: string; icon: string; duration?: number }>;
 }
 
 function FamiliarStatusSide({ familiar, position, statusEffects = [] }: FamiliarStatusSideProps) {
-  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
-  const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
+  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
+  const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error';
 
   return (
     <div
-      className={`pointer-events-none flex items-end gap-1 ${
-        position === 'left' ? 'flex-row' : 'flex-row-reverse'
-      }`}
+      className={`pointer-events-none flex items-end gap-1 ${position === 'left' ? 'flex-row' : 'flex-row-reverse'}`}
     >
       <div className="flex h-24 w-3 flex-col-reverse overflow-hidden rounded-full border border-[#3B3870] bg-[#1A1A2E]/80 shadow-md">
         <div className={`w-full ${hpColor} transition-all duration-300`} style={{ height: `${hpRatio * 100}%` }} />
@@ -52,7 +50,7 @@ function FamiliarStatusSide({ familiar, position, statusEffects = [] }: Familiar
         )}
       </div>
     </div>
-  )
+  );
 }
 
-export default FamiliarStatusSide
+export default FamiliarStatusSide;

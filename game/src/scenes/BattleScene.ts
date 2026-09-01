@@ -1,5 +1,25 @@
 import Phaser from 'phaser';
-import { BattleAction, BattleState, ActionResult, Outcome, BattleResult, ActionType, EffectType, GameState, BattleRewards, getAbility, getItem, getFamiliar, describeItem, Affinity, type FamiliarData, type AbilityData, type ItemData, type BattleFamiliar, type InventoryItem } from '@arcane-familiars/game-logic';
+import {
+  BattleAction,
+  BattleState,
+  ActionResult,
+  Outcome,
+  BattleResult,
+  ActionType,
+  EffectType,
+  GameState,
+  BattleRewards,
+  getAbility,
+  getItem,
+  getFamiliar,
+  describeItem,
+  Affinity,
+  type FamiliarData,
+  type AbilityData,
+  type ItemData,
+  type BattleFamiliar,
+  type InventoryItem,
+} from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
@@ -10,7 +30,16 @@ import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData } from '../utils/familiarState';
 import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
 import { effectAnimKey, getFamiliarSprites } from '../sprites/registry';
-import type { GameStateSnapshot, FamiliarState, PlayerActionPayload, BattleStartedPayload, BattleEndedPayload, BattlePhase, AbilityOption, ItemOption } from '../events';
+import type {
+  GameStateSnapshot,
+  FamiliarState,
+  PlayerActionPayload,
+  BattleStartedPayload,
+  BattleEndedPayload,
+  BattlePhase,
+  AbilityOption,
+  ItemOption,
+} from '../events';
 
 interface BattleSceneData {
   enemyId: string;
@@ -74,7 +103,7 @@ export class BattleScene extends Phaser.Scene {
     this.enemiesDefeated = data.enemiesDefeated ?? 0;
   }
 
-preload(): void {
+  preload(): void {
     preloadFamiliarAssets(this);
     // Load battle background images
     this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
@@ -146,15 +175,18 @@ preload(): void {
     this.battleUI.hideConnecting();
     this.battleUI.addLogMessage(message);
     this.battleUI.addLogMessage('Returning to the world map...');
-    this.timers.push(this.time.delayedCall(1800, () => {
-      this.battleUI.destroy();
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
-    }));
+    this.timers.push(
+      this.time.delayedCall(1800, () => {
+        this.battleUI.destroy();
+        this.scene.start(SCENE_KEYS.WORLD_MAP);
+      })
+    );
   }
 
   private async startBattle(): Promise<void> {
     try {
-      const party = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+      const party =
+        (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
       const playerFamiliarId = party[this.activeFamiliarIndex] ?? party[0];
       if (!playerFamiliarId) throw new Error('No active party member');
       const result = await gameApiClient.startBattle(playerFamiliarId);
@@ -167,8 +199,9 @@ preload(): void {
       this.battleUI.addLogMessage('Choose your action.');
 
       // NEW: full battle-start contract for React HUD
-      const enemy = result.battle.enemyFamiliar
-      const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? []
+      const enemy = result.battle.enemyFamiliar;
+      const partyIds =
+        (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
       const playerFamiliars: FamiliarState[] = partyIds
         .map((id) => getFamiliar(id))
         .filter((fd): fd is FamiliarData => Boolean(fd))
@@ -179,9 +212,9 @@ preload(): void {
           if (typeof hp === 'number') state.hp = hp;
           if (typeof mp === 'number') state.mp = mp;
           return state;
-        })
+        });
       if (playerFamiliars.length > 0) {
-        playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar)
+        playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar);
       }
       gameEventBus.emit(GameEvent.BATTLE_STARTED, {
         enemyId: enemy.familiarData.id,
@@ -190,9 +223,9 @@ preload(): void {
         enemyMaxHp: enemy.familiarData.stats.maxHp || enemy.currentHp,
         isBoss: result.battle.isBoss,
         playerFamiliars,
-      } satisfies BattleStartedPayload)
-      this.phase = 'menu'
-      this.emitStateUpdate()
+      } satisfies BattleStartedPayload);
+      this.phase = 'menu';
+      this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start battle';
       this.handleBattleSetupError(message);
@@ -337,12 +370,14 @@ preload(): void {
       const result = await gameApiClient.fleeBattle(this.battleState.id, this.battleState.turnCount);
       this.battleState = result.battle;
 
-      this.timers.push(this.time.delayedCall(this.FLEE_DELAY_MS, () => {
-        this.battleOutcome = { outcome: 'fled' };
-        this.phase = 'outcome';
-        gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
-        this.isProcessingAction = false;
-      }));
+      this.timers.push(
+        this.time.delayedCall(this.FLEE_DELAY_MS, () => {
+          this.battleOutcome = { outcome: 'fled' };
+          this.phase = 'outcome';
+          gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
+          this.isProcessingAction = false;
+        })
+      );
     } catch (err) {
       const recovered = await this.recoverFromStaleBattle(err as Error & { status?: number });
       if (recovered) return;
@@ -407,7 +442,8 @@ preload(): void {
   }
 
   private activateIncomingFamiliar(familiar: BattleFamiliar): void {
-    const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const partyIds =
+      (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
     const index = partyIds.indexOf(familiar.familiarData.id);
     if (index !== -1) {
       // Keep the active slot in lockstep with whoever is fielded so
@@ -511,21 +547,21 @@ preload(): void {
   };
 
   private showActionResultVisual(result: ActionResult): void {
-    const isDamage = result.effectType === EffectType.Damage
-      || result.effectType === EffectType.Debuff
-      || result.effectType === EffectType.Dot;
-    const isHeal = result.effectType === EffectType.Heal
-      || result.effectType === EffectType.Hot
-      || result.effectType === EffectType.MpHeal;
+    const isDamage =
+      result.effectType === EffectType.Damage ||
+      result.effectType === EffectType.Debuff ||
+      result.effectType === EffectType.Dot;
+    const isHeal =
+      result.effectType === EffectType.Heal ||
+      result.effectType === EffectType.Hot ||
+      result.effectType === EffectType.MpHeal;
     if (!isDamage && !isHeal) return;
     if (!this.battleState) return;
 
     const enemyUid = this.battleState.enemyFamiliar.uid;
     if (!result.targetId || !enemyUid) return;
     const targetIsEnemy = result.targetId === enemyUid;
-    const pos = targetIsEnemy
-      ? this.battleUI.getEnemyDamagePosition()
-      : this.battleUI.getPlayerDamagePosition();
+    const pos = targetIsEnemy ? this.battleUI.getEnemyDamagePosition() : this.battleUI.getPlayerDamagePosition();
     const { x, y } = pos;
 
     if (isDamage) {
@@ -593,7 +629,7 @@ preload(): void {
       enemiesDefeated: this.enemiesDefeated,
       roomsExplored: this.roomsExplored,
     });
-  }
+  };
 
   private toFamiliarState(f: BattleFamiliar): FamiliarState {
     return {
@@ -614,7 +650,8 @@ preload(): void {
   private emitStateUpdate(): void {
     if (!this.battleState) return;
     const player = this.battleState.playerFamiliar;
-    const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const partyIds =
+      (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
     // Rotate the party so the active familiar is first. activeFamiliarIndex tracks
     // the active slot and drifts on swap while activeParty order stays unchanged;
     // without this rotation the active familiar gets duplicated (shown twice).

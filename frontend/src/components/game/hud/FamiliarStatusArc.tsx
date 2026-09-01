@@ -1,26 +1,25 @@
 // Circular arc design — HP as a ring around a center point, MP as inner ring.
 // Status icons in a row below.
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 interface FamiliarStatusArcProps {
-  familiar: FamiliarState
-  position: 'above' | 'below'
-  statusEffects?: Array<{ id: string; icon: string; duration?: number }>
+  familiar: FamiliarState;
+  position: 'above' | 'below';
+  statusEffects?: Array<{ id: string; icon: string; duration?: number }>;
 }
 
 function FamiliarStatusArc({ familiar, position, statusEffects = [] }: FamiliarStatusArcProps) {
-  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
+  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
 
-  const hpColor = hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444'
-  const size = 72
-  const strokeWidth = 5
-  const radius = (size - strokeWidth) / 2
-  const circumference = 2 * Math.PI * radius
+  const hpColor = hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444';
+  const size = 72;
+  const strokeWidth = 5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
 
-  const hpOffset = circumference * (1 - hpRatio * 0.75)
-  const mpOffset = circumference * (1 - mpRatio * 0.75)
+  const hpOffset = circumference * (1 - hpRatio * 0.75);
 
   return (
     <div
@@ -101,7 +100,7 @@ function FamiliarStatusArc({ familiar, position, statusEffects = [] }: FamiliarS
         </div>
       )}
     </div>
-  )
+  );
 }
 
-export default FamiliarStatusArc
+export default FamiliarStatusArc;

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import type { Bindings } from '../types';
-import { getErrorMessage } from '../utils/http';
+import type { Bindings, Variables } from '../types';
+import { internalError } from '../utils/http';
 
-const metadataRouter = new Hono<{ Bindings: Bindings }>();
+const metadataRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 /**
  * GET /api/metadata/:id
@@ -12,24 +12,20 @@ metadataRouter.get('/metadata/:id', async (c) => {
   try {
     const { id } = c.req.param();
     const familiarId = parseInt(id, 10);
-    
+
     if (isNaN(familiarId)) {
       return c.json({ error: 'Invalid familiar ID' }, 400);
     }
-    
-    const result = await c.env.DB
-      .prepare('SELECT * FROM familiars WHERE familiar_id = ?')
-      .bind(familiarId)
-      .first();
-    
+
+    const result = await c.env.DB.prepare('SELECT * FROM familiars WHERE familiar_id = ?').bind(familiarId).first();
+
     if (!result) {
       return c.json({ error: 'Familiar not found' }, 404);
     }
-    
+
     return c.json(result);
   } catch (error: unknown) {
-    console.error('Metadata query error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to fetch metadata' }, 500);
+    return internalError(c, error, 'Metadata query');
   }
 });
 

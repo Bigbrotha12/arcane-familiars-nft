@@ -251,9 +251,7 @@
   "ast": {
     "absolutePath": "project:/contracts/IMXBridge/IMX.sol",
     "exportedSymbols": {
-      "IMX": [
-        2732
-      ]
+      "IMX": [2732]
     },
     "id": 2733,
     "license": "MIT",
@@ -261,12 +259,7 @@
     "nodes": [
       {
         "id": 2639,
-        "literals": [
-          "solidity",
-          ">=",
-          "0.8",
-          ".9"
-        ],
+        "literals": ["solidity", ">=", "0.8", ".9"],
         "nodeType": "PragmaDirective",
         "src": "32:24:17"
       },
@@ -278,9 +271,7 @@
         "contractKind": "interface",
         "fullyImplemented": false,
         "id": 2732,
-        "linearizedBaseContracts": [
-          2732
-        ],
+        "linearizedBaseContracts": [2732],
         "name": "IMX",
         "nameLocation": "68:3:17",
         "nodeType": "ContractDefinition",

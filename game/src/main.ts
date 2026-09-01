@@ -12,11 +12,15 @@ export function createGame(parentId: string): Phaser.Game {
   return game;
 }
 
-export type PhaserGame = Phaser.Game
+export type PhaserGame = Phaser.Game;
 
 // Standalone mode: auto-init only when loaded directly with ?standalone=true
 // This prevents dual Phaser instances when the frontend dynamically imports this module
 // after the React component has already rendered the #game-container element.
-if (typeof window !== 'undefined' && window.location.search.includes('standalone=true') && document.getElementById('game-container')) {
+if (
+  typeof window !== 'undefined' &&
+  window.location.search.includes('standalone=true') &&
+  document.getElementById('game-container')
+) {
   createGame('game-container');
 }

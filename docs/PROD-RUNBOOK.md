@@ -15,12 +15,12 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
   - `CLOUDFLARE_ACCOUNT_ID`.
 - [ ] GitHub Actions repo variables:
   - `CF_WORKERS_SUBDOMAIN` — **required**; the account's workers.dev subdomain (e.g. `acct` from `https://acct.workers.dev`), used to build the `VITE_BACKEND_URL`.
-  - `BACKUP_R2_BUCKET` — optional; if set, the pre-migration D1 dump is also uploaded to R2.
+  - `BACKUP_R2_BUCKET` — optional; if set, the WS1 pre-migration D1 dump in `deploy.yml` is also uploaded to R2. Not required — D1 Time Travel is the DR mechanism.
 - [ ] Worker secrets via `wrangler secret put --env production` (e.g. `JWT_SECRET` when WS2 lands).
 - [ ] GitHub `production` environment exists (created automatically on first use) — it scopes the prod job's secrets/vars; **no protection rules required** (solo dev: the push to `master` is the approval).
 - [ ] Staging D1 `arcane-familiars-staging` created via `wrangler d1 create arcane-familiars-staging`; fill the returned `database_id` into the `backend/wrangler.jsonc` staging placeholder (`00000000-…`, line 59).
 - [ ] Pages projects `arcane-familiars` + `arcane-familiars-staging` — **auto-created** by the deploy workflow (`.github/actions/ensure-pages-project`) on first deploy; nothing to pre-create.
-- [ ] Optional `BACKUP_R2_BUCKET` + R2 bucket with lifecycle rules (14 daily + 12 monthly) for durable backups.
+- [ ] Optional: R2 bucket mirroring of pre-migration dumps — only if you set `BACKUP_R2_BUCKET` and want the WS1 pre-migration dump in `deploy.yml` mirrored to R2. **No lifecycle rules needed** — D1 Time Travel is the DR mechanism.
 - [ ] Record URLs (plan §6):
   - Prod Worker URL (API base for `VITE_BACKEND_URL`): `arcane-familiars-backend-production.<subdomain>.workers.dev`
   - Staging Worker URL (API base for staging `VITE_BACKEND_URL`): `arcane-familiars-backend-staging.<subdomain>.workers.dev`
@@ -51,36 +51,50 @@ Gated on the push to `master` (the approval, solo dev — no reviewers/wait time
 
 ## Rollback procedure (R10)
 
-The D1 export is a **full-dump SQL**. Restore = **create a new D1 database and apply the SQL**; D1 has no destructive overwrite.
+**D1 Time Travel is the sole DR mechanism** — restores prod D1 **in place**, no new database or binding changes. (The WS1 pre-migration `d1-backup-*` artifact from `deploy.yml` covers the most recent deploy only; everything else is handled by Time Travel within its retention window.)
 
-1. **Identify the last good export** — newest GH Actions artifact `d1-backup-*` or R2 `d1-backup/*.sql` predating the bad deploy.
-2. **Create a fresh database:** `wrangler d1 create arcane-familiars-restored`, capture the new `database_id`.
-3. **Re-point the `DB` binding:** set the restored `database_id` in the `backend/wrangler.jsonc` production env (or an env override) — **before** applying the export.
-4. **Apply the export to the restored DB:** `npx wrangler d1 execute arcane-familiars-restored --remote --file ./d1-backup/<last-good>.sql`.
-5. **Redeploy:** from `backend/`, `npx wrangler deploy --env production`.
-6. **Verify:** `GET /api/health` returns healthy and a sample game read succeeds.
-7. Rebuild + redeploy the frontend only if the frontend bundle is what needs rollback (`wrangler pages deploy` a prior build artifact).
+**Restore in place (Time Travel):**
+1. Confirm the DB is on the supported backend: `wrangler d1 info arcane-familiars` → `version: production` (`alpha` only has old snapshot backups).
+2. **Restore in place:** `npx wrangler d1 time-travel restore arcane-familiars --env production --timestamp=<UNIX>` (a point before the bad migration). **Destructive** — overwrites the database and cancels in-flight queries; note the returned `previous_bookmark` to undo the restore.
+3. **Verify:** `GET /api/health` returns healthy and a sample game read succeeds.
+
+Rebuild + redeploy the frontend only if the frontend bundle is what needs rollback (`wrangler pages deploy` a prior build artifact).
 
 ## Data handling
 
-The `d1-backup-*` GitHub artifacts (and R2 `d1-backup/` objects) contain **full player game-state dumps**. Confirm the R2 bucket/objects stay **private**, and treat artifacts as sensitive: repo read access implies access to backups.
+The `d1-backup-*` GitHub artifacts contain **full player game-state dumps** — treat them as sensitive: repo read access implies access to backups. (R2 `d1-backup/` objects exist only if `BACKUP_R2_BUCKET` is set; keep any bucket/objects **private**.)
 
-## Alert rule (manual, per L7/R13 — WS5 step 20)
+**D1 Time Travel is the DR mechanism** — always-on and free (no enablement), retention **7 days Free / 30 days Paid**, restore in place to any minute within that window. The WS1 pre-migration artifact (GH Actions `d1-backup-*`) still covers the most recent deploy snapshot; treat it as sensitive if retained.
 
-Cloudflare dashboard alerts are manual, not code. Create the rule once, in the dashboard:
+## Identity & guest access (WS2 step 13 superseded)
 
-1. Cloudflare dashboard → **Workers & Pages** → **arcane-familiars-backend-production**.
-2. **Monitoring** → **Alerts**.
-3. **Create alert** on **HTTP 5xx rate** and/or **Workers exception rate** for the Worker.
-4. Set the threshold so "alerts within minutes" is true (e.g. ≥ 1 5xx / exception in a 1-minute window).
-5. Configure the **notification channel** (email/webhook) and save.
-6. Record the rule in the incident SLA: time-to-alert ≤ 15 min ([DEFINITION_OF_PRODUCTION.md](./DEFINITION_OF_PRODUCTION.md)).
+Prod allows **anonymous guest trial play** by product decision — no wallet sign-in is required before `/api/game/*` works. Guests are keyed by a client-generated UUID (`af_anonymous_id`, localStorage), persisted as `is_anonymous = 1`, and purged after 24h inactivity (cron).
 
-## Anti-farming deferred re-review (WS4 step 18, R18)
+On Passport sign-in, `POST /api/auth/adopt` re-keys a guest state to the wallet `sub` (session restore; the WS4 cap counters carry across). **Caveat:** adopt does not prove UUID ownership — anyone who knows a guest UUID can adopt it. Accepted for a non-monetized slice; re-review at monetization (plan §2.A / §2.L / WS2 step 13).
 
-> Placeholder — if the anti-farming cap (daily battle/currency cap or energy system) is **deferred**, record the owner + dated re-review item here:
+## Alert rule (via Notifications API — per L7/R13, WS5 step 20)
 
-- **Decision:** (to be filled on deferral)
-- **Owner:** (to be filled)
-- **Re-review date:** (to be filled)
-- **Accepted risk:** unbounded currency farming is explicitly accepted until the re-review date.
+Per-Worker dashboard alerts are **no longer available** — Cloudflare removed Workers-specific alert types and consolidated alerting into the **account-level Notifications service**. Alert policies are provisioned via the Notifications API (`POST /accounts/{account_id}/alerting/v3/policies`) — no `workers_*` alert types exist.
+
+The policy is version-controlled as a repo script (`scripts/create-alert-policy.sh`) that calls the API **idempotently** (lists existing policies by name, creates missing ones). Run it **once** with `CLOUDFLARE_API_TOKEN` (**Notifications:Edit** scope) and `CLOUDFLARE_ACCOUNT_ID` set.
+
+**Recommended:** a **Synthetic Monitoring** test on the prod Worker's `/api/health` (`arcane-familiars-backend-production.<subdomain>.workers.dev/api/health`) using **`synthetic_test_low_availability_alert`** and/or **`synthetic_test_latency_alert`** — alert when the probe misses availability/latency targets. Tie thresholds to the incident SLA in [DEFINITION_OF_PRODUCTION.md](./DEFINITION_OF_PRODUCTION.md): time-to-alert ≤ 15 min; p95 < 500 ms at 20 concurrent players. **Alternatives:** `advanced_http_alert_error` (edge 5xx) and `real_origin_monitoring` (origin health).
+
+The incident-SLA link still applies — create the rule **once, before** relying on "alerts within minutes."
+
+## Anti-farming — daily battle cap (WS4 step 18, R18)
+
+- **Decision:** daily battle cap implemented — max **20 completed battles (win or loss) per UTC calendar day per account**, enforced server-side at `POST /api/game/battle/start` (403 + Retry-After to UTC midnight) and incremented in `battle/action` on Win/Loss; fleeing does not count. The counter lives in `state_json` (`battlesToday`/`battlesDayUtc`, `YYYY-MM-DD` UTC day) and resets automatically when the UTC day changes.
+- **Enforcement boundary / accepted risk:** hard per-account cap for authenticated (Passport) users; **per-browser-profile for guests** — clearing site data resets the anonymous id and grants a fresh cap the same day (accepted; identity is client-generated for guests). The guest purge (24h inactivity cron) also resets the cap for guests.
+- **Owner:** Bigbrotha12 (repo owner).
+- **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization/NFT link (per plan P1 sequencing); suggested re-review date: at monetization planning.
+- **Race guard (F1):** the state+battle writes are both conditional (version + battle-row turnCount), so a stale writer cannot commit a cap increment (match-or-both-no-op). Additionally, `battle/action` re-checks the cap after loading state and before resolution, which closes the start check-then-act race — a concurrent `start` + `action` at 19/20 cannot slip a 21st increment, and the counter cannot exceed 20.
+
+## Post-WS6 cleanup — stale secrets (manual operator step)
+
+WS6 removed dead env vars (`INFURA_API_KEY`, `ETHERSCAN_API_KEY`) from tracked files. These variables are unused by the current code. **Manually remove** any remaining `INFURA_API_KEY` (or other dead RPC/blockchain keys) from:
+
+- `backend/.dev.vars` (gitignored — not committed)
+- any local `backend/.env` or shell environment (`export` / `.env` sourcing)
+
+This is a manual credentials-hygiene step — automated tooling cannot touch untracked files. Confirm with `env | grep INFURA` / `grep INFURA backend/.dev.vars` that the key is gone after removal.

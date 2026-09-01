@@ -30,7 +30,7 @@
 ## Incident SLA
 
 - **Time-to-alert:** ≤ 15 min. Alert rule created manually per [PROD-RUNBOOK.md](./PROD-RUNBOOK.md) (WS5 step 20).
-- **Time-to-restore:** ≤ 30 min from a durable D1 export.
+- **Time-to-restore:** ≤ 30 min — met via a **D1 Time Travel** restore (in-place, minutes; see [PROD-RUNBOOK.md](./PROD-RUNBOOK.md)).
 
 ## Acceptance criteria
 
@@ -40,6 +40,6 @@ The WS1 acceptance (playable prod Worker + SPA on master merge, deep links work,
 2. Deep links (`/app/*`, `/play/*`, `/preview/*`) resolve via the SPA `_redirects` fallback.
 3. The staging deploy precedes and validates the prod deploy.
 4. Rollback is a documented restore from a durable backup (see [PROD-RUNBOOK.md](./PROD-RUNBOOK.md)).
-5. **Number-bound criterion:** at **20 concurrent players** (launch target), the `/api/health` probe **p95 latency stays under 500 ms** (WS5 probe).
+5. **Number-bound criterion:** at **20 concurrent players** (launch target), the `/api/health` probe **p95 latency stays under 500 ms** (WS5 probe). `/api/health` now reports `latencyMs` (including a lightweight D1 round-trip, 1 decimal) and a `db` status field alongside `status`/`environment`/`timestamp`; p95 over time is observed via Workers Observability analytics (enabled) or external probes.
 6. **Number-bound criterion:** a data incident is restored from a durable D1 export within **30 min** (incident SLA above).
 7. **Number-bound criterion:** monthly Cloudflare spend stays under **$50/month** (cost ceiling).

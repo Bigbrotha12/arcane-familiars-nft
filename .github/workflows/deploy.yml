@@ -49,8 +49,8 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
@@ -91,7 +91,7 @@ jobs:
 
       - name: Build frontend (staging backend URL)
         working-directory: frontend
-        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" npm run build
+        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" VITE_IMMUTABLE_CLIENT_ID="${{ vars.IMMUTABLE_CLIENT_ID }}" npm run build
 
       - name: Ensure staging Pages project
         uses: ./.github/actions/ensure-pages-project
@@ -120,13 +120,13 @@ jobs:
       BACKUP_R2_BUCKET: ${{ vars.BACKUP_R2_BUCKET }}
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Gate - Definition of Production must exist
         if: hashFiles('docs/DEFINITION_OF_PRODUCTION.md') == ''
         run: |
           echo "::error::docs/DEFINITION_OF_PRODUCTION.md is missing; the production deploy gate requires it (see docs/PROD-RUNBOOK.md)."
           exit 1
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: 'npm'
@@ -177,7 +177,7 @@ jobs:
 
       - name: Build frontend (production backend URL)
         working-directory: frontend
-        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" npm run build
+        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" VITE_IMMUTABLE_CLIENT_ID="${{ vars.IMMUTABLE_CLIENT_ID }}" npm run build
 
       - name: Ensure production Pages project
         uses: ./.github/actions/ensure-pages-project

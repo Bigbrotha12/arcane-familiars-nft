@@ -14,6 +14,9 @@
   "license": "ISC",
   "dependencies": {
     "@arcane-familiars/game": "*",
+    "@imtbl/auth": "^2.24.8",
+    "@imtbl/config": "^2.24.8",
+    "@imtbl/wallet": "^2.24.8",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-router-dom": "^6.3.0"
@@ -26,6 +29,7 @@
     "tailwindcss": "^3.2.1",
     "typescript": "^7.0.2",
     "vite": "^8.1.5",
+    "vite-plugin-node-polyfills": "^0.28.0",
     "vite-plugin-svgr": "^5.2.0"
   }
 }

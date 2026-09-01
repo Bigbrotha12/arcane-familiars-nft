@@ -1,28 +1,25 @@
 // Compact combatant card with name, HP/MP bars, and status effect icons.
 // Solid background with double-lined border. Same layout for enemy and player.
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 interface FamiliarStatusCompactProps {
-  familiar: FamiliarState
-  isBoss?: boolean
-  statusEffects?: Array<{ id: string; icon: string; duration?: number }>
+  familiar: FamiliarState;
+  isBoss?: boolean;
+  statusEffects?: Array<{ id: string; icon: string; duration?: number }>;
 }
 
-const MAX_STATUS_SLOTS = 10
-const STATUS_COLUMNS = 5
+const MAX_STATUS_SLOTS = 10;
 
 function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }: FamiliarStatusCompactProps) {
-  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
-  const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
+  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
+  const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error';
 
   return (
     <div className="pointer-events-none flex w-[240px] flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
       <div className="flex items-center justify-between gap-1.5">
-        <span className="truncate font-body text-sm font-semibold text-[#F0EFFF]">
-          {familiar.name}
-        </span>
+        <span className="truncate font-body text-sm font-semibold text-[#F0EFFF]">{familiar.name}</span>
         {isBoss && (
           <span className="shrink-0 rounded-sm bg-error/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-error">
             Boss
@@ -52,12 +49,9 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
 
       <div className="grid grid-cols-10 gap-0.5 border-t-2 border-[#3B3870] pt-1">
         {Array.from({ length: MAX_STATUS_SLOTS }).map((_, i) => {
-          const effect = statusEffects[i]
+          const effect = statusEffects[i];
           return (
-            <div
-              key={effect?.id ?? `empty-${i}`}
-              className="relative flex h-[18px] w-full items-center justify-center"
-            >
+            <div key={effect?.id ?? `empty-${i}`} className="relative flex h-[18px] w-full items-center justify-center">
               {effect && (
                 <>
                   <div className="flex h-full w-full items-center justify-center rounded-md bg-[#2D2A5E] text-[11px]">
@@ -71,11 +65,11 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
                 </>
               )}
             </div>
-          )
+          );
         })}
       </div>
     </div>
-  )
+  );
 }
 
-export default FamiliarStatusCompact
+export default FamiliarStatusCompact;

@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import type { Bindings } from '../types';
-import { getErrorMessage } from '../utils/http';
+import type { Bindings, Variables } from '../types';
+import { internalError } from '../utils/http';
 
-const collectionRouter = new Hono<{ Bindings: Bindings }>();
+const collectionRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 /**
  * GET /api/collection
@@ -11,14 +11,11 @@ const collectionRouter = new Hono<{ Bindings: Bindings }>();
  */
 collectionRouter.get('/collection', async (c) => {
   try {
-    const { results } = await c.env.DB
-      .prepare('SELECT * FROM familiars ORDER BY familiar_id ASC')
-      .all();
-    
+    const { results } = await c.env.DB.prepare('SELECT * FROM familiars ORDER BY familiar_id ASC').all();
+
     return c.json(results);
   } catch (error: unknown) {
-    console.error('Collection query error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to fetch collection' }, 500);
+    return internalError(c, error, 'Collection query');
   }
 });
 

@@ -3,22 +3,37 @@
 // (encounter/treasure/boss). Fully presentational: receives a GameStateSnapshot
 // and emits callbacks — GamePage owns event-bus wiring (Step 6).
 
-import MiniMap from './MiniMap'
-import RoomInfo from './RoomInfo'
-import CombinedControlsPanel from './CombinedControlsPanel'
-import EncounterOverlay from './EncounterOverlay'
-import TreasureOverlay from './TreasureOverlay'
-import BossOverlay from './BossOverlay'
-import type { ActionBarItem } from './ActionBar'
-import type { GameStateSnapshot } from '@/game'
+import MiniMap from './MiniMap';
+import RoomInfo from './RoomInfo';
+import CombinedControlsPanel from './CombinedControlsPanel';
+import EncounterOverlay from './EncounterOverlay';
+import TreasureOverlay from './TreasureOverlay';
+import BossOverlay from './BossOverlay';
+import type { ActionBarItem } from './ActionBar';
+import type { GameStateSnapshot } from '@/game';
+
+const DIRECTION_ICONS: Record<string, string> = {
+  north: '▲',
+  south: '▼',
+  east: '►',
+  west: '◄',
+  northeast: '▲►',
+  northwest: '▲◄',
+  southeast: '▼►',
+  southwest: '▼◄',
+};
+
+function getDirectionIcon(direction: string): string | null {
+  return DIRECTION_ICONS[direction] ?? null;
+}
 
 interface ExplorationHUDProps {
-  snapshot: GameStateSnapshot
-  onNavigate: (roomId: string) => void
-  onCollectTreasure: () => void
-  onFleeEncounter: () => void
-  onStartBattle: () => void
-  onSwapClick?: (familiarId: string) => void
+  snapshot: GameStateSnapshot;
+  onNavigate: (roomId: string) => void;
+  onCollectTreasure: () => void;
+  onFleeEncounter: () => void;
+  onStartBattle: () => void;
+  onSwapClick?: (familiarId: string) => void;
 }
 
 function ExplorationHUD({
@@ -30,21 +45,21 @@ function ExplorationHUD({
   onSwapClick,
 }: ExplorationHUDProps) {
   if (snapshot.currentScene !== 'exploration' || !snapshot.dungeon) {
-    return null
+    return null;
   }
 
-  const dungeon = snapshot.dungeon
-  const currentRoom = dungeon.rooms.find((r) => r.id === dungeon.currentRoomId) ?? null
-  const overlayActive =
-    snapshot.encounterActive || snapshot.treasureActive || snapshot.bossRoom
+  const dungeon = snapshot.dungeon;
+  const currentRoom = dungeon.rooms.find((r) => r.id === dungeon.currentRoomId) ?? null;
+  const overlayActive = snapshot.encounterActive || snapshot.treasureActive || snapshot.bossRoom;
 
   const exitActions: ActionBarItem[] = (currentRoom?.exits ?? [])
     .filter((exit, index, all) => all.findIndex((e) => e.roomId === exit.roomId) === index)
     .map((exit) => ({
       key: exit.roomId,
       label: exit.label || exit.direction.charAt(0).toUpperCase() + exit.direction.slice(1),
+      icon: getDirectionIcon(exit.direction),
       onClick: () => onNavigate(exit.roomId),
-    }))
+    }));
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
@@ -75,8 +90,8 @@ function ExplorationHUD({
         <BossOverlay onEnter={onStartBattle} onRetreat={onFleeEncounter} />
       ) : null}
     </div>
-  )
+  );
 }
 
-export default ExplorationHUD
-export { ExplorationHUD }
+export default ExplorationHUD;
+export { ExplorationHUD };

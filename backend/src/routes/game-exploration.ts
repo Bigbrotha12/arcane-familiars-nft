@@ -14,11 +14,11 @@ import {
   validateDungeonExplore,
   validateParty,
 } from '@arcane-familiars/game-logic';
-import type { Bindings } from '../types';
-import { loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
-import { getErrorMessage, readBody } from '../utils/http';
+import type { Bindings, Variables } from '../types';
+import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { internalError, readBody } from '../utils/http';
 
-const explorationRouter = new Hono<{ Bindings: Bindings }>();
+const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -49,10 +49,8 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Invalid area id' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
@@ -88,8 +86,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     return c.json({ dungeon, area });
   } catch (error: unknown) {
-    console.error('Enter dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to enter dungeon' }, 500);
+    return internalError(c, error, 'Enter dungeon');
   }
 });
 
@@ -105,10 +102,8 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
@@ -189,8 +184,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
 
     return c.json({ room, encounter, enemy, treasure, treasureItem });
   } catch (error: unknown) {
-    console.error('Explore room error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to explore room' }, 500);
+    return internalError(c, error, 'Explore room');
   }
 });
 
@@ -206,10 +200,8 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId, itemId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
@@ -252,8 +244,7 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     return c.json({ success: true, inventory: state.inventory });
   } catch (error: unknown) {
-    console.error('Collect treasure error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to collect treasure' }, 500);
+    return internalError(c, error, 'Collect treasure');
   }
 });
 
@@ -269,10 +260,8 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state: GameState = loaded.state;
 
@@ -291,8 +280,7 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     return c.json({ success: true });
   } catch (error: unknown) {
-    console.error('Exit dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to exit dungeon' }, 500);
+    return internalError(c, error, 'Exit dungeon');
   }
 });
 
