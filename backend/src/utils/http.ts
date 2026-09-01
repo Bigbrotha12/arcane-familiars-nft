@@ -11,7 +11,11 @@ export function getErrorMessage(err: unknown): string {
  * request id, returns a JSON body carrying the id so clients/support can
  * correlate. Use in every route catch block.
  */
-export function internalError(c: Context<{ Bindings: Bindings; Variables: Variables }>, err: unknown, context: string): Response {
+export function internalError(
+  c: Context<{ Bindings: Bindings; Variables: Variables }>,
+  err: unknown,
+  context: string
+): Response {
   const requestId = c.get('requestId');
   console.error(`[${requestId}] ${context} error:`, getErrorMessage(err));
   return c.json({ error: 'Internal server error', requestId }, 500);

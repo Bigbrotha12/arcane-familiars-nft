@@ -535,14 +535,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // statements are conditional on the rows read above, so a stale writer
     // matches 0 rows and neither commit (D1 batch does not roll back a
     // 0-row match on its own).
-    const stateStmt = conditionalStateUpdate(
-      c.env.DB,
-      state,
-      anonymousId,
-      loaded.version,
-      battleId,
-      turnBefore
-    );
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, turnBefore);
 
     const battleStmt =
       outcome !== Outcome.Continue
@@ -634,14 +627,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
-    const stateStmt = conditionalStateUpdate(
-      c.env.DB,
-      state,
-      anonymousId,
-      loaded.version,
-      battleId,
-      battle.turnCount
-    );
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
 
     const battleStmt = c.env.DB.prepare(
       `UPDATE active_battles
@@ -704,14 +690,7 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
-    const stateStmt = conditionalStateUpdate(
-      c.env.DB,
-      state,
-      anonymousId,
-      loaded.version,
-      battleId,
-      battle.turnCount
-    );
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
 
     const battleStmt = c.env.DB.prepare(
       `DELETE FROM active_battles

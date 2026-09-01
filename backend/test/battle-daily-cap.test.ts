@@ -154,9 +154,7 @@ function makeState(
 }
 
 async function readState(anonId: string): Promise<GameState> {
-  const row = await (env as unknown as Bindings).DB.prepare(
-    'SELECT state_json FROM game_states WHERE anonymous_id = ?'
-  )
+  const row = await (env as unknown as Bindings).DB.prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
     .bind(anonId)
     .first<{ state_json: string }>();
   if (!row) throw new Error(`No game_states row for ${anonId}`);
@@ -165,28 +163,32 @@ async function readState(anonId: string): Promise<GameState> {
 
 async function setEnemyHp(battleId: string, hp: number): Promise<void> {
   const db = (env as unknown as Bindings).DB;
-  const row = await db.prepare('SELECT battle_json FROM active_battles WHERE battle_id = ?')
+  const row = await db
+    .prepare('SELECT battle_json FROM active_battles WHERE battle_id = ?')
     .bind(battleId)
     .first<{ battle_json: string }>();
   const battle = JSON.parse(row!.battle_json) as BattleState;
   battle.enemyFamiliar.currentHp = hp;
-  await db.prepare("UPDATE active_battles SET battle_json = ?, updated_at = datetime('now') WHERE battle_id = ?")
+  await db
+    .prepare("UPDATE active_battles SET battle_json = ?, updated_at = datetime('now') WHERE battle_id = ?")
     .bind(JSON.stringify(battle), battleId)
     .run();
 }
 
 async function resetPendingEncounter(anonId: string, enemyId: string): Promise<void> {
   const db = (env as unknown as Bindings).DB;
-  const row = await db.prepare('SELECT state_json, version FROM game_states WHERE anonymous_id = ?')
+  const row = await db
+    .prepare('SELECT state_json, version FROM game_states WHERE anonymous_id = ?')
     .bind(anonId)
     .first<{ state_json: string; version: number }>();
   const state = JSON.parse(row!.state_json) as GameState;
   const room = state.dungeon?.rooms[state.dungeon.currentRoomId];
   if (room) room.pendingEncounter = { enemyId, resolved: false };
-  await db.prepare(
-    `UPDATE game_states SET state_json = ?, version = version + 1, updated_at = datetime('now')
+  await db
+    .prepare(
+      `UPDATE game_states SET state_json = ?, version = version + 1, updated_at = datetime('now')
      WHERE anonymous_id = ? AND version = ?`
-  )
+    )
     .bind(JSON.stringify(state), anonId, row!.version)
     .run();
 }

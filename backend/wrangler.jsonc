@@ -17,13 +17,13 @@
       "enabled": true,
       "head_sampling_rate": 1,
       "persist": true,
-      "invocation_logs": true
+      "invocation_logs": true,
     },
     "traces": {
       "enabled": false,
       "persist": false,
-      "head_sampling_rate": 1
-    }
+      "head_sampling_rate": 1,
+    },
   },
   // Local development uses its own D1 database (dev only, never remote).
   // Production uses [env.production] below, so `wrangler dev` and
