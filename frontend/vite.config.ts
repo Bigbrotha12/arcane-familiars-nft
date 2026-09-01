@@ -52,7 +52,7 @@ function resolveGameAtAlias(): Plugin {
   };
 }
 
-export default defineConfig({
+export default defineConfig(({ mode }) => ({
   plugins: [
     react(),
     svgr(),
@@ -71,6 +71,6 @@ export default defineConfig({
   },
   build: {
     outDir: 'dist',
-    sourcemap: true,
+    sourcemap: mode !== 'production',
   },
-});
+}));

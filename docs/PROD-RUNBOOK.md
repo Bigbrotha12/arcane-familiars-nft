@@ -89,3 +89,12 @@ The incident-SLA link still applies — create the rule **once, before** relying
 - **Owner:** Bigbrotha12 (repo owner).
 - **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization/NFT link (per plan P1 sequencing); suggested re-review date: at monetization planning.
 - **Race guard (F1):** the state+battle writes are both conditional (version + battle-row turnCount), so a stale writer cannot commit a cap increment (match-or-both-no-op). Additionally, `battle/action` re-checks the cap after loading state and before resolution, which closes the start check-then-act race — a concurrent `start` + `action` at 19/20 cannot slip a 21st increment, and the counter cannot exceed 20.
+
+## Post-WS6 cleanup — stale secrets (manual operator step)
+
+WS6 removed dead env vars (`INFURA_API_KEY`, `ETHERSCAN_API_KEY`) from tracked files. These variables are unused by the current code. **Manually remove** any remaining `INFURA_API_KEY` (or other dead RPC/blockchain keys) from:
+
+- `backend/.dev.vars` (gitignored — not committed)
+- any local `backend/.env` or shell environment (`export` / `.env` sourcing)
+
+This is a manual credentials-hygiene step — automated tooling cannot touch untracked files. Confirm with `env | grep INFURA` / `grep INFURA backend/.dev.vars` that the key is gone after removal.

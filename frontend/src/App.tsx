@@ -4,6 +4,8 @@ import Layout from '@/components/layout/Layout';
 import PlayLayout from '@/components/layout/PlayLayout';
 import ComingSoon from '@/components/common/ComingSoon';
 import LandingPage from '@/components/layout/LandingPage';
+import PrivacyPolicy from '@/components/legal/PrivacyPolicy';
+import TermsOfService from '@/components/legal/TermsOfService';
 import GamePage from '@/components/game/GamePage';
 import FamiliarStatusPreview from '@/components/game/hud/FamiliarStatusPreview';
 
@@ -29,6 +31,16 @@ const router = createBrowserRouter([
   {
     path: '/callback',
     element: <CallbackHandler />,
+  },
+  {
+    path: '/privacy',
+    element: <Layout />,
+    children: [{ index: true, element: <PrivacyPolicy /> }],
+  },
+  {
+    path: '/terms',
+    element: <Layout />,
+    children: [{ index: true, element: <TermsOfService /> }],
   },
   {
     path: '/app',
