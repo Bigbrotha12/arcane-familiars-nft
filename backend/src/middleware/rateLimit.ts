@@ -86,7 +86,7 @@ export function createRateLimitMiddleware(
       return next();
     } catch (err) {
       // Fail-open: never 500 the game because the limiter itself failed.
-      console.error('rateLimit: D1 read/write failed, allowing request through', err);
+      console.error(`[${c.get('requestId')}] rateLimit: D1 read/write failed, allowing request through`, err);
       return next();
     }
   };

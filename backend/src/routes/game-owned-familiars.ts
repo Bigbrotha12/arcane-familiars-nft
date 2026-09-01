@@ -47,7 +47,7 @@ ownedFamiliarsRouter.get('/game/owned-familiars', async (c) => {
     const species = await getOwnedFamiliars(wallet, collection, env, c.env);
     return c.json({ familiars: species, synced: true }, 200);
   } catch (error: unknown) {
-    console.error('owned-familiars sync error:', getErrorMessage(error));
+    console.error(`[${c.get('requestId')}] owned-familiars sync error:`, getErrorMessage(error));
     return c.json({ familiars: [], synced: false, error: getErrorMessage(error) }, 200);
   }
 });

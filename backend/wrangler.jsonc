@@ -4,6 +4,27 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-07-01",
   "compatibility_flags": ["nodejs_compat"],
+  // Workers Observability (WS5): logs + traces for the Worker. Matches the
+  // Cloudflare dashboard's "sync local development" snippet, reconciled:
+  // - top-level `enabled: true` is required per Workers Logs docs for logs to
+  //   flow (the dashboard snippet's `enabled: false` was a serialization quirk);
+  // - `redact_query_string` (API-only, unsupported by wrangler's schema) is set
+  //   in the dashboard, not here.
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": false,
+      "head_sampling_rate": 1
+    }
+  },
   // Local development uses its own D1 database (dev only, never remote).
   // Production uses [env.production] below, so `wrangler dev` and
   // `wrangler d1 ... --local` can never touch the production database.

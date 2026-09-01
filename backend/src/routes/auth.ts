@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import type { Bindings, Variables } from '../types';
 import { readBearerToken, verifyIdToken } from '../utils/auth';
-import { getErrorMessage } from '../utils/http';
+import { internalError } from '../utils/http';
 import { isValidEthAddress } from '../utils/imx';
 import { recoverMessageAddress } from 'viem';
 
@@ -140,8 +140,7 @@ authRouter.post('/auth/adopt', async (c) => {
 
     return c.json({ adopted: true, sub });
   } catch (error: unknown) {
-    console.error('Adopt guest game error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to adopt guest game' }, 500);
+    return internalError(c, error, 'Adopt guest game');
   }
 });
 

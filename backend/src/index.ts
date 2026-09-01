@@ -53,12 +53,34 @@ app.use('/api/*', rateLimitMiddleware);
 // endpoints stay unauthenticated.
 app.use('/api/game/*', authMiddleware);
 
-// Health check
-app.get('/api/health', (c) => {
+// Health check.
+// `latencyMs` is the WS5 latency probe bound to docs/DEFINITION_OF_PRODUCTION.md
+// acceptance #5: at 20 concurrent players, /api/health p95 latency stays under
+// 500 ms. The probe is meaningful: it measures a real lightweight D1 round-trip
+// (SELECT 1) rather than a no-op, so it detects load-induced latency and D1
+// failures. The `db` field reports whether that D1 round-trip succeeded. p95
+// over time is observed via Workers Observability analytics (enabled) or
+// external probes.
+app.get('/api/health', async (c) => {
+  const start = performance.now();
+  let db: 'ok' | 'error' = 'ok';
+  try {
+    // Deliberately trivial — a SELECT 1 exercises the D1 pipeline (bind, cold
+    // start, connection) with negligible work. /api/health is exempt from the
+    // rate limiter (rateLimit.ts bypasses it), so this adds no meaningful load.
+    await c.env.DB.prepare('SELECT 1').first();
+  } catch {
+    db = 'error';
+  }
+  const latencyMs = Math.round((performance.now() - start) * 10) / 10;
+  // Always 200 — the probe is dependency-tolerant so deploy.yml's `curl -fsS`
+  // health check does not fail when D1 is down; `db: 'error'` is the signal.
   return c.json({
     status: 'ok',
     environment: c.env.ENVIRONMENT,
     timestamp: Date.now(),
+    latencyMs,
+    db,
   });
 });
 
