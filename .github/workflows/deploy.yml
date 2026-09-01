@@ -91,7 +91,7 @@ jobs:
 
       - name: Build frontend (staging backend URL)
         working-directory: frontend
-        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" npm run build
+        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" VITE_IMMUTABLE_CLIENT_ID="${{ vars.IMMUTABLE_CLIENT_ID }}" npm run build
 
       - name: Ensure staging Pages project
         uses: ./.github/actions/ensure-pages-project
@@ -177,7 +177,7 @@ jobs:
 
       - name: Build frontend (production backend URL)
         working-directory: frontend
-        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" npm run build
+        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" VITE_IMMUTABLE_CLIENT_ID="${{ vars.IMMUTABLE_CLIENT_ID }}" npm run build
 
       - name: Ensure production Pages project
         uses: ./.github/actions/ensure-pages-project
