@@ -28,6 +28,7 @@ import type { Bindings, Variables } from '../types';
 import { conditionalStateUpdate, getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
 import { internalError, readBody } from '../utils/http';
+import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
 const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -167,6 +168,17 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     const party = state.activeParty ?? [];
     if (!party.includes(playerFamiliarId)) {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
+    }
+
+    // Defence in depth (BC4): activeParty should already have been checked
+    // against the fieldable set when it was written, but a stale/forged row
+    // must not start a battle. Flag-gated so today's lenient behaviour (and
+    // the zero-read hot path) is unchanged when ownership authority is off.
+    if (isOwnershipAuthorityEnabled(c.env)) {
+      const fieldable = await resolveFieldableFamiliars(c.env.DB, c.get('accountKey'), state, true);
+      if (!fieldable.includes(playerFamiliarId)) {
+        return c.json({ error: 'Familiar is not owned by this account' }, 400);
+      }
     }
 
     const dungeon = state.dungeon;
