@@ -8,7 +8,7 @@
 Run once per environment before enabling deploy jobs. All authenticated steps are user-run per AGENTS.md.
 
 - [ ] `wrangler login` / confirm the production Cloudflare account.
-- [ ] Confirm prod D1 `arcane-familiars` exists and `backend/wrangler.jsonc` has the real id (`8e8bce41-…`).
+- [ ] Confirm prod D1 `arcane-familiars` exists and `backend/wrangler.jsonc` has the real id (`02b17405-7ed9-4976-a3ef-d97efacf3b73`, in `env.production`).
 - [ ] GitHub Actions secrets:
   - `CLOUDFLARE_API_TOKEN` — **Workers + Pages + D1 write + R2 write** scopes (L5).
   - `CLOUDFLARE_API_EMAIL`.
@@ -16,9 +16,9 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
 - [ ] GitHub Actions repo variables:
   - `CF_WORKERS_SUBDOMAIN` — **required**; the account's workers.dev subdomain (e.g. `acct` from `https://acct.workers.dev`), used to build the `VITE_BACKEND_URL`.
   - `BACKUP_R2_BUCKET` — optional; if set, the WS1 pre-migration D1 dump in `deploy.yml` is also uploaded to R2. Not required — D1 Time Travel is the DR mechanism.
-- [ ] Worker secrets via `wrangler secret put --env production` (e.g. `JWT_SECRET` when WS2 lands).
+- [ ] Worker secrets: **none required** — auth is Immutable Passport OIDC verification via the public JWKS (`IMMUTABLE_*` vars are non-secret `vars`, not secrets) and there is no backend-issued JWT. `JWT_SECRET` from the original WS2 design is not used.
 - [ ] GitHub `production` environment exists (created automatically on first use) — it scopes the prod job's secrets/vars; **no protection rules required** (solo dev: the push to `master` is the approval).
-- [ ] Staging D1 `arcane-familiars-staging` created via `wrangler d1 create arcane-familiars-staging`; fill the returned `database_id` into the `backend/wrangler.jsonc` staging placeholder (`00000000-…`, line 59).
+- [ ] Staging D1 `arcane-familiars-staging` exists; `backend/wrangler.jsonc` `env.staging` carries its id (`e9c91f6d-ced2-4590-b6e5-4ff03eddf704`). If it is ever recreated, run `wrangler d1 create arcane-familiars-staging` and update that id (the deploy job's preflight rejects the `00000000-…` placeholder).
 - [ ] Pages projects `arcane-familiars` + `arcane-familiars-staging` — **auto-created** by the deploy workflow (`.github/actions/ensure-pages-project`) on first deploy; nothing to pre-create.
 - [ ] Optional: R2 bucket mirroring of pre-migration dumps — only if you set `BACKUP_R2_BUCKET` and want the WS1 pre-migration dump in `deploy.yml` mirrored to R2. **No lifecycle rules needed** — D1 Time Travel is the DR mechanism.
 - [ ] Record URLs (plan §6):

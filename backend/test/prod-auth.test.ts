@@ -98,6 +98,30 @@ describe('anonymous demo mode in production', () => {
   });
 });
 
+describe('invalid Bearer token is not silently treated as a guest', () => {
+  it('rejects a supplied but invalid token on /api/game/* with 401', async () => {
+    const anonId = 'anon-invalid-token';
+    const res = await fetchApp(
+      new Request('https://example.com/api/game/state/load', {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          authorization: 'Bearer not-a-valid-jwt',
+        },
+        body: JSON.stringify({ anonymousId: anonId }),
+      }),
+      'production'
+    );
+
+    // A present-but-unverifiable token must 401 so the client refreshes, rather
+    // than falling through to guest and forking the player's state.
+    expect(res.status).toBe(401);
+
+    // No guest row may be created off the back of a rejected token.
+    expect(await gameStateRow(anonId)).toBeNull();
+  });
+});
+
 describe('guest game routes in production', () => {
   it('allows anonymous /api/game/dungeon/enter in production', async () => {
     const res = await fetchApp(

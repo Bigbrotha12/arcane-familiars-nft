@@ -153,19 +153,19 @@ describe('rate limit middleware', () => {
     expect(await rateLimitRow('10.0.0.1')).not.toBeNull();
   });
 
-  it('keys authenticated requests on ip+token hash instead of IP alone', async () => {
+  it('does not let rotating Bearer tokens bypass the per-IP budget', async () => {
     const h = makeLimitedApp({ maxRequests: 1 });
     const ip = '1.0.0.9';
 
-    // Same IP, different Bearer tokens → independent budgets of 1 each.
+    // The limiter runs before auth, so tokens are unverified here. A client that
+    // rotates a bogus Bearer token must still share the same per-IP budget.
     expect((await fetchLimitedWithToken(h, '/api/ping', ip, 'token-a')).status).toBe(200);
-    expect((await fetchLimitedWithToken(h, '/api/ping', ip, 'token-b')).status).toBe(200);
-    // A third request with token-a is over its budget.
-    expect((await fetchLimitedWithToken(h, '/api/ping', ip, 'token-a')).status).toBe(429);
+    expect((await fetchLimitedWithToken(h, '/api/ping', ip, 'token-b')).status).toBe(429);
 
-    // The raw token and the bare IP must never be used as counter keys.
+    // The counter is keyed on the bare IP; no token value is ever a key.
+    expect(await rateLimitRow(ip)).not.toBeNull();
     expect(await rateLimitRow('token-a')).toBeNull();
-    expect(await rateLimitRow(ip)).toBeNull();
+    expect(await rateLimitRow('token-b')).toBeNull();
   });
 
   it('does not rate-limit HEAD requests', async () => {

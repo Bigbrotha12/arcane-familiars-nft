@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Nav from '@/components/layout/Nav';
 import PassportLogin from '@/components/auth/PassportLogin';
-import { isLoggedIn } from '@/lib/immutable';
-import { readIdToken, clearIdToken } from '@/lib/token';
+import { getIdToken, isLoggedIn } from '@/lib/immutable';
+import { installAuthBridge } from '@/lib/authBridge';
+import { readIdToken, clearIdToken, storeIdToken } from '@/lib/token';
 
 export default function PlayLayout() {
   const [signedIn, setSignedIn] = useState<boolean>(() => readIdToken() !== null);
@@ -31,13 +32,31 @@ export default function PlayLayout() {
     try {
       const loggedIn = await isLoggedIn();
       setSignedIn(loggedIn);
+      // Re-hydrate the session token so the game client (which reads
+      // sessionStorage) sends the same identity this shell reports.
+      if (loggedIn) {
+        const token = await getIdToken();
+        if (token) storeIdToken(token);
+      }
     } catch {
       setSignedIn(false);
     }
   }, []);
 
   useEffect(() => {
+    installAuthBridge();
     refreshAuth();
+  }, [refreshAuth]);
+
+  // The game client fires this when it exhausted its token refresh attempt, so
+  // the signed-in chrome updates (the guest bar appears) instead of the player
+  // silently continuing on a different account key.
+  useEffect(() => {
+    const onExpired = () => {
+      void refreshAuth();
+    };
+    window.addEventListener('af:auth-expired', onExpired);
+    return () => window.removeEventListener('af:auth-expired', onExpired);
   }, [refreshAuth]);
 
   return (

@@ -22,6 +22,34 @@ function randomId(): string {
 
 const PASSPORT_ID_TOKEN_KEY = 'af_passport_id_token';
 
+// Fired when a token refresh attempt fails and the client falls back to guest
+// play, so the signed-in shell can update instead of the player silently
+// continuing on a different account key.
+const AUTH_EXPIRED_EVENT = 'af:auth-expired';
+
+/**
+ * The frontend installs this on `window` (see frontend/src/lib/authBridge.ts).
+ * The game package cannot import the frontend's Immutable auth libs, so the
+ * provider is a runtime contract rather than a build-time dependency.
+ */
+interface ArcaneAuthBridge {
+  getIdToken: () => Promise<string | null>;
+  refreshIdToken: () => Promise<string | null>;
+}
+
+function authBridge(): ArcaneAuthBridge | undefined {
+  if (typeof window === 'undefined') return undefined;
+  return (window as unknown as { __arcaneAuth?: ArcaneAuthBridge }).__arcaneAuth;
+}
+
+function clearStoredToken(): void {
+  try {
+    sessionStorage.removeItem(PASSPORT_ID_TOKEN_KEY);
+  } catch {
+    // ignore storage failures
+  }
+}
+
 class GameApiClient {
   private baseUrl: string;
   private anonymousId: string;
@@ -45,30 +73,66 @@ class GameApiClient {
     }
   }
 
+  /**
+   * Resolve the token for a request. When signed in, prefer a fresh token from
+   * the auth bridge (which silently renews an expired ID token); fall back to
+   * the cached session token. Returns null for guests.
+   */
+  private async resolveToken(): Promise<string | null> {
+    const cached = this.getToken();
+    if (!cached) return null;
+
+    const bridge = authBridge();
+    if (!bridge) return cached;
+
+    try {
+      const token = await bridge.getIdToken();
+      return token ?? cached;
+    } catch {
+      return cached;
+    }
+  }
+
+  /** Single fetch with an explicit token. No auth/refresh logic. */
+  private async send(method: string, url: string, body: string | undefined, token: string | null): Promise<Response> {
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (token) headers.Authorization = `Bearer ${token}`;
+
+    const options: RequestInit = { method, headers };
+    if (body !== undefined) options.body = body;
+
+    try {
+      return await fetch(url, options);
+    } catch (err) {
+      throw new Error(`Network error: ${(err as Error).message}`, { cause: err });
+    }
+  }
+
   // Guest sessions (no Passport id token in session storage) are still fully
   // persisted by the backend, keyed by a client-generated anonymous id.
   private async request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
     const url = `${this.baseUrl}${path}`;
-    const options: RequestInit = {
-      method,
-      headers: { 'Content-Type': 'application/json' },
-    };
+    const serialized = body ? JSON.stringify(body) : undefined;
 
-    const token = this.getToken();
-    if (token) {
-      options.headers = {
-        ...options.headers,
-        Authorization: `Bearer ${token}`,
-      };
-    }
+    let res = await this.send(method, url, serialized, await this.resolveToken());
 
-    if (body) options.body = JSON.stringify(body);
+    // An ID token that the backend rejects (expired/rotated) must not silently
+    // downgrade the player to their guest key. Refresh once and retry; if the
+    // session is genuinely gone, drop the token and continue as a guest while
+    // telling the shell so the UI is honest about it.
+    if (res.status === 401) {
+      const bridge = authBridge();
+      const refreshed = bridge ? await bridge.refreshIdToken().catch(() => null) : null;
 
-    let res: Response;
-    try {
-      res = await fetch(url, options);
-    } catch (err) {
-      throw new Error(`Network error: ${(err as Error).message}`, { cause: err });
+      if (refreshed) {
+        res = await this.send(method, url, serialized, refreshed);
+      } else {
+        clearStoredToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+        }
+        res = await this.send(method, url, serialized, null);
+      }
     }
 
     if (!res.ok) {
