@@ -36,6 +36,21 @@ export async function getIdToken(): Promise<string | undefined> {
   return auth.getIdToken();
 }
 
+/**
+ * Force a token refresh (silent renew) and return the fresh ID token. Used
+ * after a backend 401 so an expired ID token cannot silently downgrade a
+ * signed-in player to a guest key mid-session. Returns undefined if the
+ * session can no longer be refreshed.
+ */
+export async function forceRefreshIdToken(): Promise<string | undefined> {
+  try {
+    await auth.forceUserRefresh();
+  } catch {
+    // fall through to getIdToken below
+  }
+  return auth.getIdToken();
+}
+
 export async function getAccessToken(): Promise<string | undefined> {
   return auth.getAccessToken();
 }
