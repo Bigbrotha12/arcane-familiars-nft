@@ -1,12 +1,12 @@
 # Arcane Familiars — Production Deployment Gap Analysis & Remediation Plan (v4)
 
-> Scope: bringing the **game app** (frontend React SPA + Cloudflare Worker + Phaser game + shared `game-logic` engine) to a **production deployment**. The blockchain/NFT workstream (contracts, wallet connect, mint, IMX trading) is tracked separately at the end — it is explicitly the "next milestone" per the README and is out of scope for the game app to be *playable in production*.
+> Scope: bringing the **game app** (frontend React SPA + Cloudflare Worker + Phaser game + shared `game-logic` engine) to a **production deployment**. The blockchain and NFT workstream (contracts, wallet connect, mint, IMX trading) is tracked separately at the end — it is explicitly the "next milestone" per the README and is out of scope for the game app to be *playable in production*.
 >
 > Severity: **BLOCKER** = deploy cannot succeed as written; **HIGH** = must fix before the monetized launch; **MEDIUM** = must fix during implementation (or its acceptance fails); **LOW** = harden/cleanup, handle inline.
 >
 > **v4 revision note:** Three adversarial review rounds, each verified against the code. Round 1 (v1→v2) fixed the backend lockfile/migration blockers and the auth-rekey design. Round 2 (v2→v3) fixed the remaining lockfile staleness (all three per-package lockfiles), `VITE_BACKEND_URL` wiring, a P0/P1 test contradiction, durable backups, and the `_redirects` location. **Round 3 (v3→v4) verdict: CONDITIONAL with no blockers** — two conditions (exact CI surgery; a concrete §5 gate) plus one wording fix were required before implementation, all folded into the workstreams below. Round-3 findings M1–M3/L1–L8 are in §8c. This plan is now ready for implementation.
 >
-> **v5 revision note (2026-10-05) — IMPLEMENTED; one material deviation.** WS0–WS6 are done and green locally. The deviation: WS2 identity shipped as **Immutable Passport OIDC** (JWKS-verified ID tokens via `jose` + an EIP-191 `personal_sign` wallet-binding challenge stored in D1), **not** the SIWE + backend-HMAC-JWT + KV-nonce design written in §2.K/§2.L and WS2 steps 9–12; `JWT_SECRET` is not used. Guest trial and `POST /api/auth/adopt` are as documented. A post-implementation review (same date) closed three findings: (1) a present-but-invalid `Authorization` token now returns **401** instead of silently downgrading a signed-in player to their anonymous guest key, with client-side silent refresh + a single retry; (2) the rate limiter now keys on **client IP only** (the pre-auth `ip:token` hash was bypassable by rotating a bogus `Bearer`); (3) dungeon/party mutations are blocked while a battle is active, including a **write-time** `NOT EXISTS (active_battles)` guard that closes the lost-win race described in WS4-F1. Remaining: the blockchain/NFT track (§7) is still not started, and the client-facing refresh path assumes a live Passport session.
+> **v5 revision note (2026-10-05) — IMPLEMENTED; one material deviation.** WS0–WS6 are done and green locally. The deviation: WS2 identity shipped as **Immutable Passport OIDC** (JWKS-verified ID tokens via `jose` + an EIP-191 `personal_sign` wallet-binding challenge stored in D1), **not** the SIWE + backend-HMAC-JWT + KV-nonce design written in §2.K/§2.L and WS2 steps 9–12; `JWT_SECRET` is not used. Guest trial and `POST /api/auth/adopt` are as documented. A post-implementation review (same date) closed three findings: (1) a present-but-invalid `Authorization` token now returns **401** instead of silently downgrading a signed-in player to their anonymous guest key, with client-side silent refresh + a single retry; (2) the rate limiter now keys on **client IP only** (the pre-auth `ip:token` hash was bypassable by rotating a bogus `Bearer`); (3) dungeon/party mutations are blocked while a battle is active, including a **write-time** `NOT EXISTS (active_battles)` guard that closes the lost-win race described in WS4-F1. Remaining: the blockchain and NFT track (§7) is incomplete — BC0 is done and the BC2 mint seam / BC4 ownership flag are scaffolded but disabled by default — and the client-facing refresh path assumes a live Passport session.
 
 ---
 
@@ -61,7 +61,7 @@
 - **Status:** addressed — Workers Observability enabled in `wrangler.jsonc`; request-id on every log line (see WS5 step 20). The alert rule remains a manual user step (runbook).
 
 ### I. Tests not wired into CI — **MEDIUM**
-- `game-logic` vitest (127 tests) and `blockchain` tests never run in CI; `backend` route handlers have no tests.
+- `game-logic` vitest (127 tests) never runs in CI, and `backend` route handlers have no tests. The retired legacy contracts never had a CI job; their package was removed in BC0 and the replacement Immutable Chain track is unstarted (§7).
 - **Mechanism decisions (v3):** backend tests via `@cloudflare/vitest-pool-workers` (real `workerd` + D1). `game-logic` tests run with `working-directory: packages/game-logic` + `npm test` (its `include` glob resolves relative to cwd — root invocation collects 0 tests, R9).
 
 ### J. No staging environment, no rollback design — **MEDIUM**
@@ -219,13 +219,17 @@ Authenticated steps are user-run per AGENTS.md. Before enabling any deploy job:
 
 > Implementation plan: [`BLOCKCHAIN-IMPLEMENTATION-PLAN.md`](./BLOCKCHAIN-IMPLEMENTATION-PLAN.md) (v2).
 
-- Contracts are not deployable to any real network: `blockchain/hardhat.config.ts:6-46` has **all networks commented out** (only `hardhat` default). No Sepolia, no mainnet; `scripts/deploy.ts` is stock Hardhat.
-- No wallet connect / mint flow in the frontend (`/app/minter`, `/app/collection`, `/app/marketplace` all `ComingSoon` in `App.tsx`).
-- No contract audit; OpenZeppelin 4.8.2, Solidity 0.8.17.
-- Backend IMX proxying exists (`assets`, `balances`, `metadata`) but no end-to-end mint/ownership path wired to the game.
+- The legacy **Immutable X (StarkEx)** contracts (custom ERC-721/ERC-2981 proxy +
+  `Mintable`/`IMX_Bridge`) were **retired and removed** (BC0) — StarkEx is sunset. They were
+  never deployable: the Hardhat config had **all networks commented out** and
+  `scripts/deploy.ts` deployed the wrong contract. The workstream now targets **Immutable
+  Chain** (zkEVM); see `BLOCKCHAIN-IMPLEMENTATION-PLAN.md` §1–§3.
+- Frontend Passport sign-in + wallet binding are done; there is no mint flow. `/app/collection` is a real page (`CollectionPage`), while `/app/minter`, `/app/marketplace`, and `/app/bridge` remain `ComingSoon` in `App.tsx`.
+- The retired contracts predated any audit; the replacement track's audit status is gated on BC1a (§5 of the plan).
+- Backend Immutable **zkEVM** proxying exists (`assets`, `balances`, `owned-familiars`) but no end-to-end mint/ownership path wired to the game.
 - **Note (F13):** the game's farmable currency/items become an economy injection the moment they feed NFT mint. WS4 step 18's anti-farming decision is the prerequisite for this track.
 
-*Decision needed:* confirm Immutable X remains the L2 and the mint-on-demand flow before investing here.
+*Decision needed:* confirm the Immutable Chain (zkEVM) collection approach and the mint-on-demand flow before investing here.
 
 ---
 

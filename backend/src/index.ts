@@ -13,6 +13,8 @@ import gameStateRouter from './routes/game-state';
 import gameExplorationRouter from './routes/game-exploration';
 import gameBattleRouter from './routes/game-battle';
 import ownedFamiliarsRouter from './routes/game-owned-familiars';
+import { createGameMintRouter } from './routes/game-mint';
+import { createMintingProvider } from './services/minting/provider';
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -97,6 +99,9 @@ app.route('/api', gameStateRouter);
 app.route('/api', gameExplorationRouter);
 app.route('/api', gameBattleRouter);
 app.route('/api', ownedFamiliarsRouter);
+// BC2 mint seam. Real provider factory; tests inject a mock by building their
+// own app with createGameMintRouter.
+app.route('/api', createGameMintRouter(createMintingProvider));
 
 // 404 handler
 app.notFound((c) => {

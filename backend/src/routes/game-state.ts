@@ -8,6 +8,7 @@ import {
   saveGameStateIfVersionNoBattle,
 } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
+import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -50,7 +51,16 @@ gameStateRouter.post('/game/state/party', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
-    const validation = validateParty(activeParty, state.playerFamiliars);
+    // Fieldable set is the persisted grants plus (flag-gated) on-chain
+    // ownership. With the flag off this is exactly playerFamiliars and no
+    // extra read happens.
+    const fieldable = await resolveFieldableFamiliars(
+      c.env.DB,
+      c.get('accountKey'),
+      state,
+      isOwnershipAuthorityEnabled(c.env)
+    );
+    const validation = validateParty(activeParty, fieldable);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }
@@ -142,7 +152,16 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
 
     const reordered = reorderToLead(state.activeParty);
 
-    const validation = validateParty(reordered, state.playerFamiliars);
+    // Resolved only past the no-op short-circuit above, so the common
+    // already-leading case stays a single state read. Flag off (default) is
+    // exactly playerFamiliars, no extra D1 read.
+    const fieldable = await resolveFieldableFamiliars(
+      c.env.DB,
+      c.get('accountKey'),
+      state,
+      isOwnershipAuthorityEnabled(c.env)
+    );
+    const validation = validateParty(reordered, fieldable);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }

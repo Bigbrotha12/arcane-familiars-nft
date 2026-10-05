@@ -13,7 +13,6 @@ export default tseslint.config(
       '**/worker-configuration.d.ts',
       'docs/**',
       '.github/**',
-      'blockchain/**',
     ],
   },
   js.configs.recommended,

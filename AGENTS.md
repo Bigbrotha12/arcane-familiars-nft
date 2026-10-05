@@ -42,12 +42,15 @@ Single-integration-branch flow. All work merges into **`staging`** locally; only
 ```
 /
 ├── backend/         # Cloudflare Worker
-├── blockchain/      # Smart contracts
 ├── docs/            # Plans, decisions, reference
 ├── frontend/        # React SPA
 ├── game/            # web-based 2d game
 └── AGENTS.md        # This file — agent conventions
 ```
+
+The legacy StarkEx contracts were retired (BC0). The blockchain and NFT track is
+planned/future — tracked in `docs/BLOCKCHAIN-IMPLEMENTATION-PLAN.md`, not part of
+the game app.
 
 ## Design System
 

@@ -8,7 +8,6 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 
 ```
 ├── backend/           # Cloudflare Worker (Hono + D1) — game state, battles, dungeons
-├── blockchain/        # Smart contracts
 ├── docs/              # Plans, architecture decisions
 ├── frontend/          # React SPA (Vite + SWC + Tailwind) — HUD + landing
 ├── game/              # Phaser 4 scenes (world map, exploration, battle)
@@ -38,11 +37,11 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
 
 ### Blockchain
-- **Solidity 0.8.17** with Hardhat
-- **OpenZeppelin** contracts (ERC721 + ERC2981)
-- Transparent proxy pattern with role-based routing (FamiliarProxy / FamiliarLogic / FamiliarAdmin)
-- IMX Bridge integration for L2 minting
-- **Immutable X** for gas-free trading
+The legacy **Immutable X (StarkEx)** contracts — a Hardhat/Truffle hybrid with a custom
+ERC-721/ERC-2981 proxy and a `Mintable`/`IMX_Bridge` bridge — were **retired** (StarkEx is
+sunset; see `docs/BLOCKCHAIN-IMPLEMENTATION-PLAN.md`). The blockchain/NFT workstream now
+targets **Immutable Chain** (zkEVM) and is tracked separately in that plan; it is not part
+of the playable game app and is not yet started.
 
 ## Getting Started
 
@@ -72,14 +71,6 @@ npm run backend:dev    # wrangler dev
 npm run frontend:dev   # http://localhost:8080
 ```
 
-### Blockchain
-```bash
-cd blockchain
-npm install
-npx hardhat compile
-npx hardhat test
-```
-
 ## Game Mechanics
 
 Players summon **familiars** — creature NFTs with unique stats and abilities:
@@ -107,7 +98,7 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 |-------|-------|--------|
 | 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
 | 2 — Game Prototype | Phaser 4 engine, core game loop, dungeons, battles, items, party | Done |
-| 3 — Blockchain | Contract updates, Sepolia deploy, IMX SDK | Pending |
+| 3 — Blockchain | Retired legacy StarkEx contracts; Immutable Chain (zkEVM) + Immutable SDK track | Legacy StarkEx contracts retired (BC0); Immutable Chain workstream planned, not started |
 | 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing + Immutable Passport sign-in/wallet binding done; mint/collection/marketplace pending |
 | 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
 

@@ -7,6 +7,7 @@ import LandingPage from '@/components/layout/LandingPage';
 import PrivacyPolicy from '@/components/legal/PrivacyPolicy';
 import TermsOfService from '@/components/legal/TermsOfService';
 import GamePage from '@/components/game/GamePage';
+import CollectionPage from '@/components/collection/CollectionPage';
 import FamiliarStatusPreview from '@/components/game/hud/FamiliarStatusPreview';
 
 /**
@@ -48,7 +49,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <ComingSoon /> },
       { path: 'game', element: <Navigate to="/play/game" replace /> },
-      { path: 'collection', element: <ComingSoon /> },
+      { path: 'collection', element: <CollectionPage /> },
       { path: 'marketplace', element: <ComingSoon /> },
       { path: 'minter', element: <ComingSoon /> },
       { path: 'bridge', element: <ComingSoon /> },
