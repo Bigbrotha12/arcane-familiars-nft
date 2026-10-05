@@ -18,9 +18,6 @@ docs/*
 
 # outputs
 frontend/public/app/*
-blockchain/typechain-types/*
-blockchain/cache/*
-blockchain/artifacts/*
 build
 dist
 game/dist/*

@@ -6,6 +6,5 @@ build
 **/worker-configuration.d.ts
 docs
 .github
-blockchain
 scripts
 README.md
