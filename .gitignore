@@ -9,6 +9,7 @@ docs/*
 !docs/DEFINITION_OF_PRODUCTION.md
 !docs/PROD-RUNBOOK.md
 !docs/PRODUCTION-DEPLOYMENT-GAP-PLAN.md
+!docs/BLOCKCHAIN-IMPLEMENTATION-PLAN.md
 
 # environment
 .env
