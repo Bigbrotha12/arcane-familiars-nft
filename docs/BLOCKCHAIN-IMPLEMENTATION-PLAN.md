@@ -17,18 +17,36 @@
 > ownership from the Indexer (not mint events), mounts mint routes behind auth, and adds
 > migrations/legal/metrics/checklist work. Full mapping in §11.
 
+> **Progress (2026-10-05):** BC0 is **done** — the legacy StarkEx `blockchain/` package,
+> the dead `FamiliarABI.json`/`IMXABI.json`, and the orphaned root
+> `@openzeppelin/contracts` dependency are retired (§5 BC0). Two pieces have since landed
+> as disabled-by-default seams: the BC2 mint service (`POST /api/game/mint/request`,
+> `GET /api/game/mint/status/:referenceId`, write-ahead `mint_intents` idempotency, and the
+> confirmed-mint `owned_nfts` upsert) behind `MINTING_ENABLED` (default `false`; the real
+> `ImmutableMintingProvider` is written but unexercised), and the BC4 ownership authority
+> `OWNERSHIP_AUTHORITY` (default `false`) gating the fieldable set to
+> `playerFamiliars ∪ owned_nfts`.
+>
+> **Deferred / next:**
+> - Indexer → `owned_nfts` sync + reconciliation (beyond the mint-confirmation upsert).
+> - Webhooks (HMAC-SHA256 vs AWS SNS; partner-gated) — BC2b.
+> - R2 metadata files at `{baseURI}/{token_id}` on mint confirmation.
+> - The `/app/minter` page — BC3.
+> - The mint-sink decision — Q2, before BC2's entitlement/economy work.
+> - BC1a/BC6 (user-run Hub deploy spike + mainnet) — user-run/authenticated hand-offs.
+
 ---
 
 ## 1. Current state (verified against the repo)
 
 | Area | State |
 |---|---|
-| `blockchain/contracts` | ~1,220 LOC: a hand-rolled ERC-721 + ERC-2981, a role-routing `FamiliarProxy`, and the **StarkEx Immutable X bridge** (`Mintable.mintFor` + `Minting.split`). Solidity 0.8.17, OZ 4.8.2. |
-| `blockchain` config | All networks commented out; `scripts/deploy.ts` deploys the wrong contract (`Keepers`); no blockchain job in CI; `package.json` is a Truffle/Hardhat hybrid named `"backend"`. |
-| Backend | Read-only Immutable **zkEVM** Indexer proxy (`assets`, `balances`, `owned-familiars`), Passport OIDC auth, `wallet_bindings`. **No mint/transfer/write path.** `viem` is already a backend dependency (used for EIP-191 wallet binding). |
+| `blockchain/contracts` | **Removed in BC0.** Was ~1,220 LOC (hand-rolled ERC-721 + ERC-2981, a role-routing `FamiliarProxy`, and the **StarkEx Immutable X bridge** — `Mintable.mintFor` + `Minting.split`; Solidity 0.8.17, OZ 4.8.2) — all retired with StarkEx. |
+| `blockchain` config | **Removed in BC0.** Was a Truffle/Hardhat hybrid (`package.json` named `"backend"`) with all networks commented out and `scripts/deploy.ts` deploying the wrong contract (`Keepers`); no blockchain job in CI. |
+| Backend | Read-only Immutable **zkEVM** Indexer proxy (`assets`, `balances`, `owned-familiars`), Passport OIDC auth, `wallet_bindings`. A **disabled** BC2 mint seam exists (`/api/game/mint/*` behind `MINTING_ENABLED`, default `false`); no live mint/transfer/write path. `viem` is already a backend dependency (used for EIP-191 wallet binding). |
 | `BLUEPRINT_PREFIX_TO_SPECIES` | Defined in `backend/src/utils/imx.ts` and used by `mapTokenToFamiliar`; explicitly a placeholder. Removing it is a refactor with tests + the live `/api/game/owned-familiars` route. |
-| Frontend | Passport sign-in + EIP-191 wallet binding done. `/app/{collection,marketplace,minter,bridge}` are `ComingSoon`. `FamiliarABI.json` / `IMXABI.json` are **dead** (zero usages). |
-| Gameplay | `ownedFamiliars` is merged into the party picker as a convenience, but the server's `createDefaultGameState` hardcodes three familiars. The server also **grants** `area.baseFamiliar` on first boss defeat (`game-battle.ts`). On-chain ownership is **not** authoritative. |
+| Frontend | Passport sign-in + EIP-191 wallet binding done. `/app/collection` is a real page; `/app/{marketplace,minter,bridge}` are `ComingSoon`. `FamiliarABI.json` / `IMXABI.json` were **dead** (zero usages) and were removed in BC0. |
+| Gameplay | `ownedFamiliars` is merged into the party picker as a convenience, but the server's `createDefaultGameState` hardcodes three familiars. The server also **grants** `area.baseFamiliar` on first boss defeat (`game-battle.ts`). On-chain ownership is **not** authoritative by default (`OWNERSHIP_AUTHORITY` off). |
 
 ---
 
@@ -153,7 +171,15 @@ party select + battle/start validate against owned NFTs ∪ explicit grants
 
 ## 5. Workstreams
 
-### BC0 — Retire legacy + foundation *(cleanup, parallel)*
+### BC0 — Retire legacy + foundation *(cleanup, parallel)* — **DONE** ✅
+> **Status (2026-10-05): done.** `blockchain/` removed (`git rm -r`); dead
+> `frontend/src/app/constants/{FamiliarABI,IMXABI}.json` deleted; the orphaned root
+> `@openzeppelin/contracts` dependency and the now-dead `blockchain` tooling exclusions
+> (eslint/prettier/gitignore) dropped. README, PRODUCTION-DEPLOYMENT-GAP-PLAN §7, and the
+> §1 rows above were updated. `npm run lint` and `npm run frontend:type-check` pass. The
+> backend `StarkEx` comments and `BLUEPRINT_PREFIX_TO_SPECIES` are intentionally left for a
+> later step (BC2).
+
 - Stop treating `blockchain/` as deployable: archive/remove the StarkEx bridge, custom
   ERC721/proxy, and Truffle remnants. Delete dead `FamiliarABI.json`/`IMXABI.json`.
 - No ABI dependency is needed for Option A (REST only). Add `@imtbl/contracts` + OZ 5.x only
@@ -173,7 +199,12 @@ party select + battle/start validate against owned NFTs ∪ explicit grants
 - Acceptance: contract on testnet; a manual Minting API mint succeeds; the Indexer shows it
   with correct metadata; BC1a confirms the interface.
 
-### BC2 — Backend mint service + ownership sync
+### BC2 — Backend mint service + ownership sync — **SEAM SCAFFOLDED** ⚙️
+> **Status (2026-10-05): scaffolded, disabled.** The authenticated mint request/status
+> routes, write-ahead `mint_intents` idempotency, and the `owned_nfts` upsert on confirmed
+> mint are implemented behind `MINTING_ENABLED` (default `false`; `ImmutableMintingProvider`
+> unexercised). Indexer sync/reconciliation, grants replacement, and R2 metadata are deferred.
+
 - Mint routes **mounted behind `authMiddleware`** (e.g. `/api/game/mint/*`) or equivalent
   explicit token + wallet-binding checks; anonymous requests rejected (tested).
 - `POST .../mint/request`: validate wallet binding + entitlement/economy/per-account cap;
@@ -216,7 +247,13 @@ party select + battle/start validate against owned NFTs ∪ explicit grants
 - Require wallet binding before minting; reuse the design system (DESIGN.md).
 - Acceptance: mint + collection work on testnet; loading/error/empty states covered.
 
-### BC4 — Ownership → gameplay authority
+### BC4 — Ownership → gameplay authority — **FLAG SCAFFOLDED** ⚙️
+> **Status (2026-10-05): scaffolded, disabled.** `OWNERSHIP_AUTHORITY` (default `false`)
+> gates `state/party`, `dungeon/enter`, and `battle/start` on the fieldable set
+> `playerFamiliars ∪ owned_nfts` (`resolveFieldableFamiliars`); off, it is exactly today's
+> grants-only set with no extra D1 read. The `owned_nfts` cache is populated only by the
+> (disabled) mint-status path.
+
 - Party selection + `state/party` + `battle/start` validate `owned_nfts ∪ grants` (explicit
   starter and area-unlock grants).
 - Define behaviour when ownership is lost mid-run (indexer lag, sale, burn).
