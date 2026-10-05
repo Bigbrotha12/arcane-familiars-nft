@@ -217,6 +217,8 @@ Authenticated steps are user-run per AGENTS.md. Before enabling any deploy job:
 
 ## 7. Separate track — Blockchain / NFT (NOT part of "game app production")
 
+> Implementation plan: [`BLOCKCHAIN-IMPLEMENTATION-PLAN.md`](./BLOCKCHAIN-IMPLEMENTATION-PLAN.md) (v2).
+
 - Contracts are not deployable to any real network: `blockchain/hardhat.config.ts:6-46` has **all networks commented out** (only `hardhat` default). No Sepolia, no mainnet; `scripts/deploy.ts` is stock Hardhat.
 - No wallet connect / mint flow in the frontend (`/app/minter`, `/app/collection`, `/app/marketplace` all `ComingSoon` in `App.tsx`).
 - No contract audit; OpenZeppelin 4.8.2, Solidity 0.8.17.
