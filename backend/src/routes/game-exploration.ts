@@ -15,10 +15,21 @@ import {
   validateParty,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import {
+  getOrCreateGameState,
+  hasActiveBattle,
+  saveGameStateIfVersion,
+  saveGameStateIfVersionNoBattle,
+} from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Sent when a dungeon mutation is attempted while an active_battles row exists.
+// The write itself is also guarded (saveGameStateIfVersionNoBattle), so this is
+// the clear-error half of the guard; the write-time half closes the race where a
+// battle starts between this check and the write.
+const ACTIVE_BATTLE_ERROR = 'Cannot change dungeon state during an active battle';
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -107,6 +118,10 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
 
     const state = loaded.state;
 
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
+
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
     }
@@ -177,7 +192,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       }
     }
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
@@ -204,6 +219,10 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
+
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
@@ -237,7 +256,7 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       state.inventory.items.push({ itemId, quantity: 1 });
     }
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
@@ -265,6 +284,10 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     const state: GameState = loaded.state;
 
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
+
     // Idempotent exit: no active dungeon is a successful no-op (the dungeon is
     // already cleared by a loss or boss victory).
     if (!state.dungeon) {
@@ -273,7 +296,7 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     state.dungeon = null;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }

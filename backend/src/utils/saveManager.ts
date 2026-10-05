@@ -100,6 +100,48 @@ export async function saveGameStateIfVersion(
 }
 
 /**
+ * True when the account currently has a row in active_battles. Exploration and
+ * party mutations use this to refuse writes while a battle is in flight, since
+ * a concurrent state write would bump the version and cause an in-flight battle
+ * action's state write to no-op while its battle write still commits (a lost
+ * win/loss and rewards).
+ */
+export async function hasActiveBattle(db: D1Database, anonymousId: string): Promise<boolean> {
+  const row = await db
+    .prepare('SELECT 1 AS one FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    .bind(anonymousId)
+    .first();
+  return row !== null;
+}
+
+/**
+ * Version-guarded state write that additionally refuses to commit when ANY
+ * active battle exists for the account. This is the write-time half of the
+ * active-battle guard: the pre-check in the route can race a `battle/start`
+ * (check passes, battle starts, then the write lands), so the UPDATE carries
+ * `NOT EXISTS (active_battles)` to make the write match-or-abort atomically.
+ * Returns false when another writer won or a battle is active (caller: 409).
+ */
+export async function saveGameStateIfVersionNoBattle(
+  db: D1Database,
+  anonymousId: string,
+  state: GameState,
+  expectedVersion: number
+): Promise<boolean> {
+  state.lastSaved = Date.now();
+  const result = await db
+    .prepare(
+      `UPDATE game_states
+         SET state_json = ?, version = version + 1, updated_at = datetime('now')
+         WHERE anonymous_id = ? AND version = ?
+           AND NOT EXISTS (SELECT 1 FROM active_battles WHERE anonymous_id = ?)`
+    )
+    .bind(JSON.stringify(state), anonymousId, expectedVersion, anonymousId)
+    .run();
+  return result.meta.changes === 1;
+}
+
+/**
  * Conditional state write used by battle routes: the UPDATE matches only when
  * BOTH the state row is at `expectedVersion` AND the battle row still exists
  * with `battleTurnCount` (via its persisted turnCount). The battle write in

@@ -1,7 +1,12 @@
 import { Hono } from 'hono';
 import { validateParty } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import {
+  getOrCreateGameState,
+  hasActiveBattle,
+  saveGameStateIfVersion,
+  saveGameStateIfVersionNoBattle,
+} from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -96,10 +101,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
-    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
-      .bind(anonymousId)
-      .first();
-    if (activeBattle) {
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
       return c.json({ error: 'Cannot swap party during an active battle' }, 409);
     }
 
@@ -150,7 +152,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
       state.dungeon.party = reorderToLead(state.dungeon.party);
     }
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
