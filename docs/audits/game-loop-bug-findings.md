@@ -4,6 +4,8 @@ Date: 2026-08-15
 Scope: Core game loop (world map → party select → exploration → battle → rewards/exit) in the embedded game frontend, backend Worker API, and game-logic package.
 Method: Static review + live end-to-end API exercise against `wrangler dev` (backend :8787) and Vite (frontend).
 
+> **Status (2026-10-05): RESOLVED — kept for historical reference.** The findings below were fixed by the subsequent game-loop refactor. Verified against current code: rewards and `battleCount`/`winCount` persist server-side on win; party HP/MP carry between battles (`getPersistedResources`/`persistCombatantResources`); `DungeonFailScene` is launched on defeat; `WorldMapScene` removes its keydown handlers on shutdown; `ExplorationScene` merges the returned room and handles encounter+treasure dual rolls; `battle/swap` validates party membership, rejects the active familiar, and is capped at one per turn; `turnCount` is server-owned. One remaining quirk (not from this list's core concerns): `handleBattleSetupError` always returns to the world map even when the battle was entered from exploration.
+
 ## Symptom
 
 "Network error" while playing. All game API calls failed from the browser before any game-loop request could complete.

@@ -11,7 +11,7 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 ├── blockchain/        # Smart contracts
 ├── docs/              # Plans, architecture decisions
 ├── frontend/          # React SPA (Vite + SWC + Tailwind) — HUD + landing
-├── game/              # Phaser 3 scenes (world map, exploration, battle)
+├── game/              # Phaser 4 scenes (world map, exploration, battle)
 └── packages/
     └── game-logic/    # Shared pure-TS engine: combat math, items, types (vitest)
 ```
@@ -32,7 +32,7 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - Proxies Immutable X API for asset/balance data
 
 ### Game
-- **Phaser 3** scenes embedded in the React app (`game/`), bridged via an event bus
+- **Phaser 4** scenes embedded in the React app (`game/`), bridged via an event bus
 - **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution) consumed by both backend and client; 127 vitest specs
 - Server-authoritative battles: the client sends actions, the Worker resolves the full turn and returns a replayable result (ordered steps, canceled actions, forced swaps)
 - HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
@@ -106,14 +106,16 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 | Phase | Scope | Status |
 |-------|-------|--------|
 | 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
-| 2 — Game Prototype | Phaser 3 engine, core game loop, dungeons, battles, items, party | Done |
+| 2 — Game Prototype | Phaser 4 engine, core game loop, dungeons, battles, items, party | Done |
 | 3 — Blockchain | Contract updates, Sepolia deploy, IMX SDK | Pending |
-| 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing done; wallet/mint pending |
+| 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing + Immutable Passport sign-in/wallet binding done; mint/collection/marketplace pending |
 | 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
 
 ## CI
 
-GitHub Actions runs type-check and build for both frontend and backend on every push/PR to `master`.
+GitHub Actions runs lint, type-check, tests, and builds for the frontend, backend, and
+`game-logic` on every push/PR to `master`. Merges to `master` additionally run the
+staging-then-production deploy (`.github/workflows/deploy.yml`).
 
 ## Design
 
