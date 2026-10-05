@@ -21,15 +21,15 @@ export interface RateLimitOptions {
 /**
  * D1-backed fixed-window rate limiter for /api/* (window with lazy reset).
  *
- * KEY STRATEGY: the counter key is the client IP alone when no Bearer token
- * is present. When an `Authorization: Bearer` header IS present (which this
- * middleware reads BEFORE the auth middleware verifies it — it runs first, see
- * `index.ts`), the key becomes a SHA-256 hash of `${ip}:${token}` so
- * authenticated players behind a shared NAT/proxy each get their own budget
- * instead of collectively locking each other out. The raw token is never
- * stored or logged; only the hash is persisted. The pre-auth mount means the
- * token is unverified here — keying on it is a best-effort identity signal,
- * not an auth decision.
+ * KEY STRATEGY: the counter key is ALWAYS the client IP. This middleware runs
+ * before the auth middleware (see `index.ts`), so any `Authorization` header is
+ * unverified here. Keying on the raw token let a client rotate a bogus
+ * `Bearer <random>` on every request to mint a fresh bucket and bypass the
+ * limit entirely; keying on a token hash only helps if the token is verified,
+ * which is not this middleware's job. IP-only is the only pre-auth key an
+ * attacker cannot trivially vary. Trade-off: players behind one NAT/proxy share
+ * a budget — acceptable at the project's launch scale (see
+ * docs/DEFINITION_OF_PRODUCTION.md).
  *
  * FAIL-OPEN: if the D1 read/write fails the request is ALLOWED through — a
  * rate-limiter outage must never take the game down.
@@ -53,7 +53,7 @@ export function createRateLimitMiddleware(
 
     try {
       const now = Date.now();
-      const key = await rateLimitKey(c);
+      const key = clientIp(c);
 
       const row = await c.env.DB.prepare('SELECT window_start, count FROM rate_limits WHERE key = ?')
         .bind(key)
@@ -113,21 +113,4 @@ function clientIp(c: GameContext): string {
   const xff = c.req.header('x-forwarded-for');
   if (xff) return xff.split(',')[0].trim();
   return 'unknown';
-}
-
-/**
- * Derive the rate-limit counter key for a request. With a `Bearer` token the
- * key is a SHA-256 hash of `${ip}:${token}` (never the raw token), otherwise
- * the bare client IP. The `auth:` prefix keeps the two key spaces disjoint.
- */
-async function rateLimitKey(c: GameContext): Promise<string> {
-  const ip = clientIp(c);
-  const auth = c.req.header('Authorization');
-  if (auth && auth.startsWith('Bearer ')) {
-    const token = auth.slice('Bearer '.length).trim();
-    const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${ip}:${token}`));
-    const hex = [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
-    return `auth:${hex}`;
-  }
-  return ip;
 }
