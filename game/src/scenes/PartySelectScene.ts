@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { FAMILIARS, getAbility, Affinity, AREAS, validateParty } from '@arcane-familiars/game-logic';
+import {
+  FAMILIARS,
+  getAbility,
+  Affinity,
+  AREAS,
+  validateParty,
+  scaleFamiliarStats,
+} from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
@@ -8,7 +15,7 @@ import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
 import { preloadFamiliarPortraits } from '../sprites/loader';
-import { familiarTextureKey } from '../sprites/registry';
+import { safeFamiliarTextureKey } from '../sprites/registry';
 
 interface PartySelectData {
   areaId: string;
@@ -70,6 +77,12 @@ export class PartySelectScene extends Phaser.Scene {
   private cards: FamiliarCard[] = [];
   private cardMap: Map<string, FamiliarCard> = new Map();
   private selectedIds: string[] = [];
+  private allFamiliarIds: string[] = [];
+  private page = 0;
+  private readonly PAGE_SIZE = 4;
+  private pageText?: Phaser.GameObjects.Text;
+  private pagePrev?: Phaser.GameObjects.Text;
+  private pageNext?: Phaser.GameObjects.Text;
   private loadingText!: Phaser.GameObjects.Text;
   private confirmText!: Phaser.GameObjects.Text;
   private confirmBg!: Phaser.GameObjects.Rectangle;
@@ -93,6 +106,11 @@ export class PartySelectScene extends Phaser.Scene {
     this.cards = [];
     this.cardMap.clear();
     this.selectedIds = [];
+    this.allFamiliarIds = [];
+    this.page = 0;
+    this.pageText = undefined;
+    this.pagePrev = undefined;
+    this.pageNext = undefined;
     this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
 
@@ -208,10 +226,9 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       if (state.activeParty?.length) {
-        state.activeParty.forEach((id) => {
-          const card = this.cardMap.get(id);
-          if (card) this.toggleCard(card);
-        });
+        this.selectedIds = state.activeParty.filter((id) => this.allFamiliarIds.includes(id)).slice(0, MAX_PARTY_SIZE);
+        this.renderPage();
+        this.updateConfirmButton();
       }
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
@@ -254,11 +271,66 @@ export class PartySelectScene extends Phaser.Scene {
       return;
     }
 
-    const totalWidth = validFamiliars.length * LAYOUT.CARD_WIDTH + (validFamiliars.length - 1) * LAYOUT.CARD_GAP;
+    this.allFamiliarIds = validFamiliars;
+    this.page = 0;
+
+    this.pagePrev = this.add
+      .text(this.layout.x(320), this.layout.y(530), '< Prev', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.pagePrev.on('pointerdown', () => this.changePage(-1));
+
+    this.pageText = this.add
+      .text(this.layout.x(400), this.layout.y(530), '', {
+        fontSize: this.layout.font(12),
+        fontFamily: 'JetBrains Mono',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5);
+
+    this.pageNext = this.add
+      .text(this.layout.x(480), this.layout.y(530), 'Next >', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.pageNext.on('pointerdown', () => this.changePage(1));
+
+    this.renderPage();
+    this.setupConfirmButton();
+  }
+
+  private changePage(delta: number): void {
+    const maxPage = Math.max(0, Math.ceil(this.allFamiliarIds.length / this.PAGE_SIZE) - 1);
+    this.page = Math.min(maxPage, Math.max(0, this.page + delta));
+    this.renderPage();
+  }
+
+  private renderPage(): void {
+    for (const card of this.cards) {
+      card.container.destroy(true);
+    }
+    this.cards = [];
+    this.cardMap.clear();
+
+    const pageIds = this.allFamiliarIds.slice(this.page * this.PAGE_SIZE, (this.page + 1) * this.PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(this.allFamiliarIds.length / this.PAGE_SIZE));
+    this.pageText?.setText(`Page ${this.page + 1}/${totalPages}`);
+    this.pagePrev?.setAlpha(this.page > 0 ? 1 : 0.35);
+    this.pageNext?.setAlpha(this.page < totalPages - 1 ? 1 : 0.35);
+
+    const totalWidth = pageIds.length * LAYOUT.CARD_WIDTH + (pageIds.length - 1) * LAYOUT.CARD_GAP;
     const startX = this.layout.x((800 - totalWidth) / 2 + LAYOUT.CARD_WIDTH / 2);
 
-    validFamiliars.forEach((id, index) => {
+    pageIds.forEach((id, index) => {
       const familiar = FAMILIARS[id];
+      const selected = this.selectedIds.includes(id);
       const x = startX + index * this.layout.s(LAYOUT.CARD_WIDTH + LAYOUT.CARD_GAP);
 
       const bg = this.add.rectangle(
@@ -269,7 +341,10 @@ export class PartySelectScene extends Phaser.Scene {
         COLORS.CARD_BG
       );
       const border = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT));
-      border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
+      border.setStrokeStyle(
+        this.layout.s(LAYOUT.CARD_BORDER_WIDTH),
+        selected ? COLORS.SELECTED_BORDER : COLORS.CARD_BORDER
+      );
       border.setFillStyle(COLORS.CARD_BG);
 
       const container = this.add.container(x, this.layout.y(LAYOUT.CARD_Y), [border, bg]);
@@ -277,16 +352,19 @@ export class PartySelectScene extends Phaser.Scene {
       const portrait = this.add.image(
         0,
         -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70),
-        familiarTextureKey(id)
+        safeFamiliarTextureKey(this, id)
       );
       portrait.setDisplaySize(this.layout.s(110), this.layout.s(110));
       portrait.setDepth(1);
 
       const offsetY = -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(LAYOUT.NAME_OFFSET_Y) + this.layout.s(120);
 
+      const level = this.fullGameState?.familiarLevels?.[id] ?? 1;
+      const stats = scaleFamiliarStats(familiar.stats, level);
+
       const nameText = this.add
-        .text(0, offsetY, familiar.name, {
-          fontSize: this.layout.font(16),
+        .text(0, offsetY, `${familiar.name}  Lv ${level}`, {
+          fontSize: this.layout.font(15),
           fontFamily: 'Fredoka',
           fontStyle: '600',
           color: COLORS.TITLE,
@@ -307,11 +385,11 @@ export class PartySelectScene extends Phaser.Scene {
         .setOrigin(0.5, 0);
 
       const statsStr =
-        `HP: ${familiar.stats.hp}\n` +
-        `ATK: ${familiar.stats.attack}\n` +
-        `DEF: ${familiar.stats.defense}\n` +
-        `SPD: ${familiar.stats.speed}\n` +
-        `ARC: ${familiar.stats.arcane}`;
+        `HP: ${stats.hp}\n` +
+        `ATK: ${stats.attack}\n` +
+        `DEF: ${stats.defense}\n` +
+        `SPD: ${stats.speed}\n` +
+        `ARC: ${stats.arcane}`;
 
       const statsText = this.add
         .text(0, offsetY + this.layout.s(LAYOUT.STATS_OFFSET_Y), statsStr, {
@@ -350,7 +428,7 @@ export class PartySelectScene extends Phaser.Scene {
 
       container.add([portrait, nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
 
-      const card: FamiliarCard = { familiarId: id, selected: false, border, bg, container };
+      const card: FamiliarCard = { familiarId: id, selected, border, bg, container };
       this.cards.push(card);
       this.cardMap.set(id, card);
 
@@ -369,8 +447,6 @@ export class PartySelectScene extends Phaser.Scene {
         }
       });
     });
-
-    this.setupConfirmButton();
   }
 
   private setupConfirmButton(): void {
@@ -424,8 +500,7 @@ export class PartySelectScene extends Phaser.Scene {
     }
 
     try {
-      const allFamiliarIds = this.cards.map((c) => c.familiarId);
-      const validation = validateParty(this.selectedIds, allFamiliarIds);
+      const validation = validateParty(this.selectedIds, this.allFamiliarIds);
       if (!validation.valid) {
         throw new Error(validation.error);
       }

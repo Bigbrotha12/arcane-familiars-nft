@@ -39,6 +39,7 @@ import type {
   BattlePhase,
   AbilityOption,
   ItemOption,
+  StatusEffectView,
 } from '../events';
 
 interface BattleSceneData {
@@ -126,11 +127,17 @@ export class BattleScene extends Phaser.Scene {
       verdantMeadow: 'battle_bg_verdant',
       crystalCaves: 'battle_bg_crystal',
       shadowForest: 'battle_bg_shadow',
+      emberHollow: 'battle_bg_crystal',
+      frostpeakSummit: 'battle_bg_shadow',
+      sunkenArchive: 'battle_bg_crystal',
     };
     const bossBgMap: Record<string, string> = {
       meadowGuardian: 'battle_bg_meadow_guardian',
       caveWarden: 'battle_bg_cave_warden',
       shadowLord: 'battle_bg_shadow_lord',
+      emberTitan: 'battle_bg_cave_warden',
+      frostQueen: 'battle_bg_shadow_lord',
+      archiveKeeper: 'battle_bg_shadow_lord',
     };
 
     let bgKey: string | undefined;
@@ -232,6 +239,7 @@ export class BattleScene extends Phaser.Scene {
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
         const state = toFamiliarStateFromData(fd);
+        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -602,7 +610,9 @@ export class BattleScene extends Phaser.Scene {
     this.battleUI.addLogMessage('Battle won!');
     this.battleOutcome = {
       outcome: 'victory',
-      rewards: rewards ? { currency: rewards.currency, items: rewards.items } : undefined,
+      rewards: rewards
+        ? { currency: rewards.currency, items: rewards.items, xp: rewards.xp, levelUp: rewards.levelUp }
+        : undefined,
     };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
@@ -652,6 +662,22 @@ export class BattleScene extends Phaser.Scene {
     });
   };
 
+  private toStatusViews(f: BattleFamiliar): StatusEffectView[] {
+    return f.statusEffects.map((effect, index) => {
+      const icon =
+        effect.type === EffectType.Dot
+          ? '☠'
+          : effect.type === EffectType.Hot
+            ? '✚'
+            : effect.type === EffectType.Buff
+              ? '⬆'
+              : effect.type === EffectType.Debuff
+                ? '⬇'
+                : '✦';
+      return { id: `${effect.abilityId}-${index}`, icon, duration: effect.turnsRemaining };
+    });
+  }
+
   private toFamiliarState(f: BattleFamiliar): FamiliarState {
     return {
       id: f.familiarData.id,
@@ -665,6 +691,8 @@ export class BattleScene extends Phaser.Scene {
       speed: f.familiarData.stats.speed,
       arcane: f.familiarData.stats.arcane,
       affinity: Affinity[f.familiarData.affinity] ?? String(f.familiarData.affinity),
+      level: this.gameState?.familiarLevels?.[f.familiarData.id] ?? 1,
+      statusEffects: this.toStatusViews(f),
     };
   }
 
@@ -686,6 +714,7 @@ export class BattleScene extends Phaser.Scene {
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
         const state = toFamiliarStateFromData(fd);
+        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -700,13 +729,20 @@ export class BattleScene extends Phaser.Scene {
     const abilities: AbilityOption[] = player.familiarData.abilities
       .map((id) => getAbility(id))
       .filter((a): a is AbilityData => Boolean(a))
-      .map((ability) => ({
-        id: ability.id,
-        name: ability.name,
-        description: ability.description,
-        mpCost: ability.mpCost,
-        usable: player.currentMp >= ability.mpCost,
-      }));
+      .map((ability) => {
+        const cooldown = player.cooldowns[ability.id] ?? 0;
+        const hasMp = player.currentMp >= ability.mpCost;
+        const disabledReason = cooldown > 0 ? `Cooldown ${cooldown}` : !hasMp ? 'Not enough MP' : undefined;
+        return {
+          id: ability.id,
+          name: ability.name,
+          description: ability.description,
+          mpCost: ability.mpCost,
+          usable: !disabledReason,
+          cooldown,
+          disabledReason,
+        };
+      });
     const items: ItemOption[] = (this.gameState?.inventory?.items ?? [])
       .map((item) => ({ item, itemData: getItem(item.itemId) }))
       .filter((entry): entry is { item: InventoryItem; itemData: ItemData } => Boolean(entry.itemData))

@@ -84,7 +84,7 @@ export class DungeonFailScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen...', {
+      .text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen... 10% of your currency was lost.', {
         fontSize: layout.font(16),
         fontFamily: 'DM Sans',
         fontStyle: '400',

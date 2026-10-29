@@ -4,6 +4,7 @@ import { BattleScene } from './scenes/BattleScene';
 import { ExplorationScene } from './scenes/ExplorationScene';
 import { WorldMapScene } from './scenes/WorldMapScene';
 import { PartySelectScene } from './scenes/PartySelectScene';
+import { ShopScene } from './scenes/ShopScene';
 import { DungeonFailScene } from './scenes/DungeonFailScene';
 import { DESIGN_WIDTH, DESIGN_HEIGHT } from './ui/layout';
 
@@ -18,5 +19,5 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     autoCenter: Phaser.Scale.CENTER_BOTH,
     autoRound: true,
   },
-  scene: [BootScene, BattleScene, ExplorationScene, WorldMapScene, PartySelectScene, DungeonFailScene],
+  scene: [BootScene, BattleScene, ExplorationScene, WorldMapScene, PartySelectScene, ShopScene, DungeonFailScene],
 };

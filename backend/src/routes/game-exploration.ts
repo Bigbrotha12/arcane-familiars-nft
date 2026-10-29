@@ -13,6 +13,7 @@ import {
   RoomType,
   validateDungeonExplore,
   validateParty,
+  scaleFamiliarStats,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { conditionalStateUpdate, getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
@@ -86,8 +87,9 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
     for (const familiarId of dungeon.party) {
       const familiar = getFamiliar(familiarId);
       if (familiar) {
-        dungeon.partyHp[familiarId] = familiar.stats.hp;
-        dungeon.partyMp[familiarId] = familiar.stats.mp;
+        const stats = scaleFamiliarStats(familiar.stats, state.familiarLevels?.[familiarId] ?? 1);
+        dungeon.partyHp[familiarId] = stats.hp;
+        dungeon.partyMp[familiarId] = stats.mp;
       }
     }
 

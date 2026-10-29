@@ -330,6 +330,28 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
         );
         break;
       }
+      case 'dot': {
+        enemyStatus = {
+          abilityId: item.id,
+          type: EffectType.Dot,
+          stat: StatName.Hp,
+          value: effect.value,
+          turnsRemaining: effect.turns,
+        };
+        descriptions.push(`deals ${effect.value} damage per turn for ${effect.turns} turns`);
+        break;
+      }
+      case 'hot': {
+        selfStatus = {
+          abilityId: item.id,
+          type: EffectType.Hot,
+          stat: StatName.Hp,
+          value: effect.value,
+          turnsRemaining: effect.turns,
+        };
+        descriptions.push(`restores ${effect.value} HP per turn for ${effect.turns} turns`);
+        break;
+      }
       case 'cure_status':
         cleanse = true;
         descriptions.push('cures status ailments');
@@ -555,6 +577,52 @@ function executeAbility(
       effectType: EffectType.Buff,
       targetId: source.uid,
       value: ability.multiplier,
+      isCritical: false,
+      description: `${source.familiarData.name} uses ${ability.name}`,
+      appliedEffects: statusEffects,
+    };
+  }
+
+  if (ability.effectType === EffectType.Debuff) {
+    const statusEffects = ability.statusEffect
+      ? [
+          {
+            abilityId: ability.id,
+            type: ability.statusEffect.type,
+            stat: ability.statusEffect.stat,
+            value: ability.statusEffect.value,
+            turnsRemaining: ability.statusEffect.duration,
+          },
+        ]
+      : undefined;
+
+    return {
+      effectType: EffectType.Debuff,
+      targetId: target.uid,
+      value: 0,
+      isCritical: false,
+      description: `${source.familiarData.name} uses ${ability.name}`,
+      appliedEffects: statusEffects,
+    };
+  }
+
+  if (ability.effectType === EffectType.Dot) {
+    const statusEffects = ability.statusEffect
+      ? [
+          {
+            abilityId: ability.id,
+            type: EffectType.Dot,
+            stat: ability.statusEffect.stat,
+            value: ability.statusEffect.value,
+            turnsRemaining: ability.statusEffect.duration,
+          },
+        ]
+      : undefined;
+
+    return {
+      effectType: EffectType.Dot,
+      targetId: target.uid,
+      value: 0,
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name}`,
       appliedEffects: statusEffects,

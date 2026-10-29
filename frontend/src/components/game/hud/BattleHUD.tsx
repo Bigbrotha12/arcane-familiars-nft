@@ -72,14 +72,14 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
         {/* Enemy status card - top left corner */}
         {enemy && (
           <div className="absolute" style={{ left: '16px', top: '16px' }}>
-            <FamiliarStatusCompact familiar={enemy} isBoss={snapshot.isBoss} />
+            <FamiliarStatusCompact familiar={enemy} isBoss={snapshot.isBoss} statusEffects={enemy.statusEffects} />
           </div>
         )}
 
         {/* Player status card - right corner, above action bar */}
         {activeFamiliar && (
           <div className="absolute" style={{ right: '16px', bottom: '240px' }}>
-            <FamiliarStatusCompact familiar={activeFamiliar} />
+            <FamiliarStatusCompact familiar={activeFamiliar} statusEffects={activeFamiliar.statusEffects} />
           </div>
         )}
 

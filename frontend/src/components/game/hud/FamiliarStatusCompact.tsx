@@ -19,7 +19,12 @@ function FamiliarStatusCompact({ familiar, isBoss = false, statusEffects = [] }:
   return (
     <div className="pointer-events-none flex w-[240px] flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
       <div className="flex items-center justify-between gap-1.5">
-        <span className="truncate font-body text-sm font-semibold text-[#F0EFFF]">{familiar.name}</span>
+        <span className="truncate font-body text-sm font-semibold text-[#F0EFFF]">
+          {familiar.name}
+          {familiar.level ? (
+            <span className="ml-1 font-mono text-[10px] text-text-muted">Lv{familiar.level}</span>
+          ) : null}
+        </span>
         {isBoss && (
           <span className="shrink-0 rounded-sm bg-error/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-error">
             Boss

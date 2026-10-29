@@ -5,6 +5,7 @@ export { GameEvent } from './events';
 export type {
   GameStateSnapshot,
   FamiliarState,
+  StatusEffectView,
   SaveResult,
   PlayerActionPayload,
   NavigateRoomPayload,

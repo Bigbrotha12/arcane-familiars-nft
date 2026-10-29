@@ -1,7 +1,13 @@
 import Phaser from 'phaser';
 import type { BattleFamiliar } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
-import { familiarTextureKey, idleAnimKey, idleTextureKey, PLACEHOLDER_FAMILIAR_ID } from '../sprites/registry';
+import {
+  familiarTextureKey,
+  safeFamiliarTextureKey,
+  idleAnimKey,
+  idleTextureKey,
+  PLACEHOLDER_FAMILIAR_ID,
+} from '../sprites/registry';
 
 export class BattleUI {
   private scene: Phaser.Scene;
@@ -115,7 +121,7 @@ export class BattleUI {
 
   private applyDisplay(sprite: Phaser.GameObjects.Sprite, familiar: BattleFamiliar, facing: 'right' | 'left'): void {
     const id = familiar.familiarData.id;
-    const textureKey = familiarTextureKey(id);
+    const textureKey = safeFamiliarTextureKey(this.scene, id);
     const idleKey = idleTextureKey(id, facing);
     const animKey = idleAnimKey(id, facing);
     if (this.scene.textures.exists(idleKey) && this.scene.anims.exists(animKey)) {

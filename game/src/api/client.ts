@@ -118,6 +118,10 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/exit', { anonymousId: this.anonymousId });
   }
 
+  async buyItem(itemId: string): Promise<{ success: boolean; state: GameState }> {
+    return this.request('POST', '/api/game/shop/buy', { anonymousId: this.anonymousId, itemId });
+  }
+
   async startBattle(playerFamiliarId: string): Promise<{ battle: BattleState }> {
     return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId });
   }

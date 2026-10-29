@@ -2,6 +2,7 @@ export const SCENE_KEYS = {
   BOOT: 'BootScene',
   WORLD_MAP: 'WorldMapScene',
   PARTY_SELECT: 'PartySelectScene',
+  SHOP: 'ShopScene',
   EXPLORATION: 'ExplorationScene',
   BATTLE: 'BattleScene',
   DUNGEON_FAIL: 'DungeonFailScene',

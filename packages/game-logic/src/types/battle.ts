@@ -102,6 +102,10 @@ export interface BattleTurnResult {
 export interface BattleRewards {
   currency: number;
   items: string[];
+  /** XP awarded to the active familiar. */
+  xp?: number;
+  /** Number of levels gained by the active familiar. */
+  levelUp?: number;
 }
 
 export enum BattleResult {

@@ -79,6 +79,9 @@ export class ExplorationScene extends Phaser.Scene {
       verdantMeadow: 'verdant-meadow',
       crystalCaves: 'crystal-caves',
       shadowForest: 'shadow-forest',
+      emberHollow: 'crystal-caves',
+      frostpeakSummit: 'shadow-forest',
+      sunkenArchive: 'crystal-caves',
     };
     const dir = roomAreas[this.areaId];
     if (!dir) return;

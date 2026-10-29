@@ -16,6 +16,8 @@ export type CombatItemEffect =
   | { kind: 'damage'; value: number }
   | { kind: 'buff'; stat: StatName; value: number; turns: number }
   | { kind: 'debuff'; stat: StatName; value: number; turns: number }
+  | { kind: 'dot'; value: number; turns: number }
+  | { kind: 'hot'; value: number; turns: number }
   | { kind: 'cure_status' };
 
 /**
@@ -135,6 +137,92 @@ const lucky_coin: ItemData = {
   icon: 'lucky_coin',
 };
 
+const potion_large: ItemData = {
+  id: 'potion_large',
+  name: 'Large Potion',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'heal_hp', value: 100 }],
+  dropWeight: 2,
+};
+
+const mega_elixir: ItemData = {
+  id: 'mega_elixir',
+  name: 'Mega Elixir',
+  type: ItemType.Consumable,
+  effects: [
+    { kind: 'heal_hp', value: 100 },
+    { kind: 'heal_mp', value: 50 },
+  ],
+  dropWeight: 1,
+};
+
+const mana_dew: ItemData = {
+  id: 'mana_dew',
+  name: 'Mana Dew',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'heal_mp', value: 40 }],
+  dropWeight: 2,
+};
+
+const antidote: ItemData = {
+  id: 'antidote',
+  name: 'Antidote',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'cure_status' }, { kind: 'heal_hp', value: 20 }],
+  dropWeight: 2,
+};
+
+const regen_draught: ItemData = {
+  id: 'regen_draught',
+  name: 'Regen Draught',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'hot', value: 12, turns: 3 }],
+  dropWeight: 1,
+};
+
+const venom_flask: ItemData = {
+  id: 'venom_flask',
+  name: 'Venom Flask',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'dot', value: 8, turns: 3 }],
+  dropWeight: 1,
+};
+
+const shock_bomb: ItemData = {
+  id: 'shock_bomb',
+  name: 'Shock Bomb',
+  type: ItemType.Consumable,
+  effects: [
+    { kind: 'damage', value: 30 },
+    { kind: 'debuff', stat: StatName.Speed, value: 0.7, turns: 2 },
+  ],
+  dropWeight: 1,
+};
+
+const ward_scroll: ItemData = {
+  id: 'ward_scroll',
+  name: 'Ward Scroll',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'buff', stat: StatName.Defense, value: 1.4, turns: 3 }],
+  dropWeight: 1,
+};
+
+const greater_tonic: ItemData = {
+  id: 'greater_tonic',
+  name: 'Greater Tonic',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'cure_status' }, { kind: 'heal_hp', value: 40 }],
+  dropWeight: 1,
+};
+
+const focus_charm: ItemData = {
+  id: 'focus_charm',
+  name: 'Focus Charm',
+  type: ItemType.Consumable,
+  effects: [{ kind: 'buff', stat: StatName.Arcane, value: 1.3, turns: 3 }],
+  dropWeight: 1,
+};
+
 export const ITEMS: Record<string, ItemData> = {
   potion_small,
   potion_medium,
@@ -146,6 +234,16 @@ export const ITEMS: Record<string, ItemData> = {
   frost_bomb,
   phoenix_feather,
   lucky_coin,
+  potion_large,
+  mega_elixir,
+  mana_dew,
+  antidote,
+  regen_draught,
+  venom_flask,
+  shock_bomb,
+  ward_scroll,
+  greater_tonic,
+  focus_charm,
 };
 
 export function getItem(id: string): ItemData | undefined {
@@ -174,6 +272,10 @@ function describeEffect(effect: ItemEffectSpec): string {
       return `+${Math.round((effect.value - 1) * 100)}% ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`;
     case 'debuff':
       return `-${Math.round((1 - effect.value) * 100)}% enemy ${STAT_LABELS[effect.stat]} for ${effect.turns} turn${effect.turns === 1 ? '' : 's'}`;
+    case 'dot':
+      return `Deals ${effect.value} damage per turn for ${effect.turns} turns`;
+    case 'hot':
+      return `Restores ${effect.value} HP per turn for ${effect.turns} turns`;
     case 'cure_status':
       return 'Cures status ailments';
     case 'revive_party':

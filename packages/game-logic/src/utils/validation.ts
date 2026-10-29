@@ -34,6 +34,11 @@ export function isItemUseful(item: ItemData, familiar: BattleFamiliar, partyHp?:
       case 'debuff':
       case 'grant_currency':
         return true;
+      case 'dot':
+        return true;
+      case 'hot':
+        if (familiar.currentHp < maxHp) return true;
+        break;
       case 'cure_status':
         if (familiar.statusEffects.some((e) => e.type === EffectType.Debuff || e.type === EffectType.Dot)) {
           return true;

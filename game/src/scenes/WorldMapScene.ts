@@ -121,6 +121,19 @@ export class WorldMapScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    const shopText = this.add
+      .text(this.layout.x(720), this.layout.y(558), '🛒 Shop', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        fontStyle: '500',
+        color: '#7C5CFC',
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+    shopText.on('pointerdown', () => this.scene.start(SCENE_KEYS.SHOP));
+    shopText.on('pointerover', () => shopText.setColor('#A78BFA'));
+    shopText.on('pointerout', () => shopText.setColor('#7C5CFC'));
+
     this.setupKeyboardNavigation();
 
     try {
@@ -150,43 +163,39 @@ export class WorldMapScene extends Phaser.Scene {
 
   private createAreaCards(unlockedAreas: string[]): void {
     const areaList = Object.values(AREAS);
-    const startY = 100;
-    const cardHeight = 125;
-    const gap = 12;
-    const cardWidth = this.layout.s(700);
+    const startY = 92;
+    const cardWidth = 340;
+    const cardHeight = 145;
+    const gapX = 10;
+    const gapY = 8;
+    const columns = 2;
+    const totalWidth = columns * cardWidth + (columns - 1) * gapX;
+    const leftEdge = 400 - totalWidth / 2;
 
-    const availableHeight = 600 - 60 - startY;
-    const maxCards = Math.max(1, Math.floor(availableHeight / (cardHeight + gap)));
-    const displayAreas = areaList.length > maxCards ? areaList.slice(0, maxCards) : areaList;
-
-    if (areaList.length > maxCards) {
-      console.warn(
-        `WorldMapScene: ${areaList.length} areas exceed available space. Displaying ${maxCards} of ${areaList.length}.`
-      );
-    }
-
-    displayAreas.forEach((area, index) => {
+    areaList.forEach((area, index) => {
       const unlocked = unlockedAreas.includes(area.id);
-      const y = this.layout.y(startY + index * (cardHeight + gap));
-      const cx = this.layout.x(400);
+      const column = index % columns;
+      const row = Math.floor(index / columns);
+      const cx = this.layout.x(leftEdge + cardWidth / 2 + column * (cardWidth + gapX));
+      const y = this.layout.y(startY + row * (cardHeight + gapY));
 
       const bossData = FAMILIARS[area.bossId];
 
       const border = this.add.rectangle(
         cx,
         y + this.layout.s(cardHeight / 2),
-        cardWidth,
+        this.layout.s(cardWidth),
         this.layout.s(cardHeight),
         unlocked ? 0x1e1b4b : 0x15133a
       );
       border.setStrokeStyle(this.layout.s(2), unlocked ? 0x7c5cfc : 0x3b3870);
 
       const texts: Phaser.GameObjects.Text[] = [];
-      const left = cx - cardWidth / 2 + this.layout.s(15);
+      const left = cx - this.layout.s(cardWidth / 2) + this.layout.s(12);
 
       texts.push(
         this.add.text(left, y + this.layout.s(8), area.name, {
-          fontSize: this.layout.font(19),
+          fontSize: this.layout.font(16),
           fontFamily: 'Fredoka',
           fontStyle: '600',
           color: unlocked ? '#7C5CFC' : '#6366A1',
@@ -195,10 +204,11 @@ export class WorldMapScene extends Phaser.Scene {
 
       texts.push(
         this.add.text(left, y + this.layout.s(32), area.description, {
-          fontSize: this.layout.font(12),
+          fontSize: this.layout.font(10),
           fontFamily: 'DM Sans',
           fontStyle: '400',
           color: unlocked ? '#A5A3C4' : '#6366A1',
+          wordWrap: { width: this.layout.s(cardWidth - 24) },
         })
       );
 
@@ -206,10 +216,10 @@ export class WorldMapScene extends Phaser.Scene {
       texts.push(
         this.add.text(
           left,
-          y + this.layout.s(54),
+          y + this.layout.s(70),
           `Level ${area.levelRange[0]}-${area.levelRange[1]}  |  Boss: ${bossName}`,
           {
-            fontSize: this.layout.font(11),
+            fontSize: this.layout.font(10),
             fontFamily: 'DM Sans',
             fontStyle: '400',
             color: unlocked ? '#6366A1' : '#3B3870',
@@ -218,8 +228,8 @@ export class WorldMapScene extends Phaser.Scene {
       );
 
       texts.push(
-        this.add.text(left, y + this.layout.s(74), `Recommended Level: ${area.levelRange[0]}+`, {
-          fontSize: this.layout.font(11),
+        this.add.text(left, y + this.layout.s(88), `Recommended Level: ${area.levelRange[0]}+`, {
+          fontSize: this.layout.font(10),
           fontFamily: 'DM Sans',
           fontStyle: '400',
           color: unlocked ? '#6366A1' : '#3B3870',
@@ -230,8 +240,8 @@ export class WorldMapScene extends Phaser.Scene {
       const statusText = unlocked ? '● AVAILABLE' : '● LOCKED';
       texts.push(
         this.add
-          .text(cx + cardWidth / 2 - this.layout.s(15), y + this.layout.s(8), statusText, {
-            fontSize: this.layout.font(11),
+          .text(cx + this.layout.s(cardWidth / 2) - this.layout.s(12), y + this.layout.s(8), statusText, {
+            fontSize: this.layout.font(9),
             fontFamily: 'DM Sans',
             fontStyle: '500',
             color: statusColor,

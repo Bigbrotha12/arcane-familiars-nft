@@ -21,6 +21,8 @@ import {
   validateBattleAction,
   seededRandom,
   resolveBattleRoomId,
+  applyFamiliarXp,
+  scaleFamiliarStats,
   BattleResult,
   ActionType,
   Outcome,
@@ -60,15 +62,16 @@ function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 
-function createBattleFamiliar(familiarId: string): BattleFamiliar {
+function createBattleFamiliar(familiarId: string, level = 1): BattleFamiliar {
   const data = getFamiliar(familiarId);
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
+  const stats = scaleFamiliarStats(data.stats, level);
 
   return {
     uid: generateId(),
-    familiarData: data,
-    currentHp: data.stats.hp,
-    currentMp: data.stats.mp,
+    familiarData: { ...data, stats },
+    currentHp: stats.hp,
+    currentMp: stats.mp,
     statusEffects: [],
     cooldowns: {},
     isAlly: false,
@@ -113,8 +116,8 @@ function persistCombatantResources(dungeon: GameState['dungeon'], familiar: Batt
  * resources persisted in the dungeon state. Shared by battle start, voluntary
  * swap-in, and the involuntary KO relay.
  */
-function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string): BattleFamiliar {
-  const familiar = createBattleFamiliar(familiarId);
+function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string, level = 1): BattleFamiliar {
+  const familiar = createBattleFamiliar(familiarId, level);
   const resources = getPersistedResources(dungeon, familiarId, familiar);
   familiar.currentHp = resources.currentHp;
   familiar.currentMp = resources.currentMp;
@@ -201,7 +204,11 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Invalid area' }, 500);
     }
 
-    const playerFamiliar = buildIncomingCombatant(dungeon, playerFamiliarId);
+    const playerFamiliar = buildIncomingCombatant(
+      dungeon,
+      playerFamiliarId,
+      state.familiarLevels?.[playerFamiliarId] ?? 1
+    );
     if (playerFamiliar.currentHp <= 0) {
       return c.json(
         {
@@ -448,7 +455,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       const otherId = state.activeParty.find((id) => id !== fallenId);
       if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
-        const incoming = buildIncomingCombatant(state.dungeon, otherId);
+        const incoming = buildIncomingCombatant(state.dungeon, otherId, state.familiarLevels?.[otherId] ?? 1);
         forcedSwap = {
           fallenName: battle.playerFamiliar.familiarData.name,
           incomingName: incoming.familiarData.name,
@@ -467,10 +474,21 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     let rewards: BattleRewards | undefined;
+    let xpGained = 0;
+    let levelUps = 0;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
+
+      const activeId = battle.playerFamiliar.familiarData.id;
+      xpGained = 20 + (battle.isBoss ? 40 : 0);
+      state.familiarLevels ??= {};
+      state.familiarXp ??= {};
+      const progress = applyFamiliarXp(state.familiarLevels[activeId] ?? 1, state.familiarXp[activeId] ?? 0, xpGained);
+      state.familiarLevels[activeId] = progress.level;
+      state.familiarXp[activeId] = progress.xp;
+      levelUps = progress.levelsGained;
 
       // Resolve the room the battle was started in. A player cannot move during
       // a battle, but legacy battles persisted before roomId existed fall back
@@ -526,11 +544,20 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
+      // Defeat costs 10% of banked currency. The full run-loot penalty is a
+      // later milestone; this keeps failure meaningful until then.
+      state.inventory.currency = Math.floor(state.inventory.currency * 0.9);
       state.dungeon = null;
     } else {
       if (state.dungeon) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
       }
+    }
+
+    if (xpGained > 0) {
+      rewards = rewards
+        ? { ...rewards, xp: xpGained, levelUp: levelUps }
+        : { currency: 0, items: [], xp: xpGained, levelUp: levelUps };
     }
 
     const turnResult: BattleTurnResult = {
@@ -649,7 +676,11 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     }
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
-    battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
+    battle.playerFamiliar = buildIncomingCombatant(
+      state.dungeon,
+      newFamiliarId,
+      state.familiarLevels?.[newFamiliarId] ?? 1
+    );
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
     const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);

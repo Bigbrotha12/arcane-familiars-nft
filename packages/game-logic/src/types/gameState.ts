@@ -16,6 +16,9 @@ export interface GameState {
   anonymousId: string;
   playerFamiliars: string[];
   activeParty: string[];
+  /** Per-species progression. Missing entries mean level 1 / 0 XP. */
+  familiarLevels?: Record<string, number>;
+  familiarXp?: Record<string, number>;
   inventory: Inventory;
   dungeon: DungeonState | null;
   unlockedAreas: string[];
