@@ -41,6 +41,9 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
               {rewards.levelUp ? (
                 <p className="font-display text-sm font-semibold text-teal">Level up! +{rewards.levelUp}</p>
               ) : null}
+              {rewards.recruitedName ? (
+                <p className="font-display text-sm font-semibold text-pink">Recruited {rewards.recruitedName}!</p>
+              ) : null}
             </div>
           )}
         </div>

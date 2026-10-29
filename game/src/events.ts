@@ -116,6 +116,8 @@ export interface BattleEndedPayload {
     items: string[];
     xp?: number;
     levelUp?: number;
+    recruitedFamiliar?: string;
+    recruitedName?: string;
   };
 }
 

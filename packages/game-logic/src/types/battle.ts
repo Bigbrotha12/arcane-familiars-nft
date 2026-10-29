@@ -106,6 +106,10 @@ export interface BattleRewards {
   xp?: number;
   /** Number of levels gained by the active familiar. */
   levelUp?: number;
+  /** Species id recruited after a non-boss victory. */
+  recruitedFamiliar?: string;
+  /** Display name of the recruited familiar. */
+  recruitedName?: string;
 }
 
 export enum BattleResult {

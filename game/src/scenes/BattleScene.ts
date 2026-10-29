@@ -612,7 +612,14 @@ export class BattleScene extends Phaser.Scene {
     this.battleOutcome = {
       outcome: 'victory',
       rewards: rewards
-        ? { currency: rewards.currency, items: rewards.items, xp: rewards.xp, levelUp: rewards.levelUp }
+        ? {
+            currency: rewards.currency,
+            items: rewards.items,
+            xp: rewards.xp,
+            levelUp: rewards.levelUp,
+            recruitedFamiliar: rewards.recruitedFamiliar,
+            recruitedName: rewards.recruitedName,
+          }
         : undefined,
     };
     this.phase = 'outcome';
