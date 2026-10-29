@@ -91,7 +91,7 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 - **Turn-based combat**: speed-ordered sequential turns (faster familiar acts first; a KO'd-before-acting familiar loses its action), abilities with cooldowns and MP costs, status effects (buffs, debuffs, DoT/HoT), defend, flee
 - **Party management**: swap the active familiar between rooms or mid-battle (once per turn, free); if the active familiar falls, the backup relays in automatically — defeat only when both are down
 - **Items**: inventory drops and a world-map shop (potions, ethers, bombs, cures, buffs, revives, currency); consumption respects KO cancellation
-- **Progression**: familiars earn XP and level up to 20, scaling their stats; regions unlock through boss clears
+- **Progression**: familiars earn XP and level up to 20, scaling their stats; non-boss victories can recruit the defeated species; regions unlock through boss clears
 - **Shop**: spend gold on consumables from the world map
 
 ## Development Phases
