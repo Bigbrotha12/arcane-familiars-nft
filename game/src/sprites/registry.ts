@@ -8,6 +8,7 @@
 //   texture share the key by convention; per-familiar because frame counts differ)
 // - Effect texture + anim: `effect_<effectId>`                (effectAnimKey — also shared)
 
+import { getFamiliar, Affinity } from '@arcane-familiars/game-logic';
 import type { FAMILIARS } from '@arcane-familiars/game-logic';
 
 // Connecting-phase stand-in until real display updates arrive.
@@ -54,6 +55,23 @@ export function getFamiliarSprites(id: string): FamiliarSpriteConfig | undefined
 
 export function familiarTextureKey(id: string): string {
   return `familiar_${id}`;
+}
+
+const FALLBACK_BY_AFFINITY: Record<Affinity, string> = {
+  [Affinity.Light]: 'whiteDog',
+  [Affinity.Dark]: 'shadowCat',
+  [Affinity.Fire]: 'yellowFighter',
+  [Affinity.Water]: 'aquaSprite',
+  [Affinity.Earth]: 'leafBunny',
+  [Affinity.Wind]: 'sparkMouse',
+};
+
+/** Portrait key with a guaranteed affinity-matched fallback for familiars without art yet. */
+export function safeFamiliarTextureKey(scene: { textures: { exists: (key: string) => boolean } }, id: string): string {
+  const key = familiarTextureKey(id);
+  if (scene.textures.exists(key)) return key;
+  const affinity = getFamiliar(id)?.affinity ?? Affinity.Light;
+  return familiarTextureKey(FALLBACK_BY_AFFINITY[affinity]);
 }
 
 export function idleTextureKey(id: string, facing: 'right' | 'left'): string {

@@ -18,7 +18,7 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
   const flavor = isVictory
     ? 'Your familiars prevailed!'
     : result === 'defeat'
-      ? 'Your party has fallen...'
+      ? 'Your party has fallen... 10% of your currency was lost.'
       : 'You escaped the encounter.';
 
   return (
@@ -37,6 +37,10 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
               {rewards.items.length > 0 && (
                 <p className="font-body text-xs text-[#F0EFFF]">Found: {rewards.items.join(', ')}</p>
               )}
+              {rewards.xp ? <p className="font-mono text-xs tabular-nums text-accent">+{rewards.xp} XP</p> : null}
+              {rewards.levelUp ? (
+                <p className="font-display text-sm font-semibold text-teal">Level up! +{rewards.levelUp}</p>
+              ) : null}
             </div>
           )}
         </div>

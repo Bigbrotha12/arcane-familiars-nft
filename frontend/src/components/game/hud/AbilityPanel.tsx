@@ -26,9 +26,16 @@ function AbilityPanel({ open, abilities, onSelect, onClose }: AbilityPanelProps)
               onClick={() => onSelect(ability.id)}
             >
               <span className="flex-1 text-left font-body font-medium">{ability.name}</span>
-              <span className="font-mono text-[10px] tabular-nums text-teal">MP: {ability.mpCost}</span>
+              {ability.cooldown && ability.cooldown > 0 ? (
+                <span className="font-mono text-[10px] tabular-nums text-warning">CD {ability.cooldown}</span>
+              ) : (
+                <span className="font-mono text-[10px] tabular-nums text-teal">MP: {ability.mpCost}</span>
+              )}
             </Button>
-            <p className="px-1 text-xs text-text-muted">{ability.description}</p>
+            <p className="px-1 text-xs text-text-muted">
+              {ability.description}
+              {ability.disabledReason ? ` — ${ability.disabledReason}` : ''}
+            </p>
           </div>
         ))}
       </div>

@@ -15,6 +15,8 @@ export function createDefaultGameState(anonymousId: string): GameState {
     anonymousId,
     playerFamiliars: ['whiteDog', 'yellowFighter', 'aquaSprite'],
     activeParty: [],
+    familiarLevels: {},
+    familiarXp: {},
     inventory: {
       currency: 100,
       items: [{ itemId: 'potion_small', quantity: 3 }],

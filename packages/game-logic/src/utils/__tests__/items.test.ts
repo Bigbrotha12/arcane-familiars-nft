@@ -50,19 +50,29 @@ function useItem(item: ItemData, player = makePlayer(), enemy = makeEnemy()) {
 }
 
 describe('item data registry', () => {
-  it('exposes all ten basic items', () => {
+  it('exposes the full item catalog', () => {
     expect(Object.keys(ITEMS).sort()).toEqual(
       [
+        'antidote',
         'elixir',
         'ether_large',
         'ether_small',
         'fire_bomb',
+        'focus_charm',
         'frost_bomb',
+        'greater_tonic',
         'lucky_coin',
+        'mana_dew',
+        'mega_elixir',
         'phoenix_feather',
+        'potion_large',
         'potion_medium',
         'potion_small',
+        'regen_draught',
+        'shock_bomb',
         'tonic',
+        'venom_flask',
+        'ward_scroll',
       ].sort()
     );
   });

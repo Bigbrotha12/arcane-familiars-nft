@@ -25,8 +25,22 @@ function loadSheet(scene: Phaser.Scene, key: string, url: string, config: Sprite
   scene.load.spritesheet(key, url, { frameWidth: config.frameWidth, frameHeight: config.frameHeight });
 }
 
+const PORTRAIT_ART_IDS = new Set([
+  'whiteDog',
+  'yellowFighter',
+  'aquaSprite',
+  'leafBunny',
+  'sparkMouse',
+  'tideTurtle',
+  'shadowCat',
+  'meadowGuardian',
+  'caveWarden',
+  'shadowLord',
+]);
+
 export function preloadFamiliarPortraits(scene: Phaser.Scene): void {
   for (const id of Object.keys(FAMILIARS)) {
+    if (!PORTRAIT_ART_IDS.has(id)) continue;
     scene.load.image(familiarTextureKey(id), `${PORTRAIT_BASE}/${id}/${id}_portrait.png`);
   }
 }

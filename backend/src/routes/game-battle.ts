@@ -20,6 +20,9 @@ import {
   updateCooldowns,
   validateBattleAction,
   seededRandom,
+  resolveBattleRoomId,
+  applyFamiliarXp,
+  scaleFamiliarStats,
   BattleResult,
   ActionType,
   Outcome,
@@ -60,15 +63,16 @@ function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 
-function createBattleFamiliar(familiarId: string): BattleFamiliar {
+function createBattleFamiliar(familiarId: string, level = 1): BattleFamiliar {
   const data = getFamiliar(familiarId);
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
+  const stats = scaleFamiliarStats(data.stats, level);
 
   return {
     uid: generateId(),
-    familiarData: data,
-    currentHp: data.stats.hp,
-    currentMp: data.stats.mp,
+    familiarData: { ...data, stats },
+    currentHp: stats.hp,
+    currentMp: stats.mp,
     statusEffects: [],
     cooldowns: {},
     isAlly: false,
@@ -113,8 +117,8 @@ function persistCombatantResources(dungeon: GameState['dungeon'], familiar: Batt
  * resources persisted in the dungeon state. Shared by battle start, voluntary
  * swap-in, and the involuntary KO relay.
  */
-function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string): BattleFamiliar {
-  const familiar = createBattleFamiliar(familiarId);
+function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string, level = 1): BattleFamiliar {
+  const familiar = createBattleFamiliar(familiarId, level);
   const resources = getPersistedResources(dungeon, familiarId, familiar);
   familiar.currentHp = resources.currentHp;
   familiar.currentMp = resources.currentMp;
@@ -149,6 +153,20 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
+
+    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+      .bind(anonymousId)
+      .first<{ battle_id: string }>();
+    if (activeBattle) {
+      return c.json(
+        {
+          error: 'A battle is already active; resume or abandon it',
+          code: 'BATTLE_ACTIVE',
+          battleId: activeBattle.battle_id,
+        },
+        409
+      );
+    }
 
     // Daily battle cap: reject the start before any state/battle validation so
     // the 403 fires even against a minimal state (testable) and no battle row or
@@ -198,7 +216,20 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Invalid area' }, 500);
     }
 
-    const playerFamiliar = buildIncomingCombatant(dungeon, playerFamiliarId);
+    const playerFamiliar = buildIncomingCombatant(
+      dungeon,
+      playerFamiliarId,
+      state.familiarLevels?.[playerFamiliarId] ?? 1
+    );
+    if (playerFamiliar.currentHp <= 0) {
+      return c.json(
+        {
+          error: 'That familiar has fainted; choose a living party member',
+          code: 'FAMILIAR_FAINTED',
+        },
+        400
+      );
+    }
 
     // Enemy identity is derived from the persisted room encounter, never from the client.
     const enemyId = pending.enemyId;
@@ -229,6 +260,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const battle: BattleState = {
       id: generateId(),
+      roomId: dungeon.currentRoomId,
       playerFamiliar,
       enemyFamiliar,
       isBoss: baseEnemy.isBoss ?? false,
@@ -238,18 +270,15 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       seed: battleSeed,
     };
 
-    // Supersede any leftover battle row: rows are only removed when a battle
-    // ends (win/loss/flee), so an abandoned session (closed tab, kicked out
-    // mid-battle) leaves a row behind that violates the one-battle-per-user
-    // unique index and would 500 every future start. There is no
-    // battle-resume path, so deleting it here is safe.
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM active_battles WHERE anonymous_id = ?').bind(anonymousId),
-      c.env.DB.prepare(
-        `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
-         VALUES (?, ?, ?, datetime('now'))`
-      ).bind(battle.id, anonymousId, JSON.stringify(battle)),
-    ]);
+    // A battle row is created only after the active-battle guard above. Resume
+    // and abandon are the only ways to clear an existing row; the route never
+    // deletes a live battle to make room for a restart (which would restore HP).
+    await c.env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
+       VALUES (?, ?, ?, datetime('now'))`
+    )
+      .bind(battle.id, anonymousId, JSON.stringify(battle))
+      .run();
 
     return c.json({ battle });
   } catch (error: unknown) {
@@ -287,6 +316,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -296,7 +326,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
 
-    const validation = validateBattleAction(action, battle);
+    const validation = validateBattleAction(action, battle, state.dungeon?.partyHp);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid action' }, 400);
     }
@@ -310,8 +340,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         return c.json({ error: 'Player familiar does not know this ability' }, 400);
       }
     }
-
-    const state = loaded.state;
 
     // Anti-farming re-check: the guard at start is check-then-act, so a player
     // at the cap could race `start` + `action` and let a battle that should
@@ -439,7 +467,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       const otherId = state.activeParty.find((id) => id !== fallenId);
       if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
-        const incoming = buildIncomingCombatant(state.dungeon, otherId);
+        const incoming = buildIncomingCombatant(state.dungeon, otherId, state.familiarLevels?.[otherId] ?? 1);
         forcedSwap = {
           fallenName: battle.playerFamiliar.familiarData.name,
           incomingName: incoming.familiarData.name,
@@ -458,12 +486,27 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     let rewards: BattleRewards | undefined;
+    let xpGained = 0;
+    let levelUps = 0;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
 
-      const room = state.dungeon?.rooms[state.dungeon.currentRoomId];
+      const activeId = battle.playerFamiliar.familiarData.id;
+      xpGained = 20 + (battle.isBoss ? 40 : 0);
+      state.familiarLevels ??= {};
+      state.familiarXp ??= {};
+      const progress = applyFamiliarXp(state.familiarLevels[activeId] ?? 1, state.familiarXp[activeId] ?? 0, xpGained);
+      state.familiarLevels[activeId] = progress.level;
+      state.familiarXp[activeId] = progress.xp;
+      levelUps = progress.levelsGained;
+
+      // Resolve the room the battle was started in. A player cannot move during
+      // a battle, but legacy battles persisted before roomId existed fall back
+      // to the current room.
+      const resolvedRoomId = resolveBattleRoomId(state.dungeon, battle);
+      const room = resolvedRoomId && state.dungeon ? state.dungeon.rooms[resolvedRoomId] : undefined;
       if (room?.pendingEncounter) {
         room.pendingEncounter.resolved = true;
       }
@@ -513,11 +556,20 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
+      // Defeat costs 10% of banked currency. The full run-loot penalty is a
+      // later milestone; this keeps failure meaningful until then.
+      state.inventory.currency = Math.floor(state.inventory.currency * 0.9);
       state.dungeon = null;
     } else {
       if (state.dungeon) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
       }
+    }
+
+    if (xpGained > 0) {
+      rewards = rewards
+        ? { ...rewards, xp: xpGained, levelUp: levelUps }
+        : { currency: 0, items: [], xp: xpGained, levelUp: levelUps };
     }
 
     const turnResult: BattleTurnResult = {
@@ -636,7 +688,11 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     }
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
-    battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
+    battle.playerFamiliar = buildIncomingCombatant(
+      state.dungeon,
+      newFamiliarId,
+      state.familiarLevels?.[newFamiliarId] ?? 1
+    );
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
 
     const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
@@ -718,6 +774,66 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
     return c.json({ success: true, message: 'Successfully fled from battle', battle });
   } catch (error: unknown) {
     return internalError(c, error, 'Flee battle');
+  }
+});
+
+gameBattleRouter.post('/game/battle/abandon', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string; battleId: string; expectedTurnCount: number }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { anonymousId, battleId, expectedTurnCount } = body;
+    if (!anonymousId || !battleId) {
+      return c.json({ error: 'Missing required fields: anonymousId, battleId' }, 400);
+    }
+    if (typeof expectedTurnCount !== 'number') {
+      return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
+    }
+
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
+
+    if (!row) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
+    if (expectedTurnCount !== battle.turnCount) {
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
+    }
+
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
+
+    // Persist the active combatant's attrition. A non-boss abandon leaves the
+    // room's encounter unresolved (same as flee); a boss abandon forfeits the
+    // run. Run-loot penalties land with the run lifecycle work.
+    persistCombatantResources(state.dungeon, battle.playerFamiliar);
+    const forfeited = battle.isBoss;
+    if (forfeited) {
+      state.dungeon = null;
+    }
+
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
+    const battleStmt = c.env.DB.prepare(
+      `DELETE FROM active_battles
+         WHERE battle_id = ? AND anonymous_id = ?
+           AND json_extract(battle_json, '$.turnCount') = ?`
+    ).bind(battleId, anonymousId, battle.turnCount);
+
+    const results = await c.env.DB.batch([stateStmt, battleStmt]);
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({ success: true, state, forfeited });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Abandon battle');
   }
 });
 

@@ -148,6 +148,10 @@ class GameApiClient {
     return this.request('POST', '/api/game/state/load', { anonymousId: this.anonymousId });
   }
 
+  async bootstrap(): Promise<{ state: GameState; battle: BattleState | null }> {
+    return this.request('GET', `/api/game/bootstrap?anonymousId=${encodeURIComponent(this.anonymousId)}`);
+  }
+
   async setParty(activeParty: string[]): Promise<{ success: boolean; state: GameState }> {
     return this.request('POST', '/api/game/state/party', { anonymousId: this.anonymousId, activeParty });
   }
@@ -176,6 +180,10 @@ class GameApiClient {
 
   async exitDungeon(): Promise<{ success: boolean }> {
     return this.request('POST', '/api/game/dungeon/exit', { anonymousId: this.anonymousId });
+  }
+
+  async buyItem(itemId: string): Promise<{ success: boolean; state: GameState }> {
+    return this.request('POST', '/api/game/shop/buy', { anonymousId: this.anonymousId, itemId });
   }
 
   async startBattle(playerFamiliarId: string): Promise<{ battle: BattleState }> {
@@ -215,6 +223,17 @@ class GameApiClient {
       anonymousId: this.anonymousId,
       battleId,
       newFamiliarId,
+      expectedTurnCount,
+    });
+  }
+
+  async abandonBattle(
+    battleId: string,
+    expectedTurnCount: number
+  ): Promise<{ success: boolean; state: GameState; forfeited: boolean }> {
+    return this.request('POST', '/api/game/battle/abandon', {
+      anonymousId: this.anonymousId,
+      battleId,
       expectedTurnCount,
     });
   }

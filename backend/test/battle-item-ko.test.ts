@@ -143,7 +143,7 @@ function makeKoBattle(battleId: string): BattleState {
   };
   return {
     id: battleId,
-    playerFamiliar: makeCombatant('aquaSprite', 90, 100, true),
+    playerFamiliar: makeCombatant('aquaSprite', 60, 100, true),
     enemyFamiliar: makeCombatant('shadowLord', 300, 270, false, [speedBuff]),
     isBoss: true,
     turnCount: 0,
@@ -161,7 +161,7 @@ describe('battle action: item KO-cancellation', () => {
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'potion_small', quantity: 1 }] },
         activeParty: ['aquaSprite', 'yellowFighter'],
-        partyHp: { aquaSprite: 90, yellowFighter: 140 },
+        partyHp: { aquaSprite: 60, yellowFighter: 140 },
         partyMp: { aquaSprite: 100, yellowFighter: 60 },
       })
     );
@@ -221,7 +221,7 @@ describe('battle action: item KO-cancellation', () => {
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'lucky_coin', quantity: 1 }] },
         activeParty: ['aquaSprite', 'yellowFighter'],
-        partyHp: { aquaSprite: 90, yellowFighter: 140 },
+        partyHp: { aquaSprite: 60, yellowFighter: 140 },
         partyMp: { aquaSprite: 100, yellowFighter: 60 },
       })
     );
@@ -251,7 +251,7 @@ describe('battle action: item KO-cancellation', () => {
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'potion_small', quantity: 1 }] },
         activeParty: ['yellowFighter', 'whiteDog'],
-        partyHp: { yellowFighter: 140, whiteDog: 120 },
+        partyHp: { yellowFighter: 100, whiteDog: 120 },
         partyMp: { yellowFighter: 60, whiteDog: 80 },
       })
     );
@@ -261,7 +261,7 @@ describe('battle action: item KO-cancellation', () => {
     const battleId = 'battle-item-survives';
     const battle: BattleState = {
       id: battleId,
-      playerFamiliar: makeCombatant('yellowFighter', 140, 60, true),
+      playerFamiliar: makeCombatant('yellowFighter', 100, 60, true),
       enemyFamiliar: makeCombatant('tideTurtle', 130, 70, false),
       isBoss: false,
       turnCount: 0,

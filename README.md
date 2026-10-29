@@ -2,7 +2,7 @@
 
 A browser-based NFT creature-collector game integrated with the Immutable X (IMX) L2 marketplace. Summon familiars, battle with turn-based combat, and trade on-chain — all from your browser.
 
-> **Status:** Active development — **playable vertical slice**: dungeon exploration, server-authoritative turn-based combat (speed-ordered turns, status effects, items, party swapping, KO relay), loot and currency. Blockchain integration is the next milestone.
+> **Status:** Playable content-complete slice — 6 regions, 25 familiars, 26 abilities, 20 items, server-authoritative combat, party swapping, KO relay, shops, and familiar leveling. Blockchain/NFT deployment remains a separate milestone.
 
 ## Project Structure
 
@@ -32,7 +32,7 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 
 ### Game
 - **Phaser 4** scenes embedded in the React app (`game/`), bridged via an event bus
-- **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution) consumed by both backend and client; 127 vitest specs
+- **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution, progression) consumed by both backend and client; 150 vitest specs
 - Server-authoritative battles: the client sends actions, the Worker resolves the full turn and returns a replayable result (ordered steps, canceled actions, forced swaps)
 - HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
 
@@ -90,7 +90,9 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 - **Dungeon runs**: pick a party of 2, explore room graphs (minimap), treasure rooms, boss rooms
 - **Turn-based combat**: speed-ordered sequential turns (faster familiar acts first; a KO'd-before-acting familiar loses its action), abilities with cooldowns and MP costs, status effects (buffs, debuffs, DoT/HoT), defend, flee
 - **Party management**: swap the active familiar between rooms or mid-battle (once per turn, free); if the active familiar falls, the backup relays in automatically — defeat only when both are down
-- **Items**: inventory drops (potions, bombs, revives, currency) usable in battle; consumption respects KO cancellation
+- **Items**: inventory drops and a world-map shop (potions, ethers, bombs, cures, buffs, revives, currency); consumption respects KO cancellation
+- **Progression**: familiars earn XP and level up to 20, scaling their stats; regions unlock through boss clears
+- **Shop**: spend gold on consumables from the world map
 
 ## Development Phases
 

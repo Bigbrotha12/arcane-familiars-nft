@@ -16,6 +16,12 @@ export enum GameEvent {
   PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
 }
 
+export interface StatusEffectView {
+  id: string;
+  icon: string;
+  duration?: number;
+}
+
 export interface FamiliarState {
   id: string;
   name: string;
@@ -28,6 +34,8 @@ export interface FamiliarState {
   speed: number;
   arcane: number;
   affinity: string;
+  level?: number;
+  statusEffects?: StatusEffectView[];
 }
 
 export interface GameStateSnapshot {
@@ -106,6 +114,8 @@ export interface BattleEndedPayload {
   rewards?: {
     currency: number;
     items: string[];
+    xp?: number;
+    levelUp?: number;
   };
 }
 
@@ -115,6 +125,8 @@ export interface AbilityOption {
   description: string;
   mpCost: number;
   usable: boolean;
+  cooldown?: number;
+  disabledReason?: string;
 }
 
 export interface ItemOption {

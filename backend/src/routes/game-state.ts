@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { validateParty } from '@arcane-familiars/game-logic';
+import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import {
   getOrCreateGameState,
@@ -11,6 +11,16 @@ import { internalError, readBody } from '../utils/http';
 import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+async function getActiveBattleRow(
+  db: D1Database,
+  anonymousId: string
+): Promise<{ battle_id: string; battle_json: string } | null> {
+  return db
+    .prepare('SELECT battle_id, battle_json FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    .bind(anonymousId)
+    .first<{ battle_id: string; battle_json: string }>();
+}
 
 gameStateRouter.post('/game/state/load', async (c) => {
   try {
@@ -25,6 +35,42 @@ gameStateRouter.post('/game/state/load', async (c) => {
     return c.json({ state });
   } catch (error: unknown) {
     return internalError(c, error, 'Load state');
+  }
+});
+
+/**
+ * Bootstrap returns the save plus any active battle to resume, and repairs
+ * orphaned rows (battle without a dungeon, missing room, or already-resolved
+ * encounter) so the unique one-battle index cannot strand the player.
+ */
+gameStateRouter.get('/game/bootstrap', async (c) => {
+  try {
+    const anonymousId = c.req.query('anonymousId');
+    if (!anonymousId) {
+      return c.json({ error: 'Missing required query: anonymousId' }, 400);
+    }
+
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+    const state = loaded.state;
+    const active = await getActiveBattleRow(c.env.DB, anonymousId);
+
+    if (!active) {
+      return c.json({ state, battle: null });
+    }
+
+    const battle = JSON.parse(active.battle_json);
+    const decision = reconcileActiveBattle(state.dungeon, battle);
+    if (decision.action === 'delete') {
+      await c.env.DB.prepare('DELETE FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+        .bind(active.battle_id, anonymousId)
+        .run();
+      return c.json({ state, battle: null });
+    }
+
+    return c.json({ state, battle });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Bootstrap');
   }
 });
 
@@ -50,6 +96,10 @@ gameStateRouter.post('/game/state/party', async (c) => {
     const isGuest = c.get('isGuest') ?? false;
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
+
+    if (await getActiveBattleRow(c.env.DB, anonymousId)) {
+      return c.json({ error: 'Cannot change party during an active battle' }, 409);
+    }
 
     // Fieldable set is the persisted grants plus (flag-gated) on-chain
     // ownership. With the flag off this is exactly playerFamiliars and no

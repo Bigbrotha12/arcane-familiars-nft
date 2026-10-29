@@ -39,6 +39,7 @@ import type {
   BattlePhase,
   AbilityOption,
   ItemOption,
+  StatusEffectView,
 } from '../events';
 
 interface BattleSceneData {
@@ -126,11 +127,17 @@ export class BattleScene extends Phaser.Scene {
       verdantMeadow: 'battle_bg_verdant',
       crystalCaves: 'battle_bg_crystal',
       shadowForest: 'battle_bg_shadow',
+      emberHollow: 'battle_bg_crystal',
+      frostpeakSummit: 'battle_bg_shadow',
+      sunkenArchive: 'battle_bg_crystal',
     };
     const bossBgMap: Record<string, string> = {
       meadowGuardian: 'battle_bg_meadow_guardian',
       caveWarden: 'battle_bg_cave_warden',
       shadowLord: 'battle_bg_shadow_lord',
+      emberTitan: 'battle_bg_cave_warden',
+      frostQueen: 'battle_bg_shadow_lord',
+      archiveKeeper: 'battle_bg_shadow_lord',
     };
 
     let bgKey: string | undefined;
@@ -162,9 +169,13 @@ export class BattleScene extends Phaser.Scene {
     this.emitStateUpdate();
 
     try {
-      const { state } = await gameApiClient.loadGameState();
+      const { state, battle } = await gameApiClient.bootstrap();
       this.gameState = state;
-      await this.startBattle();
+      if (battle) {
+        this.adoptBattle(battle);
+      } else {
+        await this.startBattle();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load game';
       this.handleBattleSetupError(message);
@@ -190,46 +201,64 @@ export class BattleScene extends Phaser.Scene {
       const playerFamiliarId = party[this.activeFamiliarIndex] ?? party[0];
       if (!playerFamiliarId) throw new Error('No active party member');
       const result = await gameApiClient.startBattle(playerFamiliarId);
-      this.battleState = result.battle;
-
-      this.battleUI.hideConnecting();
-      this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
-      this.battleUI.updateEnemyDisplay(result.battle.enemyFamiliar);
-      this.battleUI.addLogMessage(`Battle begins against ${result.battle.enemyFamiliar.familiarData.name}!`);
-      this.battleUI.addLogMessage('Choose your action.');
-
-      // NEW: full battle-start contract for React HUD
-      const enemy = result.battle.enemyFamiliar;
-      const partyIds =
-        (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
-      const playerFamiliars: FamiliarState[] = partyIds
-        .map((id) => getFamiliar(id))
-        .filter((fd): fd is FamiliarData => Boolean(fd))
-        .map((fd) => {
-          const state = toFamiliarStateFromData(fd);
-          const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
-          const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
-          if (typeof hp === 'number') state.hp = hp;
-          if (typeof mp === 'number') state.mp = mp;
-          return state;
-        });
-      if (playerFamiliars.length > 0) {
-        playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar);
-      }
-      gameEventBus.emit(GameEvent.BATTLE_STARTED, {
-        enemyId: enemy.familiarData.id,
-        enemyName: enemy.familiarData.name,
-        enemyHp: enemy.currentHp,
-        enemyMaxHp: enemy.familiarData.stats.maxHp || enemy.currentHp,
-        isBoss: result.battle.isBoss,
-        playerFamiliars,
-      } satisfies BattleStartedPayload);
-      this.phase = 'menu';
-      this.emitStateUpdate();
+      this.enterBattle(result.battle, `Battle begins against ${result.battle.enemyFamiliar.familiarData.name}!`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start battle';
       this.handleBattleSetupError(message);
     }
+  }
+
+  /**
+   * Resume a battle returned by bootstrap. Combat HP/MP live in the battle row,
+   * so resuming is the only refresh-safe path; starting a new battle would
+   * restore the dungeon's persisted (pre-turn) HP.
+   */
+  private adoptBattle(battle: BattleState): void {
+    this.enterBattle(battle, `Resuming battle against ${battle.enemyFamiliar.familiarData.name}!`);
+  }
+
+  private enterBattle(battle: BattleState, openingMessage: string): void {
+    this.battleState = battle;
+
+    const partyIds =
+      (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const activeIndex = partyIds.indexOf(battle.playerFamiliar.familiarData.id);
+    if (activeIndex !== -1) {
+      this.activeFamiliarIndex = activeIndex;
+    }
+
+    this.battleUI.hideConnecting();
+    this.battleUI.updatePlayerDisplay(battle.playerFamiliar);
+    this.battleUI.updateEnemyDisplay(battle.enemyFamiliar);
+    this.battleUI.addLogMessage(openingMessage);
+    this.battleUI.addLogMessage('Choose your action.');
+
+    const enemy = battle.enemyFamiliar;
+    const playerFamiliars: FamiliarState[] = partyIds
+      .map((id) => getFamiliar(id))
+      .filter((fd): fd is FamiliarData => Boolean(fd))
+      .map((fd) => {
+        const state = toFamiliarStateFromData(fd);
+        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
+        const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
+        const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
+        if (typeof hp === 'number') state.hp = hp;
+        if (typeof mp === 'number') state.mp = mp;
+        return state;
+      });
+    if (playerFamiliars.length > 0) {
+      playerFamiliars[0] = this.toFamiliarState(battle.playerFamiliar);
+    }
+    gameEventBus.emit(GameEvent.BATTLE_STARTED, {
+      enemyId: enemy.familiarData.id,
+      enemyName: enemy.familiarData.name,
+      enemyHp: enemy.currentHp,
+      enemyMaxHp: enemy.familiarData.stats.maxHp || enemy.currentHp,
+      isBoss: battle.isBoss,
+      playerFamiliars,
+    } satisfies BattleStartedPayload);
+    this.phase = 'menu';
+    this.emitStateUpdate();
   }
 
   private async handleAction(action: BattleAction): Promise<void> {
@@ -556,6 +585,7 @@ export class BattleScene extends Phaser.Scene {
       result.effectType === EffectType.Hot ||
       result.effectType === EffectType.MpHeal;
     if (!isDamage && !isHeal) return;
+    if (result.value <= 0) return;
     if (!this.battleState) return;
 
     const enemyUid = this.battleState.enemyFamiliar.uid;
@@ -581,7 +611,9 @@ export class BattleScene extends Phaser.Scene {
     this.battleUI.addLogMessage('Battle won!');
     this.battleOutcome = {
       outcome: 'victory',
-      rewards: rewards ? { currency: rewards.currency, items: rewards.items } : undefined,
+      rewards: rewards
+        ? { currency: rewards.currency, items: rewards.items, xp: rewards.xp, levelUp: rewards.levelUp }
+        : undefined,
     };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
@@ -631,6 +663,22 @@ export class BattleScene extends Phaser.Scene {
     });
   };
 
+  private toStatusViews(f: BattleFamiliar): StatusEffectView[] {
+    return f.statusEffects.map((effect, index) => {
+      const icon =
+        effect.type === EffectType.Dot
+          ? '☠'
+          : effect.type === EffectType.Hot
+            ? '✚'
+            : effect.type === EffectType.Buff
+              ? '⬆'
+              : effect.type === EffectType.Debuff
+                ? '⬇'
+                : '✦';
+      return { id: `${effect.abilityId}-${index}`, icon, duration: effect.turnsRemaining };
+    });
+  }
+
   private toFamiliarState(f: BattleFamiliar): FamiliarState {
     return {
       id: f.familiarData.id,
@@ -644,6 +692,8 @@ export class BattleScene extends Phaser.Scene {
       speed: f.familiarData.stats.speed,
       arcane: f.familiarData.stats.arcane,
       affinity: Affinity[f.familiarData.affinity] ?? String(f.familiarData.affinity),
+      level: this.gameState?.familiarLevels?.[f.familiarData.id] ?? 1,
+      statusEffects: this.toStatusViews(f),
     };
   }
 
@@ -665,6 +715,7 @@ export class BattleScene extends Phaser.Scene {
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
         const state = toFamiliarStateFromData(fd);
+        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -679,13 +730,20 @@ export class BattleScene extends Phaser.Scene {
     const abilities: AbilityOption[] = player.familiarData.abilities
       .map((id) => getAbility(id))
       .filter((a): a is AbilityData => Boolean(a))
-      .map((ability) => ({
-        id: ability.id,
-        name: ability.name,
-        description: ability.description,
-        mpCost: ability.mpCost,
-        usable: player.currentMp >= ability.mpCost,
-      }));
+      .map((ability) => {
+        const cooldown = player.cooldowns[ability.id] ?? 0;
+        const hasMp = player.currentMp >= ability.mpCost;
+        const disabledReason = cooldown > 0 ? `Cooldown ${cooldown}` : !hasMp ? 'Not enough MP' : undefined;
+        return {
+          id: ability.id,
+          name: ability.name,
+          description: ability.description,
+          mpCost: ability.mpCost,
+          usable: !disabledReason,
+          cooldown,
+          disabledReason,
+        };
+      });
     const items: ItemOption[] = (this.gameState?.inventory?.items ?? [])
       .map((item) => ({ item, itemData: getItem(item.itemId) }))
       .filter((entry): entry is { item: InventoryItem; itemData: ItemData } => Boolean(entry.itemData))
@@ -723,13 +781,38 @@ export class BattleScene extends Phaser.Scene {
   };
 
   private handleExit = (): void => {
+    void this.abandonAndLeave();
+  };
+
+  private abandonAndLeave = async (): Promise<void> => {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
+
+    try {
+      if (this.battleState) {
+        await gameApiClient.abandonBattle(this.battleState.id, this.battleState.turnCount);
+      }
+    } catch (err) {
+      // Do not trap the player on a failed abandon; bootstrap will reconcile an
+      // orphaned row on the next load.
+      console.error('Abandon battle error:', err);
+    }
+
     this.battleUI.destroy();
-    // Clean up battle background
     this.sceneBackground?.destroy();
     this.sceneBackground = undefined;
-    this.scene.start(SCENE_KEYS.WORLD_MAP);
+
+    if (this.battleState?.isBoss) {
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      return;
+    }
+    this.scene.start(this.returnScene, {
+      areaId: this.areaId,
+      pendingTreasureItemId: this.pendingTreasureItemId,
+      activeIndex: this.activeFamiliarIndex,
+      enemiesDefeated: this.enemiesDefeated,
+      roomsExplored: this.roomsExplored,
+    });
   };
 
   private onShutdown(): void {

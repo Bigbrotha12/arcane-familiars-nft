@@ -12,6 +12,7 @@ import metadataRouter from './routes/metadata';
 import gameStateRouter from './routes/game-state';
 import gameExplorationRouter from './routes/game-exploration';
 import gameBattleRouter from './routes/game-battle';
+import gameShopRouter from './routes/game-shop';
 import ownedFamiliarsRouter from './routes/game-owned-familiars';
 import { createGameMintRouter } from './routes/game-mint';
 import { createMintingProvider } from './services/minting/provider';
@@ -98,6 +99,7 @@ app.route('/api', metadataRouter);
 app.route('/api', gameStateRouter);
 app.route('/api', gameExplorationRouter);
 app.route('/api', gameBattleRouter);
+app.route('/api', gameShopRouter);
 app.route('/api', ownedFamiliarsRouter);
 // BC2 mint seam. Real provider factory; tests inject a mock by building their
 // own app with createGameMintRouter.

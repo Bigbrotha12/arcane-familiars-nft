@@ -106,3 +106,20 @@ export interface FleeBattleResponse {
   message: string;
   battle: BattleState;
 }
+
+export interface BootstrapResponse {
+  state: GameState;
+  battle: BattleState | null;
+}
+
+export interface AbandonBattleRequest {
+  anonymousId: string;
+  battleId: string;
+  expectedTurnCount: number;
+}
+
+export interface AbandonBattleResponse {
+  success: boolean;
+  state: GameState;
+  forfeited: boolean;
+}
