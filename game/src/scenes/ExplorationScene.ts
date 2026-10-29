@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import type { DungeonState, Area, Room } from '@arcane-familiars/game-logic';
-import { AREAS, RoomType, getFamiliar, Directions } from '@arcane-familiars/game-logic';
+import { AREAS, RoomType, getFamiliar, getRunLoot, Directions } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI } from '../ui/ExplorationUI';
 import { Layout } from '../ui/layout';
@@ -325,6 +325,9 @@ export class ExplorationScene extends Phaser.Scene {
       if (this.fullGameState) {
         this.fullGameState.inventory = result.inventory;
       }
+      if (this.dungeon) {
+        this.dungeon.runLoot = result.runLoot;
+      }
       this.explorationUI.addLogMessage(`You took ${itemId}.`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to collect treasure';
@@ -426,7 +429,7 @@ export class ExplorationScene extends Phaser.Scene {
     const snapshot: GameStateSnapshot = {
       familiars: party,
       activeId: party[leadIdx]?.id,
-      currency: this.fullGameState?.inventory?.currency ?? 0,
+      currency: (this.fullGameState?.inventory?.currency ?? 0) + getRunLoot(this.dungeon).currency,
       battleCount: this.fullGameState?.battleCount ?? 0,
       wins: this.fullGameState?.winCount ?? 0,
       currentScene: 'exploration',
@@ -446,6 +449,8 @@ export class ExplorationScene extends Phaser.Scene {
       encounterActive: this.encounterActive,
       treasureActive: this.treasureActive,
       bossRoom: this.bossActive,
+      runLootCurrency: getRunLoot(this.dungeon).currency,
+      runLootItems: getRunLoot(this.dungeon).items.map((item) => item.itemId),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }

@@ -62,6 +62,8 @@ export interface GameStateSnapshot {
   encounterActive?: boolean;
   treasureActive?: boolean;
   bossRoom?: boolean;
+  runLootCurrency?: number;
+  runLootItems?: string[];
 }
 
 export interface SaveResult {
@@ -118,6 +120,10 @@ export interface BattleEndedPayload {
     levelUp?: number;
     recruitedFamiliar?: string;
     recruitedName?: string;
+  };
+  lostLoot?: {
+    currency: number;
+    items: { itemId: string; quantity: number }[];
   };
 }
 

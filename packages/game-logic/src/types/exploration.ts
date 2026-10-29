@@ -1,4 +1,5 @@
 import type { Directions } from '@/utils/dungeonEngine';
+import type { Inventory } from '@/types/gameState';
 
 export interface Area {
   id: string;
@@ -60,4 +61,6 @@ export interface DungeonState {
   rooms: Record<string, Room>;
   activeIndex?: number;
   seed?: number;
+  /** Loot found during this run; banked on exit/victory, lost on defeat. */
+  runLoot?: Inventory;
 }

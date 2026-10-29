@@ -52,6 +52,7 @@ export interface CollectTreasureRequest {
 export interface CollectTreasureResponse {
   success: boolean;
   inventory: Inventory;
+  runLoot: Inventory;
 }
 
 export interface ExitDungeonRequest {

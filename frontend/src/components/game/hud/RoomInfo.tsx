@@ -40,6 +40,13 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
         </p>
       )}
 
+      {(snapshot.runLootCurrency ?? 0) > 0 || (snapshot.runLootItems?.length ?? 0) > 0 ? (
+        <p className="font-mono text-[9px] tabular-nums text-yellow">
+          Run loot: {snapshot.runLootCurrency ?? 0}g
+          {snapshot.runLootItems?.length ? ` · ${snapshot.runLootItems.length} items` : ''}
+        </p>
+      ) : null}
+
       <p className="font-mono text-[9px] tracking-wider text-[#A5A3C4]">
         Room {dungeon.currentRoomIndex + 1}/{dungeon.roomCount}
       </p>

@@ -14,6 +14,9 @@ import {
   validateDungeonExplore,
   validateParty,
   scaleFamiliarStats,
+  getRunLoot,
+  addInventoryItem,
+  bankRunLoot,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import {
@@ -258,19 +261,17 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     pending.looted = true;
 
-    const existingItem = state.inventory.items.find((i) => i.itemId === itemId);
-    if (existingItem) {
-      existingItem.quantity += 1;
-    } else {
-      state.inventory.items.push({ itemId, quantity: 1 });
-    }
+    // Treasure is run loot, not banked inventory. It is usable during the run
+    // and is lost on defeat; exiting or winning banks it.
+    const runLoot = getRunLoot(state.dungeon);
+    addInventoryItem(runLoot, itemId);
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, inventory: state.inventory });
+    return c.json({ success: true, inventory: state.inventory, runLoot });
   } catch (error: unknown) {
     return internalError(c, error, 'Collect treasure');
   }
@@ -303,6 +304,8 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ success: true });
     }
 
+    // Leaving banks everything found this run.
+    bankRunLoot(state);
     state.dungeon = null;
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);

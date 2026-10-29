@@ -18,7 +18,7 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
   const flavor = isVictory
     ? 'Your familiars prevailed!'
     : result === 'defeat'
-      ? 'Your party has fallen... 10% of your currency was lost.'
+      ? 'Your party has fallen... all loot found this run is lost.'
       : 'You escaped the encounter.';
 
   return (
@@ -46,6 +46,19 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
               ) : null}
             </div>
           )}
+
+          {result === 'defeat' && outcome.lostLoot ? (
+            <div className="mt-0.5 flex flex-col items-center gap-0.5">
+              {outcome.lostLoot.currency > 0 && (
+                <p className="font-mono text-sm tabular-nums text-error">-{outcome.lostLoot.currency} coins</p>
+              )}
+              {outcome.lostLoot.items.length > 0 && (
+                <p className="font-body text-xs text-[#F0EFFF]">
+                  Lost: {outcome.lostLoot.items.map((item) => `${item.itemId} x${item.quantity}`).join(', ')}
+                </p>
+              )}
+            </div>
+          ) : null}
         </div>
 
         <Button size="md" onClick={onContinue}>

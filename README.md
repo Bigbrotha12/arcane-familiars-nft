@@ -93,6 +93,7 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 - **Items**: inventory drops and a world-map shop (potions, ethers, bombs, cures, buffs, revives, currency); consumption respects KO cancellation
 - **Progression**: familiars earn XP and level up to 20, scaling their stats; non-boss victories can recruit the defeated species; regions unlock through boss clears
 - **Shop**: spend gold on consumables from the world map
+- **Push-your-luck loot**: items and gold found in a run are run loot, usable immediately but lost if the party is KO'd; exit or clear the boss to bank them
 
 ## Development Phases
 

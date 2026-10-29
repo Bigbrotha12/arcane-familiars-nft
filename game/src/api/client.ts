@@ -170,7 +170,10 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/explore', { anonymousId: this.anonymousId, roomId });
   }
 
-  async collectTreasure(roomId: string, itemId: string): Promise<{ success: boolean; inventory: Inventory }> {
+  async collectTreasure(
+    roomId: string,
+    itemId: string
+  ): Promise<{ success: boolean; inventory: Inventory; runLoot: Inventory }> {
     return this.request('POST', '/api/game/dungeon/collect-treasure', {
       anonymousId: this.anonymousId,
       roomId,

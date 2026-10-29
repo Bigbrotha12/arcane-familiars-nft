@@ -1,5 +1,6 @@
 import type { StatName, EffectType } from '@/data/abilities';
 import type { FamiliarData } from '@/data/familiars';
+import type { Inventory } from '@/types/gameState';
 
 export interface BattleFamiliar {
   /** Unique identity of this combatant within the battle. Unlike `familiarData.id`
@@ -94,6 +95,8 @@ export interface BattleTurnResult {
   steps: TurnStep[];
   /** Actions skipped because their actor was KO'd before it could act. */
   canceledActions: CanceledAction[];
+  /** Set on defeat: run loot discarded because the party fell. */
+  lostLoot?: Inventory;
   /** Set when the active familiar was KO'd and a living party member
    *  involuntarily took its place (battleOutcome is then Continue). */
   forcedSwap?: ForcedSwapInfo;

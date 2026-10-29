@@ -12,13 +12,13 @@ import {
   getAbility,
   getItem,
   getFamiliar,
+  getRunLoot,
   describeItem,
   Affinity,
   type FamiliarData,
   type AbilityData,
   type ItemData,
   type BattleFamiliar,
-  type InventoryItem,
 } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { BattleUI } from '../ui/BattleUI';
@@ -363,7 +363,7 @@ export class BattleScene extends Phaser.Scene {
       } else if (outcome === Outcome.Win) {
         this.handleVictory(rewards);
       } else if (outcome === Outcome.Loss) {
-        this.handleDefeat();
+        this.handleDefeat(turnResult.lostLoot);
       } else {
         this.phase = 'menu';
       }
@@ -626,9 +626,9 @@ export class BattleScene extends Phaser.Scene {
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
   }
 
-  private handleDefeat(): void {
+  private handleDefeat(lostLoot?: { currency: number; items: { itemId: string; quantity: number }[] }): void {
     this.battleUI.addLogMessage('You were defeated...');
-    this.battleOutcome = { outcome: 'defeat' };
+    this.battleOutcome = { outcome: 'defeat', lostLoot };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
   }
@@ -751,20 +751,25 @@ export class BattleScene extends Phaser.Scene {
           disabledReason,
         };
       });
-    const items: ItemOption[] = (this.gameState?.inventory?.items ?? [])
-      .map((item) => ({ item, itemData: getItem(item.itemId) }))
-      .filter((entry): entry is { item: InventoryItem; itemData: ItemData } => Boolean(entry.itemData))
-      .map(({ item, itemData }) => ({
-        id: item.itemId,
+    const itemTotals = new Map<string, number>();
+    for (const item of [...(this.gameState?.inventory?.items ?? []), ...getRunLoot(this.gameState?.dungeon).items]) {
+      itemTotals.set(item.itemId, (itemTotals.get(item.itemId) ?? 0) + item.quantity);
+    }
+    const items: ItemOption[] = [...itemTotals]
+      .map(([itemId, quantity]) => ({ itemId, quantity, itemData: getItem(itemId) }))
+      .filter((entry): entry is { itemId: string; quantity: number; itemData: ItemData } => Boolean(entry.itemData))
+      .map(({ itemId, quantity, itemData }) => ({
+        id: itemId,
         name: itemData.name,
         description: describeItem(itemData),
-        quantity: item.quantity,
-        usable: item.quantity > 0,
+        quantity,
+        usable: quantity > 0,
         iconUrl: itemData.icon ? `/assets/sprites/items/${itemData.icon}` : undefined,
       }));
+    const runLoot = getRunLoot(this.gameState?.dungeon);
     const snapshot: GameStateSnapshot = {
       familiars: [this.toFamiliarState(player)],
-      currency: this.gameState?.inventory?.currency ?? 0,
+      currency: (this.gameState?.inventory?.currency ?? 0) + runLoot.currency,
       battleCount: this.gameState?.battleCount ?? 0,
       wins: this.gameState?.winCount ?? 0,
       currentScene: 'battle',
@@ -776,6 +781,8 @@ export class BattleScene extends Phaser.Scene {
       canSwap: partyIds.length >= 2,
       party,
       isBoss: this.battleState.isBoss,
+      runLootCurrency: runLoot.currency,
+      runLootItems: runLoot.items.map((item) => item.itemId),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }

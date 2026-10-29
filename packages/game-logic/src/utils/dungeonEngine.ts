@@ -2,6 +2,7 @@ import { type Area, type Room, type DungeonState, RoomType } from '@/types/explo
 import type { FamiliarData } from '@/data/familiars';
 import { ITEMS } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
+import { emptyInventory } from '@/utils/runLoot';
 
 /**
  * Dungeon treasure pool, derived from item data: any item with a dropWeight
@@ -152,6 +153,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     partyMp: {},
     rooms,
     seed,
+    runLoot: emptyInventory(),
   };
 }
 

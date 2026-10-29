@@ -24,6 +24,12 @@ import {
   applyFamiliarXp,
   scaleFamiliarStats,
   Rarity,
+  getRunLoot,
+  addInventoryItem,
+  bankRunLoot,
+  discardRunLoot,
+  findOwnedItem,
+  consumeOwnedItem,
   BattleResult,
   ActionType,
   Outcome,
@@ -367,8 +373,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let consumedItem: ItemData | undefined;
     let faintedPartyIds: string[] = [];
     if (action.type === ActionType.Item && action.itemId) {
-      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
-      if (!itemEntry || typeof itemEntry.quantity !== 'number' || itemEntry.quantity < 1) {
+      const owned = findOwnedItem(state, action.itemId);
+      if (!owned) {
         return c.json({ error: 'You do not own this item' }, 400);
       }
       const item = getItem(action.itemId);
@@ -418,10 +424,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // applied here rather than in the battle engine, which only sees the two
     // active combatants.
     if (action.type === ActionType.Item && action.itemId && playerActed && consumedItem) {
-      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
-      if (itemEntry) {
-        itemEntry.quantity -= 1;
-      }
+      consumeOwnedItem(state, action.itemId);
 
       for (const effect of consumedItem.effects) {
         if (effect.kind === 'grant_currency') {
@@ -490,6 +493,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let rewards: BattleRewards | undefined;
     let xpGained = 0;
     let levelUps = 0;
+    let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
@@ -521,14 +525,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.defeatedBosses.push(area.bossId);
             // One-time reward: re-fighting a defeated boss does not farm
             // currency or items (the encounter can otherwise be re-entered).
-            state.inventory.currency += area.bossReward.currency;
+            const runLoot = getRunLoot(state.dungeon);
+            runLoot.currency += area.bossReward.currency;
             for (const itemId of area.bossReward.items) {
-              const existing = state.inventory.items.find((i) => i.itemId === itemId);
-              if (existing) {
-                existing.quantity += 1;
-              } else {
-                state.inventory.items.push({ itemId, quantity: 1 });
-              }
+              addInventoryItem(runLoot, itemId);
             }
             rewards = { currency: area.bossReward.currency, items: [...area.bossReward.items] };
           }
@@ -539,18 +539,16 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.unlockedAreas.push(area.unlocks);
           }
         }
+        // A boss clear ends the run; bank everything found plus the boss reward.
+        bankRunLoot(state);
         state.dungeon = null;
       } else {
         const battleRewards = generateBattleRewards(rng);
         rewards = battleRewards;
-        state.inventory.currency += battleRewards.currency;
+        const runLoot = getRunLoot(state.dungeon);
+        runLoot.currency += battleRewards.currency;
         for (const itemId of battleRewards.items) {
-          const existing = state.inventory.items.find((i) => i.itemId === itemId);
-          if (existing) {
-            existing.quantity += 1;
-          } else {
-            state.inventory.items.push({ itemId, quantity: 1 });
-          }
+          addInventoryItem(runLoot, itemId);
         }
 
         // Non-boss victories can recruit the defeated species. Rarer species
@@ -572,9 +570,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
-      // Defeat costs 10% of banked currency. The full run-loot penalty is a
-      // later milestone; this keeps failure meaningful until then.
-      state.inventory.currency = Math.floor(state.inventory.currency * 0.9);
+      // The run's loot is lost; the banked inventory is untouched.
+      lostLoot = discardRunLoot(state);
       state.dungeon = null;
     } else {
       if (state.dungeon) {
@@ -595,6 +592,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       enemyFamiliar: battle.enemyFamiliar,
       battleOutcome: outcome,
       rewards,
+      lostLoot,
       steps: turnSteps,
       canceledActions,
       forcedSwap,
