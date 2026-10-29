@@ -585,6 +585,7 @@ export class BattleScene extends Phaser.Scene {
       result.effectType === EffectType.Hot ||
       result.effectType === EffectType.MpHeal;
     if (!isDamage && !isHeal) return;
+    if (result.value <= 0) return;
     if (!this.battleState) return;
 
     const enemyUid = this.battleState.enemyFamiliar.uid;
