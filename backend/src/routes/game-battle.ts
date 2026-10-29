@@ -23,6 +23,7 @@ import {
   resolveBattleRoomId,
   applyFamiliarXp,
   scaleFamiliarStats,
+  Rarity,
   BattleResult,
   ActionType,
   Outcome,
@@ -528,9 +529,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         }
         state.dungeon = null;
       } else {
-        rewards = generateBattleRewards(rng);
-        state.inventory.currency += rewards.currency;
-        for (const itemId of rewards.items) {
+        const battleRewards = generateBattleRewards(rng);
+        rewards = battleRewards;
+        state.inventory.currency += battleRewards.currency;
+        for (const itemId of battleRewards.items) {
           const existing = state.inventory.items.find((i) => i.itemId === itemId);
           if (existing) {
             existing.quantity += 1;
@@ -538,6 +540,19 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.inventory.items.push({ itemId, quantity: 1 });
           }
         }
+
+        // Non-boss victories can recruit the defeated species. Rarer species
+        // are less likely; already-owned species are skipped.
+        const species = getFamiliar(battle.enemyFamiliar.familiarData.id);
+        if (species && !species.isBoss && !state.playerFamiliars.includes(species.id)) {
+          const chance = species.rarity >= Rarity.Rare ? 0.12 : 0.22;
+          if (rng() < chance) {
+            state.playerFamiliars.push(species.id);
+            battleRewards.recruitedFamiliar = species.id;
+            battleRewards.recruitedName = species.name;
+          }
+        }
+
         if (state.dungeon) {
           persistCombatantResources(state.dungeon, battle.playerFamiliar);
         }
