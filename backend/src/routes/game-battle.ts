@@ -247,11 +247,12 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       // The level was fixed when the encounter was rolled (explore), so fleeing
       // and re-starting cannot reroll enemy strength.
       const level = pending.level ?? area.levelRange[0];
+      const scaled = scaleEnemy(baseEnemy, level);
       enemyFamiliar = {
         uid: generateId(),
-        familiarData: scaleEnemy(baseEnemy, level),
-        currentHp: Math.round(baseEnemy.stats.hp * (1 + 0.1 * (level - 1))),
-        currentMp: Math.round(baseEnemy.stats.mp * (1 + 0.1 * (level - 1))),
+        familiarData: scaled,
+        currentHp: scaled.stats.hp,
+        currentMp: scaled.stats.mp,
         statusEffects: [],
         cooldowns: {},
         isAlly: false,
@@ -494,7 +495,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       state.winCount = (state.winCount ?? 0) + 1;
 
       const activeId = battle.playerFamiliar.familiarData.id;
-      xpGained = 20 + (battle.isBoss ? 40 : 0);
+      xpGained = 40 + (battle.isBoss ? 60 : 0);
       state.familiarLevels ??= {};
       state.familiarXp ??= {};
       const progress = applyFamiliarXp(state.familiarLevels[activeId] ?? 1, state.familiarXp[activeId] ?? 0, xpGained);

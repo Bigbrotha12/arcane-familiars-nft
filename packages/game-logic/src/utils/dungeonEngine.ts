@@ -206,7 +206,8 @@ export function selectEnemy(area: Area, rng: () => number): string | null {
  * Uses the plan's scaling: base stats * (1 + 0.1 * (level - 1))
  */
 export function scaleEnemy(baseFamiliar: FamiliarData, level: number): FamiliarData {
-  const scaleFactor = 1 + 0.1 * (level - 1);
+  // Keep the enemy curve in lockstep with player familiar levels (+6%/level).
+  const scaleFactor = 1 + 0.06 * (level - 1);
   return {
     ...baseFamiliar,
     stats: {
