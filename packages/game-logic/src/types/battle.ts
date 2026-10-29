@@ -112,6 +112,10 @@ export enum BattleResult {
 }
 export interface BattleState {
   id: string;
+  /** Room whose pending encounter this battle belongs to. Persisted so a win
+   *  resolves the fought room, not wherever the player has since moved. Optional
+   *  for battles persisted before this field existed. */
+  roomId?: string;
   playerFamiliar: BattleFamiliar;
   enemyFamiliar: BattleFamiliar;
   isBoss: boolean;

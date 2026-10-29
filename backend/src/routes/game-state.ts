@@ -1,8 +1,12 @@
 import { Hono } from 'hono';
-import { validateParty } from '@arcane-familiars/game-logic';
+import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-logic';
 import type { Bindings } from '../types';
-import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { getOrCreateGameState, loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
 import { getErrorMessage, readBody } from '../utils/http';
+import {
+  deleteActiveBattle,
+  loadActiveBattle,
+} from '../utils/activeBattle';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings }>();
 
@@ -19,6 +23,58 @@ gameStateRouter.post('/game/state/load', async (c) => {
   } catch (error: unknown) {
     console.error('Load state error:', getErrorMessage(error));
     return c.json({ error: 'Failed to load game state' }, 500);
+  }
+});
+
+/**
+ * Bootstrap returns the save plus any battle that should be resumed. It also
+ * repairs orphaned battle rows: a battle without a dungeon, a battle whose
+ * room is gone, or a battle whose encounter is already resolved is deleted so
+ * the player is not stuck behind the one-battle-per-user index.
+ */
+gameStateRouter.get('/game/bootstrap', async (c) => {
+  try {
+    const anonymousId = c.req.query('anonymousId');
+    if (!anonymousId) {
+      return c.json({ error: 'Missing required query: anonymousId' }, 400);
+    }
+
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
+    const state = loaded.state;
+    let version = loaded.version;
+
+    // One-time import of a battle row written before the battle moved into the
+    // save document. The table remains only for legacy rows.
+    if (!state.activeBattle) {
+      const legacy = await loadActiveBattle(c.env.DB, anonymousId);
+      if (legacy) {
+        state.activeBattle = legacy.battle;
+        const imported = await saveGameStateIfVersion(c.env.DB, anonymousId, state, version);
+        if (!imported) {
+          const fresh = await loadGameState(c.env.DB, anonymousId);
+          return c.json({ state: fresh?.state ?? state, battle: fresh?.state.activeBattle ?? null });
+        }
+        version += 1;
+        await deleteActiveBattle(c.env.DB, anonymousId);
+      }
+    }
+
+    const decision = reconcileActiveBattle(state.dungeon, state.activeBattle);
+    if (decision.action === 'delete') {
+      state.activeBattle = null;
+      const cleaned = await saveGameStateIfVersion(c.env.DB, anonymousId, state, version);
+      if (!cleaned) {
+        // Another writer moved the save between load and cleanup. Return the
+        // fresh state; the next bootstrap will reconcile again.
+        const fresh = await loadGameState(c.env.DB, anonymousId);
+        return c.json({ state: fresh?.state ?? state, battle: fresh?.state.activeBattle ?? null });
+      }
+    }
+
+    return c.json({ state, battle: state.activeBattle });
+  } catch (error: unknown) {
+    console.error('Bootstrap error:', getErrorMessage(error));
+    return c.json({ error: 'Failed to bootstrap game state' }, 500);
   }
 });
 
@@ -43,6 +99,10 @@ gameStateRouter.post('/game/state/party', async (c) => {
 
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
     const state = loaded.state;
+
+    if (state.activeBattle) {
+      return c.json({ error: 'Cannot change party during an active battle' }, 409);
+    }
 
     const validation = validateParty(activeParty, state.playerFamiliars);
     if (!validation.valid) {
@@ -95,11 +155,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId);
     const state = loaded.state;
 
-    const activeBattle = await c.env.DB
-      .prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
-      .bind(anonymousId)
-      .first();
-    if (activeBattle) {
+    if (state.activeBattle) {
       return c.json({ error: 'Cannot swap party during an active battle' }, 409);
     }
 
@@ -116,7 +172,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     // Mid-run aliveness: with a dungeon in progress the run tracks per-familiar
     // HP, and promoting a fainted familiar would make it the battle-start lead
     // at 0 HP. Outside a run there is no HP concept, so this does not apply.
-    if (state.dungeon && (state.dungeon.partyHp[familiarId] ?? 0) <= 0) {
+    if (state.dungeon && (state.dungeon.partyHp?.[familiarId] ?? 0) <= 0) {
       return c.json({ error: 'Cannot make a fainted familiar the lead' }, 400);
     }
 

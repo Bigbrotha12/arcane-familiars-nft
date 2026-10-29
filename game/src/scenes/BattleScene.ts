@@ -133,9 +133,13 @@ preload(): void {
     this.emitStateUpdate();
 
     try {
-      const { state } = await gameApiClient.loadGameState();
+      const { state, battle } = await gameApiClient.bootstrap();
       this.gameState = state;
-      await this.startBattle();
+      if (battle) {
+        this.adoptBattle(battle);
+      } else {
+        await this.startBattle();
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to load game';
       this.handleBattleSetupError(message);
@@ -158,45 +162,63 @@ preload(): void {
       const playerFamiliarId = party[this.activeFamiliarIndex] ?? party[0];
       if (!playerFamiliarId) throw new Error('No active party member');
       const result = await gameApiClient.startBattle(playerFamiliarId);
-      this.battleState = result.battle;
-
-      this.battleUI.hideConnecting();
-      this.battleUI.updatePlayerDisplay(result.battle.playerFamiliar);
-      this.battleUI.updateEnemyDisplay(result.battle.enemyFamiliar);
-      this.battleUI.addLogMessage(`Battle begins against ${result.battle.enemyFamiliar.familiarData.name}!`);
-      this.battleUI.addLogMessage('Choose your action.');
-
-      // NEW: full battle-start contract for React HUD
-      const enemy = result.battle.enemyFamiliar
-      const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? []
-      const playerFamiliars: FamiliarState[] = partyIds
-        .map((id) => getFamiliar(id))
-        .filter((fd): fd is FamiliarData => Boolean(fd))
-        .map((fd) => {
-          const state = toFamiliarStateFromData(fd);
-          const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
-          const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
-          if (typeof hp === 'number') state.hp = hp;
-          if (typeof mp === 'number') state.mp = mp;
-          return state;
-        })
-      if (playerFamiliars.length > 0) {
-        playerFamiliars[0] = this.toFamiliarState(result.battle.playerFamiliar)
-      }
-      gameEventBus.emit(GameEvent.BATTLE_STARTED, {
-        enemyId: enemy.familiarData.id,
-        enemyName: enemy.familiarData.name,
-        enemyHp: enemy.currentHp,
-        enemyMaxHp: enemy.familiarData.stats.maxHp || enemy.currentHp,
-        isBoss: result.battle.isBoss,
-        playerFamiliars,
-      } satisfies BattleStartedPayload)
-      this.phase = 'menu'
-      this.emitStateUpdate()
+      this.enterBattle(result.battle, `Battle begins against ${result.battle.enemyFamiliar.familiarData.name}!`);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to start battle';
       this.handleBattleSetupError(message);
     }
+  }
+
+  /**
+   * Resume a battle returned by bootstrap. Used after a refresh or when the
+   * player re-enters a run with an active battle row. Combat HP/MP live in the
+   * battle state, so this is the only way to avoid the restart-heal exploit.
+   */
+  private adoptBattle(battle: BattleState): void {
+    this.enterBattle(battle, `Resuming battle against ${battle.enemyFamiliar.familiarData.name}!`);
+  }
+
+  private enterBattle(battle: BattleState, openingMessage: string): void {
+    this.battleState = battle;
+
+    const partyIds = (this.gameState?.activeParty?.length ? this.gameState.activeParty : this.gameState?.playerFamiliars) ?? [];
+    const activeIndex = partyIds.indexOf(battle.playerFamiliar.familiarData.id);
+    if (activeIndex !== -1) {
+      this.activeFamiliarIndex = activeIndex;
+    }
+
+    this.battleUI.hideConnecting();
+    this.battleUI.updatePlayerDisplay(battle.playerFamiliar);
+    this.battleUI.updateEnemyDisplay(battle.enemyFamiliar);
+    this.battleUI.addLogMessage(openingMessage);
+    this.battleUI.addLogMessage('Choose your action.');
+
+    const enemy = battle.enemyFamiliar;
+    const playerFamiliars: FamiliarState[] = partyIds
+      .map((id) => getFamiliar(id))
+      .filter((fd): fd is FamiliarData => Boolean(fd))
+      .map((fd) => {
+        const state = toFamiliarStateFromData(fd);
+        const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
+        const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
+        if (typeof hp === 'number') state.hp = hp;
+        if (typeof mp === 'number') state.mp = mp;
+        return state;
+      });
+    if (playerFamiliars.length > 0) {
+      playerFamiliars[0] = this.toFamiliarState(battle.playerFamiliar);
+    }
+    gameEventBus.emit(GameEvent.BATTLE_STARTED, {
+      enemyId: enemy.familiarData.id,
+      enemyName: enemy.familiarData.name,
+      enemyHp: enemy.currentHp,
+      enemyMaxHp: enemy.familiarData.stats.maxHp || enemy.currentHp,
+      isBoss: battle.isBoss,
+      playerFamiliars,
+    } satisfies BattleStartedPayload);
+
+    this.phase = 'menu';
+    this.emitStateUpdate();
   }
 
   private async handleAction(action: BattleAction): Promise<void> {
@@ -686,13 +708,38 @@ preload(): void {
   };
 
   private handleExit = (): void => {
+    void this.abandonAndLeave();
+  };
+
+  private abandonAndLeave = async (): Promise<void> => {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
+
+    try {
+      if (this.battleState) {
+        await gameApiClient.abandonBattle(this.battleState.id, this.battleState.turnCount);
+      }
+    } catch (err) {
+      // The player asked to leave; do not trap them on a failed abandon. The
+      // bootstrap reconciler will clean up an orphaned battle row later.
+      console.error('Abandon battle error:', err);
+    }
+
     this.battleUI.destroy();
-    // Clean up battle background
     this.sceneBackground?.destroy();
     this.sceneBackground = undefined;
-    this.scene.start(SCENE_KEYS.WORLD_MAP);
+
+    if (this.battleState?.isBoss) {
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      return;
+    }
+    this.scene.start(this.returnScene, {
+      areaId: this.areaId,
+      pendingTreasureItemId: this.pendingTreasureItemId,
+      activeIndex: this.activeFamiliarIndex,
+      enemiesDefeated: this.enemiesDefeated,
+      roomsExplored: this.roomsExplored,
+    });
   };
 
   private onShutdown(): void {

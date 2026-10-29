@@ -6,6 +6,9 @@ bin
 .vscode
 .awcache
 docs/*
+!docs/PRODUCTION-READINESS.md
+!docs/IMPLEMENTATION-PLAN.md
+!docs/MIGRATIONS.md
 
 # environment
 .env

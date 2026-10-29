@@ -75,7 +75,7 @@ export interface BattleActionRequest {
   anonymousId: string;
   battleId: string;
   action: BattleAction;
-  expectedTurnCount?: number;
+  expectedTurnCount: number;
 }
 
 export interface BattleActionResponse {
@@ -88,7 +88,7 @@ export interface SwapFamiliarRequest {
   anonymousId: string;
   battleId: string;
   newFamiliarId: string;
-  expectedTurnCount?: number;
+  expectedTurnCount: number;
 }
 
 export interface SwapFamiliarResponse {
@@ -98,11 +98,34 @@ export interface SwapFamiliarResponse {
 export interface FleeBattleRequest {
   anonymousId: string;
   battleId: string;
-  expectedTurnCount?: number;
+  expectedTurnCount: number;
 }
 
 export interface FleeBattleResponse {
   success: boolean;
   message: string;
   battle: BattleState;
+}
+
+export interface BootstrapRequest {
+  anonymousId: string;
+}
+
+export interface BootstrapResponse {
+  state: GameState;
+  /** Active battle to resume, or null when the player should continue exploring. */
+  battle: BattleState | null;
+}
+
+export interface AbandonBattleRequest {
+  anonymousId: string;
+  battleId: string;
+  expectedTurnCount: number;
+}
+
+export interface AbandonBattleResponse {
+  success: boolean;
+  state: GameState;
+  /** True when abandoning a boss run forfeited the dungeon. */
+  forfeited: boolean;
 }

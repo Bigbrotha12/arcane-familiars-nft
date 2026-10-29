@@ -10,6 +10,7 @@
     "build": "wrangler deploy --env production --dry-run",
     "cf-typegen": "wrangler types",
     "type-check": "tsc --noEmit",
+    "test": "vitest run",
     "db:migrate": "wrangler d1 migrations apply arcane-familiars-dev --local",
     "db:seed": "wrangler d1 execute arcane-familiars-dev --local --file ./seeds/0001_seed_familiars.sql",
     "db:setup": "npm run db:migrate && npm run db:seed"
@@ -20,7 +21,10 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^5.20260727.1",
+    "esbuild": "^0.25.12",
+    "miniflare": "^4.20260722.0",
     "typescript": "^7.0.2",
+    "vitest": "^4.1.12",
     "wrangler": "^4.114.0"
   }
 }

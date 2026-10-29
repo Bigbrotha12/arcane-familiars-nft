@@ -21,6 +21,7 @@ export function createDefaultGameState(anonymousId: string): GameState {
       ],
     },
     dungeon: null,
+    activeBattle: null,
     unlockedAreas: ['verdantMeadow'],
     defeatedBosses: [],
     battleCount: 0,
@@ -36,7 +37,10 @@ export async function loadGameState(db: D1Database, anonymousId: string): Promis
     .first<{ state_json: string; version: number }>();
 
   if (!row) return null;
-  return { state: JSON.parse(row.state_json) as GameState, version: row.version };
+  const state = JSON.parse(row.state_json) as GameState;
+  // Saves written before the battle moved into the document have no field.
+  if (state.activeBattle === undefined) state.activeBattle = null;
+  return { state, version: row.version };
 }
 
 /**

@@ -64,8 +64,23 @@ app.onError((err, c) => {
 // tables don't grow without bound.
 async function scheduled(event: ScheduledEvent, env: Bindings, ctx: ExecutionContext): Promise<void> {
   ctx.waitUntil((async () => {
+    // A battle belongs to a run. Do not delete it while the player still has an
+    // active dungeon: doing so would turn a paused fight into a free heal when
+    // they return. Only purge orphaned battles (no dungeon) after a day, and
+    // cap any battle at 30 days so abandoned rows cannot live forever.
     await env.DB
-      .prepare(`DELETE FROM active_battles WHERE created_at < datetime('now', '-1 day')`)
+      .prepare(
+        `DELETE FROM active_battles
+         WHERE created_at < datetime('now', '-1 day')
+           AND NOT EXISTS (
+             SELECT 1 FROM game_states
+             WHERE game_states.anonymous_id = active_battles.anonymous_id
+               AND json_extract(game_states.state_json, '$.dungeon') IS NOT NULL
+           )`
+      )
+      .run();
+    await env.DB
+      .prepare(`DELETE FROM active_battles WHERE created_at < datetime('now', '-30 day')`)
       .run();
     await env.DB
       .prepare(`DELETE FROM dungeon_runs WHERE ended_at IS NOT NULL AND ended_at < datetime('now', '-7 day')`)

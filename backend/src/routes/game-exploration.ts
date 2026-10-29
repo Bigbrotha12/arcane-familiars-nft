@@ -17,6 +17,9 @@ import {
 import type { Bindings } from '../types';
 import { loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
 import { getErrorMessage, readBody } from '../utils/http';
+import {
+  persistCombatantResources,
+} from '../utils/activeBattle';
 
 const explorationRouter = new Hono<{ Bindings: Bindings }>();
 
@@ -58,6 +61,10 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     if (!state.unlockedAreas.includes(areaId)) {
       return c.json({ error: 'Area is not unlocked' }, 403);
+    }
+
+    if (state.activeBattle) {
+      return c.json({ error: 'Cannot enter a dungeon during an active battle' }, 409);
     }
 
     if (state.dungeon) {
@@ -111,6 +118,13 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
     }
 
     const state = loaded.state;
+
+    if (state.activeBattle) {
+      return c.json({
+        error: 'Cannot explore while a battle is active; resume or abandon it',
+        code: 'BATTLE_ACTIVE',
+      }, 409);
+    }
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
@@ -213,6 +227,10 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     const state = loaded.state;
 
+    if (state.activeBattle) {
+      return c.json({ error: 'Cannot collect treasure during an active battle' }, 409);
+    }
+
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
     }
@@ -278,15 +296,23 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     // Idempotent exit: no active dungeon is a successful no-op (the dungeon is
     // already cleared by a loss or boss victory).
-    if (!state.dungeon) {
+    if (!state.dungeon && !state.activeBattle) {
       return c.json({ success: true });
     }
 
+    // Exiting mid-battle abandons it. Persist the combatant's resources before
+    // the dungeon is cleared; the battle lives in the same save document, so
+    // the clear and the dungeon exit commit together.
+    if (state.activeBattle) {
+      persistCombatantResources(state.dungeon, state.activeBattle.playerFamiliar);
+    }
+
     state.dungeon = null;
+    state.activeBattle = null;
 
     const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
     }
 
     return c.json({ success: true });

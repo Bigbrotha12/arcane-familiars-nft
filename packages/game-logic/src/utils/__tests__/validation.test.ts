@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { validateBattleAction, validateDungeonExplore, validateParty } from "../validation";
 import { getFamiliar } from "../../data/familiars";
-import { getAbility } from "../../data/abilities";
+import { getAbility, EffectType, StatName } from "../../data/abilities";
 import { generateDungeon } from "../dungeonEngine";
 import { AREAS } from "../../data/areas";
 import { ActionType, BattleResult } from "../../types/battle";
@@ -52,6 +52,21 @@ describe("validateBattleAction", () => {
       const state = createBattleState();
       const action: BattleAction = { type: ActionType.Attack };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("accepts the enemy uid as a target", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Attack, targetId: "enemy" };
+      expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("rejects targeting the player with an attack", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Attack, targetId: "player" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Invalid target",
+      });
     });
   });
 
@@ -108,6 +123,36 @@ describe("validateBattleAction", () => {
       const action: BattleAction = { type: ActionType.Ability, abilityId: "brave" };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
     });
+
+    it("accepts the enemy uid for an enemy-targeted ability", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "fireball", targetId: "enemy" };
+      expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("rejects targeting the player with an enemy-targeted ability", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "fireball", targetId: "player" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Invalid target",
+      });
+    });
+
+    it("accepts the player uid for a self/ally ability", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "healpulse", targetId: "player" };
+      expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("rejects targeting the enemy with a self/ally ability", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Ability, abilityId: "healpulse", targetId: "enemy" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Invalid target",
+      });
+    });
   });
 
   describe("defend", () => {
@@ -128,10 +173,97 @@ describe("validateBattleAction", () => {
       });
     });
 
-    it("is valid with itemId", () => {
-      const state = createBattleState();
+    it("is valid with a useful item", () => {
+      const state = createBattleState({
+        playerFamiliar: {
+          ...createBattleState().playerFamiliar,
+          currentHp: 60,
+        },
+      });
       const action: BattleAction = { type: ActionType.Item, itemId: "potion_small" };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("rejects a healing item at full HP", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Item, itemId: "potion_small" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Item would have no effect",
+      });
+    });
+
+    it("rejects an MP item at full MP", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Item, itemId: "ether_small" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Item would have no effect",
+      });
+    });
+
+    it("allows a multi-effect item when only one component is useful", () => {
+      const state = createBattleState({
+        playerFamiliar: {
+          ...createBattleState().playerFamiliar,
+          currentMp: 20,
+        },
+      });
+      const action: BattleAction = { type: ActionType.Item, itemId: "elixir" };
+      expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it("allows a cleanse item only when a debuff or DoT is present", () => {
+      const clean = createBattleState();
+      expect(validateBattleAction({ type: ActionType.Item, itemId: "tonic" }, clean)).toEqual({
+        valid: false,
+        error: "Item would have no effect",
+      });
+
+      const afflicted = createBattleState({
+        playerFamiliar: {
+          ...createBattleState().playerFamiliar,
+          statusEffects: [
+            {
+              abilityId: "shadowstrike",
+              type: EffectType.Debuff,
+              stat: StatName.Defense,
+              value: 0.8,
+              turnsRemaining: 2,
+            },
+          ],
+        },
+      });
+      expect(validateBattleAction({ type: ActionType.Item, itemId: "tonic" }, afflicted)).toEqual({ valid: true });
+    });
+
+    it("rejects a revive item when no party member is fainted", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Item, itemId: "phoenix_feather" };
+      expect(validateBattleAction(action, state, { player: 120, enemy: 240 })).toEqual({
+        valid: false,
+        error: "No fainted party members to revive",
+      });
+    });
+
+    it("allows a revive item when a party member is fainted", () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Item, itemId: "phoenix_feather" };
+      expect(validateBattleAction(action, state, { player: 0 })).toEqual({ valid: true });
+    });
+
+    it("rejects targeting the enemy with a self-targeted item", () => {
+      const state = createBattleState({
+        playerFamiliar: {
+          ...createBattleState().playerFamiliar,
+          currentHp: 60,
+        },
+      });
+      const action: BattleAction = { type: ActionType.Item, itemId: "potion_small", targetId: "enemy" };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: "Invalid target",
+      });
     });
   });
 

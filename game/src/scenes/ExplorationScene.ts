@@ -116,7 +116,7 @@ export class ExplorationScene extends Phaser.Scene {
 
   private async loadDungeonState(): Promise<void> {
     try {
-      const { state } = await this.gameApi.loadGameState();
+      const { state, battle } = await this.gameApi.bootstrap();
       this.fullGameState = state;
 
       if (state.dungeon) {
@@ -143,11 +143,30 @@ export class ExplorationScene extends Phaser.Scene {
         this.currentRoomIndex = this.getRoomIndex(currentRoom.id);
 
         this.explorationUI.showRoomInfo(currentRoom, this.currentRoomIndex, this.area.roomCount, this.area);
+
+        // A refresh mid-battle leaves an active battle row. Resume it with the
+        // server's combat HP/MP instead of starting a fresh fight.
+        if (battle) {
+          this.explorationUI.destroy();
+          this.scene.start(SCENE_KEYS.BATTLE, {
+            enemyId: battle.enemyFamiliar.familiarData.id,
+            returnScene: SCENE_KEYS.EXPLORATION,
+            areaId: this.areaId,
+            pendingTreasureItemId: this.pendingTreasureItemId,
+            roomsExplored: this.visitedRoomIds.size,
+            enemiesDefeated: this.enemiesDefeated,
+          });
+          return;
+        }
+
         this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
 
         if (currentRoom.type === RoomType.Boss) {
           this.pendingEnemyId = this.area.bossId;
           this.bossActive = true;
+        } else if (currentRoom.pendingEncounter && !currentRoom.pendingEncounter.resolved) {
+          this.pendingEnemyId = currentRoom.pendingEncounter.enemyId;
+          this.encounterActive = true;
         } else if (this.pendingTreasureItemId) {
           this.treasureActive = true;
         }

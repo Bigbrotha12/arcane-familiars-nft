@@ -54,6 +54,10 @@ class GameApiClient {
     return this.request('POST', '/api/game/state/load', { anonymousId: this.anonymousId });
   }
 
+  async bootstrap(): Promise<{ state: GameState; battle: BattleState | null }> {
+    return this.request('GET', `/api/game/bootstrap?anonymousId=${encodeURIComponent(this.anonymousId)}`);
+  }
+
   async setParty(activeParty: string[]): Promise<{ success: boolean; state: GameState }> {
     return this.request('POST', '/api/game/state/party', { anonymousId: this.anonymousId, activeParty });
   }
@@ -82,16 +86,20 @@ class GameApiClient {
     return this.request('POST', '/api/game/battle/start', { anonymousId: this.anonymousId, playerFamiliarId });
   }
 
-  async battleAction(battleId: string, action: BattleAction, expectedTurnCount?: number): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
+  async battleAction(battleId: string, action: BattleAction, expectedTurnCount: number): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
     return this.request('POST', '/api/game/battle/action', { anonymousId: this.anonymousId, battleId, action, expectedTurnCount });
   }
 
-  async fleeBattle(battleId: string, expectedTurnCount?: number): Promise<{ success: boolean; message: string; battle: BattleState }> {
+  async fleeBattle(battleId: string, expectedTurnCount: number): Promise<{ success: boolean; message: string; battle: BattleState }> {
     return this.request('POST', '/api/game/battle/flee', { anonymousId: this.anonymousId, battleId, expectedTurnCount });
   }
 
-  async swapFamiliar(battleId: string, newFamiliarId: string, expectedTurnCount?: number): Promise<{ battle: BattleState }> {
+  async swapFamiliar(battleId: string, newFamiliarId: string, expectedTurnCount: number): Promise<{ battle: BattleState }> {
     return this.request('POST', '/api/game/battle/swap', { anonymousId: this.anonymousId, battleId, newFamiliarId, expectedTurnCount });
+  }
+
+  async abandonBattle(battleId: string, expectedTurnCount: number): Promise<{ success: boolean; state: GameState; forfeited: boolean }> {
+    return this.request('POST', '/api/game/battle/abandon', { anonymousId: this.anonymousId, battleId, expectedTurnCount });
   }
 }
 

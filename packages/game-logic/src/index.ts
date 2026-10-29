@@ -16,3 +16,4 @@ export * from '@/utils/enemyAI';
 export * from '@/utils/dungeonEngine';
 export * from '@/utils/mathUtils';
 export * from '@/utils/validation';
+export * from '@/utils/activeRun';
