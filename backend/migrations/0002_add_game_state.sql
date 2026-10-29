@@ -1,5 +1,5 @@
 -- Migration 0002: Game state tables for Arcane Familiars
--- Applied via: wrangler d1 migrations apply arcane-familiars --remote
+-- Applied via: wrangler d1 migrations apply arcane-familiars --env production --remote
 
 -- Game save states per user
 CREATE TABLE IF NOT EXISTS game_states (

@@ -67,9 +67,11 @@ export class BattleUI {
   }
 
   private createGround(x: number, y: number): void {
-    const ground = this.register(this.scene.add.ellipse(x, y + this.layout.s(50), this.layout.s(120), this.layout.s(28)));
-    ground.setStrokeStyle(this.layout.s(3), 0x7C5CFC, 1);
-    ground.setFillStyle(0x1E1B4B, 1);
+    const ground = this.register(
+      this.scene.add.ellipse(x, y + this.layout.s(50), this.layout.s(120), this.layout.s(28))
+    );
+    ground.setStrokeStyle(this.layout.s(3), 0x7c5cfc, 1);
+    ground.setFillStyle(0x1e1b4b, 1);
     ground.setDepth(0);
   }
 
@@ -80,16 +82,13 @@ export class BattleUI {
       this.removeFromOwned(this.connectingText);
       this.connectingText = undefined;
     }
-    this.connectingText = this.register(this.scene.add.text(
-      this.layout.x(400),
-      this.layout.y(300),
-      'Connecting...',
-      {
+    this.connectingText = this.register(
+      this.scene.add.text(this.layout.x(400), this.layout.y(300), 'Connecting...', {
         fontSize: this.layout.font(18),
         fontFamily: 'DM Sans',
         color: '#A5A3C4',
-      },
-    ));
+      })
+    );
     this.connectingText.setOrigin(0.5);
   }
 
@@ -201,11 +200,11 @@ export class BattleUI {
       ease: 'Power2',
       onComplete: () => {
         textObj.destroy();
-        this.floatingTweens = this.floatingTweens.filter(t => t !== tween);
+        this.floatingTweens = this.floatingTweens.filter((t) => t !== tween);
       },
       onStop: () => {
         textObj.destroy();
-        this.floatingTweens = this.floatingTweens.filter(t => t !== tween);
+        this.floatingTweens = this.floatingTweens.filter((t) => t !== tween);
       },
     });
     this.floatingTweens.push(tween);

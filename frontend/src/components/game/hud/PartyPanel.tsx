@@ -1,26 +1,24 @@
 // Player party familiar cards (compact HP bar + MP readout per member) with the
 // active familiar ringed in accent. Non-interactive chrome.
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 interface PartyPanelProps {
-  party: FamiliarState[]
-  activeId?: string
+  party: FamiliarState[];
+  activeId?: string;
 }
 
 function PartyPanel({ party, activeId }: PartyPanelProps) {
-  if (!party.length) return null
+  if (!party.length) return null;
 
-  const resolvedActiveId = activeId ?? party[0].id
+  const resolvedActiveId = activeId ?? party[0].id;
 
   return (
     <div className="hud-frame pointer-events-none flex w-56 flex-col gap-2 rounded-md p-md">
       {party.map((familiar) => {
-        const isActive = familiar.id === resolvedActiveId
-        const hpRatio =
-          familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-        const fillColor =
-          hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error'
+        const isActive = familiar.id === resolvedActiveId;
+        const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+        const fillColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error';
 
         return (
           <div
@@ -29,9 +27,7 @@ function PartyPanel({ party, activeId }: PartyPanelProps) {
           >
             <div className="flex items-center justify-between gap-1">
               <span
-                className={`truncate font-body text-xs font-medium ${
-                  isActive ? 'text-[#F0EFFF]' : 'text-[#B8B5E0]'
-                }`}
+                className={`truncate font-body text-xs font-medium ${isActive ? 'text-[#F0EFFF]' : 'text-[#B8B5E0]'}`}
               >
                 {familiar.name}
               </span>
@@ -56,10 +52,10 @@ function PartyPanel({ party, activeId }: PartyPanelProps) {
               </span>
             </div>
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
-export default PartyPanel
+export default PartyPanel;

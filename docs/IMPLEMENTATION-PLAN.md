@@ -82,29 +82,27 @@ before any content or UI work.
 
 **Changes**
 
-1. **Atomic state + battle write**
-   - Move the authoritative active battle into `GameState.activeBattle` so the
-     encounter, turn, rewards, inventory, and battle commit in one optimistic row write.
-   - Keep `active_battles` only as a legacy import source; bootstrap imports a row once
-     and deletes it.
-   - Make `expectedTurnCount` required on `/game/battle/action`, `/swap`, `/flee`,
-     `/abandon`.
-   - Remove the two-statement batch from the action/swap/flee/abandon paths.
+1. **Keep the upstream battle-row architecture**
+   - `active_battles` remains the authoritative battle row; auth/rate-limit/daily-cap
+     code depends on it.
+   - Use `conditionalStateUpdate` for the state write and keep the battle statement in
+     the same D1 batch.
+   - Do not restart a battle by deleting the row; the start route rejects an existing
+     battle with 409.
 2. **Bind the battle to the fought room**
    - Add `roomId` to `BattleState`.
    - Set it in `/battle/start` from `dungeon.currentRoomId`.
    - On win, resolve the room from `battle.roomId` (falling back for legacy rows), not
      the player's current room.
    - Reject `explore`, `collect-treasure`, `exit`, party changes, and a second
-     `battle/start` while `state.activeBattle` exists.
+     `battle/start` while an `active_battles` row exists.
 3. **Restart / abandon / resume**
-   - `/battle/start` returns 409 when `state.activeBattle` exists.
-   - Add `POST /game/battle/abandon`: persist HP/MP, clear `activeBattle`, and save. For
+   - `/battle/start` returns 409 when an active battle row exists.
+   - Add `POST /game/battle/abandon`: persist HP/MP and delete the battle row. For
      non-boss battles the encounter stays unresolved (same as flee); for boss battles
      abandon forfeits the run.
-   - `dungeon/exit` clears `activeBattle` and the dungeon in one save.
+   - `dungeon/exit` persists the combatant, clears the battle row, and exits the dungeon.
    - Add `GET /game/bootstrap` with the reconciliation matrix from the parent plan.
-   - The cron no longer deletes battles owned by an active dungeon.
 4. **Validation**
    - Reject a 0-HP lead at `battle/start` or select a living party member.
    - Validate `targetId` belongs to the expected side and is alive.
@@ -115,15 +113,13 @@ before any content or UI work.
      abandon on exit, and never restart a battle to heal.
    - `game/src/scenes/ExplorationScene.ts`: bootstrap, resume an active battle, and show
      an unresolved encounter after a refresh.
-   - `game/src/api/client.ts`: add `bootstrap` and `abandonBattle`; require
-     `expectedTurnCount` on action/swap/flee.
+   - `game/src/api/client.ts`: add `bootstrap` and `abandonBattle`.
 
 **Tests**
 
-- `backend/test/battle-integrity.test.ts` (Miniflare + D1, 10 tests):
+- `backend/test/battle-integrity.test.ts` (Cloudflare pool-workers + D1, 9 tests):
   - second start rejected;
   - room binding survives moving the current room;
-  - concurrent action applies once;
   - abandon persists HP/MP and clears the battle;
   - dungeon exit clears the battle;
   - explore blocked during battle;
@@ -132,10 +128,12 @@ before any content or UI work.
   - invalid target rejected;
   - orphaned battle cleaned by bootstrap.
 - `packages/game-logic` unit tests cover `reconcileActiveBattle`,
-  `resolveBattleRoomId`, item usefulness, and target validation. Total suite: 150 tests.
+  `resolveBattleRoomId`, item usefulness, and target validation.
 
-**Status:** implemented on `fix/battle-state-integrity`; backend integration tests and
-game-logic tests are green. CI wiring is Task 02.
+**Status:** merged into `master` on 2026-10-29 with the upstream auth/rate-limit/daily-cap
+work. All backend and game-logic tests, type-checks, lint, and builds are green. The
+remaining known gap is the two-row atomicity of `conditionalStateUpdate` + battle write
+(P0.19); revisit it before adding more reward-bearing actions.
 
 **Done**
 

@@ -6,6 +6,8 @@ bin
 .vscode
 .awcache
 docs/*
+!docs/DEFINITION_OF_PRODUCTION.md
+!docs/PROD-RUNBOOK.md
 !docs/PRODUCTION-READINESS.md
 !docs/IMPLEMENTATION-PLAN.md
 !docs/MIGRATIONS.md

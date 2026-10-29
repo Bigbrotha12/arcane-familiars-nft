@@ -16,11 +16,7 @@ export interface ValidationResult {
  * dungeon state; when omitted, revive items are assumed useful and the backend
  * performs the real check before consumption.
  */
-export function isItemUseful(
-  item: ItemData,
-  familiar: BattleFamiliar,
-  partyHp?: Record<string, number>,
-): boolean {
+export function isItemUseful(item: ItemData, familiar: BattleFamiliar, partyHp?: Record<string, number>): boolean {
   const maxHp = familiar.familiarData.stats.maxHp;
   const maxMp = familiar.familiarData.stats.maxMp;
 
@@ -82,7 +78,7 @@ function validateTarget(action: BattleAction, battleState: BattleState): Validat
 export function validateBattleAction(
   action: BattleAction,
   battleState: BattleState,
-  partyHp?: Record<string, number>,
+  partyHp?: Record<string, number>
 ): ValidationResult {
   if (battleState.status !== BattleResult.Active) {
     return { valid: false, error: 'Battle is not active' };
@@ -104,7 +100,10 @@ export function validateBattleAction(
         return { valid: false, error: `Unknown ability: ${action.abilityId}` };
       }
       if (battleState.playerFamiliar.currentMp < ability.mpCost) {
-        return { valid: false, error: `Not enough MP. Need ${ability.mpCost}, have ${battleState.playerFamiliar.currentMp}` };
+        return {
+          valid: false,
+          error: `Not enough MP. Need ${ability.mpCost}, have ${battleState.playerFamiliar.currentMp}`,
+        };
       }
       const cooldown = battleState.playerFamiliar.cooldowns[action.abilityId] || 0;
       if (cooldown > 0) {

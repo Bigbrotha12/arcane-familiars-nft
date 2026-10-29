@@ -1,8 +1,8 @@
 // Preview showing Compact Card positioned near sprites (left of enemy, right of player)
 // with solid background and double border.
 
-import type { FamiliarState } from '@/game'
-import FamiliarStatusCompact from '../hud/FamiliarStatusCompact'
+import type { FamiliarState } from '@/game';
+import FamiliarStatusCompact from '../hud/FamiliarStatusCompact';
 
 const mockFamiliar: FamiliarState = {
   id: 'whiteDog',
@@ -16,7 +16,7 @@ const mockFamiliar: FamiliarState = {
   speed: 15,
   arcane: 20,
   affinity: 'light',
-}
+};
 
 const mockEnemy: FamiliarState = {
   id: 'shadowCat',
@@ -30,13 +30,13 @@ const mockEnemy: FamiliarState = {
   speed: 18,
   arcane: 15,
   affinity: 'shadow',
-}
+};
 
 const mockStatusEffects = [
   { id: 'burn', icon: '🔥', duration: 2 },
   { id: 'shield', icon: '🛡️', duration: 3 },
   { id: 'regen', icon: '💚', duration: 1 },
-]
+];
 
 function CompactCardInContext() {
   return (
@@ -67,7 +67,7 @@ function CompactCardInContext() {
         <FamiliarStatusCompact familiar={mockFamiliar} statusEffects={mockStatusEffects} />
       </div>
     </div>
-  )
+  );
 }
 
-export default CompactCardInContext
+export default CompactCardInContext;

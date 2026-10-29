@@ -5,25 +5,25 @@ import Phaser from 'phaser';
 // frontend/tailwind.config.js so both render layers look consistent.
 
 export const C = {
-  bg: 0x0A0A0F,
-  primary: 0x7C5CFC,
-  primaryHover: 0x6A4AE8,
-  primaryLight: 0xA78BFA,
+  bg: 0x0a0a0f,
+  primary: 0x7c5cfc,
+  primaryHover: 0x6a4ae8,
+  primaryLight: 0xa78bfa,
   text: '#A5A3C4',
   textLight: '#F0EFFF',
   textMuted: '#6366A1',
-  muted: 0x6366A1,
-  hpBar: 0x2DD4BF,
-  hpBarMid: 0xF59E0B,
-  hpBarLow: 0xEF4444,
-  mpBar: 0x6366A1,
-  buttonBg: 0x3B3870,
-  panelBg: 0x1E1B4B,
-  border: 0x3B3870,
-  cardBg: 0x2D2A5E,
-  barBg: 0x1A1A2E,
-  gold: 0xF59E0B,
-  bossRed: 0xEF4444,
+  muted: 0x6366a1,
+  hpBar: 0x2dd4bf,
+  hpBarMid: 0xf59e0b,
+  hpBarLow: 0xef4444,
+  mpBar: 0x6366a1,
+  buttonBg: 0x3b3870,
+  panelBg: 0x1e1b4b,
+  border: 0x3b3870,
+  cardBg: 0x2d2a5e,
+  barBg: 0x1a1a2e,
+  gold: 0xf59e0b,
+  bossRed: 0xef4444,
 };
 
 export function getHpColor(current: number, max: number): number {
@@ -35,8 +35,13 @@ export function getHpColor(current: number, max: number): number {
 
 export function drawBar(
   g: Phaser.GameObjects.Graphics,
-  x: number, y: number, w: number, h: number,
-  cur: number, max: number, color: number,
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  cur: number,
+  max: number,
+  color: number
 ): void {
   g.clear();
   g.fillStyle(C.barBg, 1);

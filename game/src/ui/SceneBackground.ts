@@ -32,7 +32,7 @@ export class SceneBackground {
       scene.scale.height / 2,
       scene.scale.width,
       scene.scale.height,
-      C.bg,
+      C.bg
     );
     this.container.add(fallback);
   }
@@ -58,7 +58,7 @@ export class SceneBackground {
         this.layout.s(800),
         this.layout.s(600),
         color,
-        alpha,
+        alpha
       );
       this.overlay.setOrigin(0.5);
       this.container.add(this.overlay);

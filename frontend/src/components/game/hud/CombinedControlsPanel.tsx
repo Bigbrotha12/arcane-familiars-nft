@@ -2,17 +2,17 @@
 // Row 1: action bar (full width).
 // Row 2: two columns — left 75% = log box, right 25% = party panel.
 
-import type { FamiliarState } from '@/game'
-import ActionBar, { type ActionBarItem } from './ActionBar'
-import BattleLog from './BattleLog'
-import CircularArcPartyPanel from './CircularArcPartyPanel'
+import type { FamiliarState } from '@/game';
+import ActionBar, { type ActionBarItem } from './ActionBar';
+import BattleLog from './BattleLog';
+import CircularArcPartyPanel from './CircularArcPartyPanel';
 
 interface CombinedControlsPanelProps {
-  actions: ActionBarItem[]
-  logEntries: string[]
-  party: FamiliarState[]
-  activeId?: string
-  onSwapClick?: (familiarId: string) => void
+  actions: ActionBarItem[];
+  logEntries: string[];
+  party: FamiliarState[];
+  activeId?: string;
+  onSwapClick?: (familiarId: string) => void;
 }
 
 function CombinedControlsPanel({ actions, logEntries, party, activeId, onSwapClick }: CombinedControlsPanelProps) {
@@ -39,8 +39,8 @@ function CombinedControlsPanel({ actions, logEntries, party, activeId, onSwapCli
         </div>
       </div>
     </div>
-  )
+  );
 }
 
-export default CombinedControlsPanel
-export { CombinedControlsPanel }
+export default CombinedControlsPanel;
+export { CombinedControlsPanel };

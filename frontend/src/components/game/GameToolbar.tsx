@@ -1,11 +1,11 @@
-import Button from '@/components/ui/Button'
-import type { GameStateSnapshot } from '@/game'
+import Button from '@/components/ui/Button';
+import type { GameStateSnapshot } from '@/game';
 
 interface GameToolbarProps {
-  gameState: GameStateSnapshot | null
-  onSave: () => void
-  onExit: () => void
-  saving: boolean
+  gameState: GameStateSnapshot | null;
+  onSave: () => void;
+  onExit: () => void;
+  saving: boolean;
 }
 
 export default function GameToolbar({ gameState, onSave, onExit, saving }: GameToolbarProps) {
@@ -17,15 +17,11 @@ export default function GameToolbar({ gameState, onSave, onExit, saving }: GameT
         </Button>
 
         <div className="flex items-center gap-3">
-          <span className="font-display text-sm font-semibold text-text-primary">
-            Arcane Familiars
-          </span>
+          <span className="font-display text-sm font-semibold text-text-primary">Arcane Familiars</span>
           {gameState?.areaName && (
             <>
               <span className="text-text-muted">·</span>
-              <span className="font-body text-xs text-text-secondary">
-                {gameState.areaName}
-              </span>
+              <span className="font-body text-xs text-text-secondary">{gameState.areaName}</span>
             </>
           )}
           {gameState?.roomName && (
@@ -43,5 +39,5 @@ export default function GameToolbar({ gameState, onSave, onExit, saving }: GameT
         </Button>
       </div>
     </div>
-  )
+  );
 }

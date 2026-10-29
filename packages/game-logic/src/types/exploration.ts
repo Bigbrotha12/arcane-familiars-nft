@@ -18,7 +18,7 @@ export enum RoomType {
   Start,
   Normal,
   Deadend,
-  Boss
+  Boss,
 }
 
 export interface Room {

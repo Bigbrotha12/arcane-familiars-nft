@@ -1,6 +1,6 @@
 import { createRoot, Root } from 'react-dom/client';
-import "@/styles.css";
-import App from "@/App";
+import '@/styles.css';
+import App from '@/App';
 import ErrorBoundary from '@/components/common/ErrorBoundary';
 
 function appendErrorOverlay({
@@ -9,10 +9,10 @@ function appendErrorOverlay({
   stack,
   background,
 }: {
-  title: string
-  message: string
-  stack?: string
-  background: string
+  title: string;
+  message: string;
+  stack?: string;
+  background: string;
 }) {
   const errorDiv = document.createElement('div');
   errorDiv.style.cssText = `position:fixed;top:0;left:0;right:0;background:${background};color:white;padding:20px;font-family:monospace;z-index:9999;max-height:50vh;overflow:auto;`;
@@ -59,7 +59,7 @@ if (import.meta.env.DEV) {
   });
 }
 
-const container: HTMLElement = document.getElementById("root")!
+const container: HTMLElement = document.getElementById('root')!;
 const root: Root = createRoot(container);
 
 try {

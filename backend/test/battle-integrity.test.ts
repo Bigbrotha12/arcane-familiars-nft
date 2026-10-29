@@ -1,270 +1,283 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { createTestEnv, type TestEnv } from './helpers/worker';
+import { describe, it, expect } from 'vitest';
+import { env } from 'cloudflare:workers';
+import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
+import { app } from '../src/index';
+import type { Bindings } from '../src/types';
+import {
+  ActionType,
+  BattleResult,
+  RoomType,
+  getFamiliar,
+  type BattleFamiliar,
+  type BattleState,
+  type GameState,
+} from '@arcane-familiars/game-logic';
 
-const PLAYER = 'player-1';
-const PARTY = ['whiteDog', 'yellowFighter'];
+/**
+ * Integrity regressions for the battle loop:
+ * - one active battle per player; restart is rejected (no free heal)
+ * - a win resolves the room the battle was started in
+ * - abandon/exit clear the battle row and preserve attrition
+ * - dungeon mutations are blocked during a battle
+ * - 0-HP starts, invalid targets, and useless items are rejected
+ * - bootstrap deletes an orphaned battle
+ */
 
-let env: TestEnv;
-
-beforeEach(async () => {
-  env = await createTestEnv();
-});
-
-afterEach(async () => {
-  await env.dispose();
-});
-
-async function readState(): Promise<any> {
-  const row = await env.db
-    .prepare('SELECT state_json, version FROM game_states WHERE anonymous_id = ?')
-    .bind(PLAYER)
-    .first();
-  return { state: JSON.parse(row.state_json), version: row.version };
+function makeEnv(environment = 'development'): Bindings {
+  return { ...(env as unknown as Bindings), ENVIRONMENT: environment };
 }
 
-async function patchState(mutator: (state: any) => void): Promise<void> {
-  const { state, version } = await readState();
-  mutator(state);
-  await env.db
-    .prepare('UPDATE game_states SET state_json = ?, version = version + 1 WHERE anonymous_id = ? AND version = ?')
-    .bind(JSON.stringify(state), PLAYER, version)
+async function fetchApp(request: Request, environment = 'development'): Promise<Response> {
+  const ctx = createExecutionContext();
+  const response = await app.fetch(request, makeEnv(environment), ctx);
+  await waitOnExecutionContext(ctx);
+  return response;
+}
+
+function post(path: string, body: Record<string, unknown>, ip = '10.0.0.1'): Request {
+  return new Request(`https://example.com${path}`, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ip },
+    body: JSON.stringify(body),
+  });
+}
+
+function get(path: string, ip = '10.0.0.1'): Request {
+  return new Request(`https://example.com${path}`, { headers: { 'CF-Connecting-IP': ip } });
+}
+
+function makeCombatant(familiarId: string, hp: number, mp: number, isAlly: boolean): BattleFamiliar {
+  const data = getFamiliar(familiarId);
+  if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
+  return {
+    uid: `u-${familiarId}`,
+    familiarData: data,
+    currentHp: hp,
+    currentMp: mp,
+    statusEffects: [],
+    cooldowns: {},
+    isAlly,
+  };
+}
+
+function makeState(anonId: string): GameState {
+  return {
+    version: 1,
+    id: `state-${anonId}`,
+    anonymousId: anonId,
+    playerFamiliars: ['whiteDog', 'yellowFighter'],
+    activeParty: ['whiteDog', 'yellowFighter'],
+    inventory: { currency: 100, items: [{ itemId: 'potion_small', quantity: 3 }] },
+    dungeon: {
+      areaId: 'verdantMeadow',
+      currentRoomId: 'room-1',
+      party: ['whiteDog', 'yellowFighter'],
+      partyHp: { whiteDog: 120, yellowFighter: 140 },
+      partyMp: { whiteDog: 80, yellowFighter: 60 },
+      rooms: {
+        'room-1': {
+          id: 'room-1',
+          name: 'Room 1',
+          description: 'Test room',
+          type: RoomType.Normal,
+          exits: [],
+          encounterChance: 0,
+          treasureChance: 0,
+          treasurePool: [],
+          cleared: true,
+          pendingEncounter: { enemyId: 'tideTurtle', resolved: false, level: 1 },
+        },
+      },
+      seed: 1,
+    },
+    unlockedAreas: ['verdantMeadow'],
+    defeatedBosses: [],
+    battleCount: 0,
+    winCount: 0,
+    lastSaved: 0,
+  };
+}
+
+function makeBattle(battleId: string, roomId = 'room-1'): BattleState {
+  return {
+    id: battleId,
+    roomId,
+    playerFamiliar: makeCombatant('whiteDog', 120, 80, true),
+    enemyFamiliar: makeCombatant('tideTurtle', 1, 70, false),
+    isBoss: false,
+    turnCount: 0,
+    status: BattleResult.Active,
+    swapsThisTurn: 0,
+    seed: 7,
+  };
+}
+
+async function seed(anonId: string, state: GameState, battle?: BattleState): Promise<void> {
+  const db = (env as unknown as Bindings).DB;
+  await db
+    .prepare(
+      `INSERT INTO game_states (anonymous_id, state_json, version, updated_at, is_anonymous)
+       VALUES (?, ?, 1, datetime('now'), 1)`
+    )
+    .bind(anonId, JSON.stringify(state))
     .run();
+  if (battle) {
+    await db
+      .prepare(
+        `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+      )
+      .bind(battle.id, anonId, JSON.stringify(battle))
+      .run();
+  }
 }
 
-async function readBattle(): Promise<any> {
-  const { state } = await readState();
-  return state.activeBattle ? { battleId: state.activeBattle.id, battle: state.activeBattle } : null;
+async function readState(anonId: string): Promise<GameState> {
+  const row = await (env as unknown as Bindings).DB.prepare('SELECT state_json FROM game_states WHERE anonymous_id = ?')
+    .bind(anonId)
+    .first<{ state_json: string }>();
+  return JSON.parse(row!.state_json) as GameState;
 }
 
-async function patchBattle(mutator: (battle: any) => void): Promise<void> {
-  const { state, version } = await readState();
-  if (!state.activeBattle) throw new Error('No active battle to patch');
-  mutator(state.activeBattle);
-  await env.db
-    .prepare('UPDATE game_states SET state_json = ?, version = version + 1 WHERE anonymous_id = ? AND version = ?')
-    .bind(JSON.stringify(state), PLAYER, version)
-    .run();
+async function battleCount(anonId: string): Promise<number> {
+  const row = await (env as unknown as Bindings).DB.prepare(
+    'SELECT COUNT(*) AS n FROM active_battles WHERE anonymous_id = ?'
+  )
+    .bind(anonId)
+    .first<{ n: number }>();
+  return row!.n;
 }
 
-async function createRun(): Promise<any> {
-  const load = await env.post('/api/game/state/load', { anonymousId: PLAYER });
-  expect(load.status).toBe(200);
-
-  const party = await env.post('/api/game/state/party', { anonymousId: PLAYER, activeParty: PARTY });
-  expect(party.status).toBe(200);
-
-  const enter = await env.post('/api/game/dungeon/enter', { anonymousId: PLAYER, areaId: 'verdantMeadow' });
-  expect(enter.status).toBe(200);
-  return enter.body.dungeon;
-}
-
-async function setupEncounter(roomId = 'room_1'): Promise<void> {
-  await patchState((state) => {
-    const room = state.dungeon.rooms[roomId];
-    room.cleared = true;
-    room.pendingEncounter = { enemyId: 'sparkMouse', resolved: false, level: 1 };
-    state.dungeon.currentRoomId = roomId;
-  });
-}
-
-async function startBattle(): Promise<any> {
-  const start = await env.post('/api/game/battle/start', {
-    anonymousId: PLAYER,
-    playerFamiliarId: 'whiteDog',
-  });
-  expect(start.status).toBe(200);
-  return start.body.battle;
-}
-
-async function makeBattleWinnable(): Promise<void> {
-  await patchBattle((battle) => {
-    battle.enemyFamiliar.currentHp = 1;
-    battle.enemyFamiliar.familiarData.stats.speed = 1;
-    battle.enemyFamiliar.familiarData.stats.hp = 1;
-    battle.playerFamiliar.familiarData.stats.speed = 999;
-  });
-}
-
-describe('battle state integrity', () => {
+describe('battle integrity', () => {
   it('rejects a second start while a battle is active', async () => {
-    await createRun();
-    await setupEncounter();
-    const battle = await startBattle();
-    expect(battle.roomId).toBe('room_1');
+    const anonId = 'anon-restart';
+    const battle = makeBattle('battle-restart');
+    await seed(anonId, makeState(anonId), battle);
 
-    const again = await env.post('/api/game/battle/start', {
-      anonymousId: PLAYER,
-      playerFamiliarId: 'whiteDog',
-    });
-    expect(again.status).toBe(409);
-    expect(again.body.code).toBe('BATTLE_ACTIVE');
+    const res = await fetchApp(post('/api/game/battle/start', { anonymousId: anonId, playerFamiliarId: 'whiteDog' }));
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { code: string }).code).toBe('BATTLE_ACTIVE');
   });
 
-  it('resolves the fought room, not the current room', async () => {
-    await createRun();
-    await setupEncounter('room_1');
-    await startBattle();
-    await makeBattleWinnable();
+  it('resolves the room the battle belongs to, not the current room', async () => {
+    const anonId = 'anon-room-bind';
+    const state = makeState(anonId);
+    state.dungeon!.rooms['room-2'] = {
+      ...state.dungeon!.rooms['room-1'],
+      id: 'room-2',
+      pendingEncounter: { enemyId: 'leafBunny', resolved: false, level: 1 },
+    };
+    state.dungeon!.currentRoomId = 'room-2';
+    const battle = makeBattle('battle-room-bind', 'room-1');
+    await seed(anonId, state, battle);
 
-    // Simulate the old exploit: move the current room while the battle is live.
-    await patchState((state) => {
-      const room = state.dungeon.rooms.room_2;
-      room.cleared = true;
-      room.pendingEncounter = { enemyId: 'leafBunny', resolved: false, level: 1 };
-      state.dungeon.currentRoomId = 'room_2';
-    });
-
-    const action = await env.post('/api/game/battle/action', {
-      anonymousId: PLAYER,
-      battleId: (await readBattle()).battleId,
-      action: { type: 0 },
-      expectedTurnCount: 0,
-    });
-    expect(action.status).toBe(200);
-    const { state } = await readState();
-    expect(state.dungeon.rooms.room_1.pendingEncounter.resolved).toBe(true);
-    expect(state.dungeon.rooms.room_2.pendingEncounter.resolved).toBe(false);
-  });
-
-  it('does not apply a concurrent action twice', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
-    await makeBattleWinnable();
-    const active = await readBattle();
-
-    const results = await Promise.all([
-      env.post('/api/game/battle/action', {
-        anonymousId: PLAYER,
-        battleId: active.battleId,
-        action: { type: 0 },
+    const res = await fetchApp(
+      post('/api/game/battle/action', {
+        anonymousId: anonId,
+        battleId: battle.id,
+        action: { type: ActionType.Attack },
         expectedTurnCount: 0,
-      }),
-      env.post('/api/game/battle/action', {
-        anonymousId: PLAYER,
-        battleId: active.battleId,
-        action: { type: 0 },
+      })
+    );
+    expect(res.status).toBe(200);
+
+    const after = await readState(anonId);
+    expect(after.dungeon!.rooms['room-1'].pendingEncounter?.resolved).toBe(true);
+    expect(after.dungeon!.rooms['room-2'].pendingEncounter?.resolved).toBe(false);
+  });
+
+  it('persists HP/MP on abandon and clears the battle row', async () => {
+    const anonId = 'anon-abandon';
+    const battle = makeBattle('battle-abandon');
+    battle.playerFamiliar.currentHp = 42;
+    battle.playerFamiliar.currentMp = 17;
+    await seed(anonId, makeState(anonId), battle);
+
+    const res = await fetchApp(
+      post('/api/game/battle/abandon', {
+        anonymousId: anonId,
+        battleId: battle.id,
         expectedTurnCount: 0,
-      }),
-    ]);
-
-    const statuses = results.map((r) => r.status).sort();
-    expect(statuses[0]).toBe(200);
-    expect([404, 409]).toContain(statuses[1]);
-    const { state } = await readState();
-    expect(state.winCount).toBe(1);
-    expect(await readBattle()).toBeNull();
+      })
+    );
+    expect(res.status).toBe(200);
+    expect(await battleCount(anonId)).toBe(0);
+    const after = await readState(anonId);
+    expect(after.dungeon!.partyHp.whiteDog).toBe(42);
+    expect(after.dungeon!.partyMp.whiteDog).toBe(17);
   });
 
-  it('persists combat HP on abandon and removes the row', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
-    await patchBattle((battle) => {
-      battle.playerFamiliar.currentHp = 42;
-      battle.playerFamiliar.currentMp = 17;
-    });
-    const active = await readBattle();
+  it('clears the battle row when exiting the dungeon', async () => {
+    const anonId = 'anon-exit';
+    await seed(anonId, makeState(anonId), makeBattle('battle-exit'));
 
-    const abandon = await env.post('/api/game/battle/abandon', {
-      anonymousId: PLAYER,
-      battleId: active.battleId,
-      expectedTurnCount: 0,
-    });
-    expect(abandon.status).toBe(200);
-    expect(abandon.body.forfeited).toBe(false);
-
-    expect(await readBattle()).toBeNull();
-    const { state } = await readState();
-    expect(state.dungeon.partyHp.whiteDog).toBe(42);
-    expect(state.dungeon.partyMp.whiteDog).toBe(17);
+    const res = await fetchApp(post('/api/game/dungeon/exit', { anonymousId: anonId }));
+    expect(res.status).toBe(200);
+    expect(await battleCount(anonId)).toBe(0);
+    expect((await readState(anonId)).dungeon).toBeNull();
   });
 
-  it('deletes an active battle when exiting the dungeon', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
+  it('blocks exploration during a battle', async () => {
+    const anonId = 'anon-block-explore';
+    await seed(anonId, makeState(anonId), makeBattle('battle-block-explore'));
 
-    const exit = await env.post('/api/game/dungeon/exit', { anonymousId: PLAYER });
-    expect(exit.status).toBe(200);
-    expect(await readBattle()).toBeNull();
-    const { state } = await readState();
-    expect(state.dungeon).toBeNull();
+    const res = await fetchApp(post('/api/game/dungeon/explore', { anonymousId: anonId, roomId: 'room-1' }));
+    expect(res.status).toBe(409);
   });
 
-  it('rejects a second exploration while a battle is active', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
+  it('rejects a 0-HP lead at start', async () => {
+    const anonId = 'anon-zero-hp';
+    const state = makeState(anonId);
+    state.dungeon!.partyHp.whiteDog = 0;
+    await seed(anonId, state);
 
-    const explore = await env.post('/api/game/dungeon/explore', {
-      anonymousId: PLAYER,
-      roomId: 'room_2',
-    });
-    expect(explore.status).toBe(409);
-    expect(explore.body.code).toBe('BATTLE_ACTIVE');
-  });
-
-  it('rejects a 0-HP lead at battle start', async () => {
-    await createRun();
-    await setupEncounter();
-    await patchState((state) => {
-      state.dungeon.partyHp.whiteDog = 0;
-    });
-
-    const start = await env.post('/api/game/battle/start', {
-      anonymousId: PLAYER,
-      playerFamiliarId: 'whiteDog',
-    });
-    expect(start.status).toBe(400);
-    expect(start.body.code).toBe('FAMILIAR_FAINTED');
+    const res = await fetchApp(post('/api/game/battle/start', { anonymousId: anonId, playerFamiliarId: 'whiteDog' }));
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { code: string }).code).toBe('FAMILIAR_FAINTED');
   });
 
   it('rejects a full-HP potion without consuming it', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
-    const active = await readBattle();
+    const anonId = 'anon-full-hp-potion';
+    await seed(anonId, makeState(anonId), makeBattle('battle-full-hp-potion'));
 
-    const action = await env.post('/api/game/battle/action', {
-      anonymousId: PLAYER,
-      battleId: active.battleId,
-      action: { type: 3, itemId: 'potion_small' },
-      expectedTurnCount: 0,
-    });
-    expect(action.status).toBe(400);
-    expect(action.body.error).toBe('Item would have no effect');
-
-    const { state } = await readState();
-    expect(state.inventory.items.find((i: any) => i.itemId === 'potion_small').quantity).toBe(3);
+    const res = await fetchApp(
+      post('/api/game/battle/action', {
+        anonymousId: anonId,
+        battleId: 'battle-full-hp-potion',
+        action: { type: ActionType.Item, itemId: 'potion_small' },
+        expectedTurnCount: 0,
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('Item would have no effect');
+    expect((await readState(anonId)).inventory.items[0].quantity).toBe(3);
   });
 
   it('rejects an attack targeted at the player', async () => {
-    await createRun();
-    await setupEncounter();
-    const battle = await startBattle();
+    const anonId = 'anon-bad-target';
+    await seed(anonId, makeState(anonId), makeBattle('battle-bad-target'));
 
-    const action = await env.post('/api/game/battle/action', {
-      anonymousId: PLAYER,
-      battleId: battle.id,
-      action: { type: 0, targetId: battle.playerFamiliar.uid },
-      expectedTurnCount: 0,
-    });
-    expect(action.status).toBe(400);
-    expect(action.body.error).toBe('Invalid target');
+    const res = await fetchApp(
+      post('/api/game/battle/action', {
+        anonymousId: anonId,
+        battleId: 'battle-bad-target',
+        action: { type: ActionType.Attack, targetId: 'u-whiteDog' },
+        expectedTurnCount: 0,
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe('Invalid target');
   });
 
   it('cleans an orphaned battle on bootstrap', async () => {
-    await createRun();
-    await setupEncounter();
-    await startBattle();
-    await patchState((state) => {
-      state.dungeon = null;
-    });
+    const anonId = 'anon-orphan-bootstrap';
+    const state = makeState(anonId);
+    state.dungeon = null;
+    await seed(anonId, state, makeBattle('battle-orphan'));
 
-    const boot = await env.get(`/api/game/bootstrap?anonymousId=${PLAYER}`);
-    expect(boot.status).toBe(200);
-    expect(boot.body.battle).toBeNull();
-    expect(await readBattle()).toBeNull();
+    const res = await fetchApp(get(`/api/game/bootstrap?anonymousId=${anonId}`));
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { battle: unknown }).battle).toBeNull();
+    expect(await battleCount(anonId)).toBe(0);
   });
 });

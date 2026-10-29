@@ -15,7 +15,7 @@ export interface ActiveBattleDecision {
  */
 export function reconcileActiveBattle(
   dungeon: DungeonState | null | undefined,
-  battle: BattleState | null | undefined,
+  battle: BattleState | null | undefined
 ): ActiveBattleDecision {
   if (!battle) return { action: 'none', reason: 'no battle' };
   if (battle.status !== BattleResult.Active) {
@@ -44,7 +44,7 @@ export function reconcileActiveBattle(
  */
 export function resolveBattleRoomId(
   dungeon: DungeonState | null | undefined,
-  battle: BattleState | null | undefined,
+  battle: BattleState | null | undefined
 ): string | null {
   if (!dungeon) return null;
   if (battle?.roomId && dungeon.rooms[battle.roomId]) return battle.roomId;

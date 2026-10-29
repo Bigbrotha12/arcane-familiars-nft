@@ -25,9 +25,9 @@ export class ExplorationUI {
 
   showRoomInfo(room: Room, roomIndex: number, totalRooms: number, area: Area): void {
     const depthRatio = roomIndex / Math.max(totalRooms - 1, 1);
-    const r = ((area.bgColor >> 16) & 0xff);
-    const g = ((area.bgColor >> 8) & 0xff);
-    const b = (area.bgColor & 0xff);
+    const r = (area.bgColor >> 16) & 0xff;
+    const g = (area.bgColor >> 8) & 0xff;
+    const b = area.bgColor & 0xff;
     const darkR = Math.floor(r * (0.3 + depthRatio * 0.3));
     const darkG = Math.floor(g * (0.3 + depthRatio * 0.3));
     const darkB = Math.floor(b * (0.3 + depthRatio * 0.3));

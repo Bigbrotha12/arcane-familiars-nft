@@ -1,63 +1,60 @@
-import { useEffect, useCallback, useRef } from 'react'
-import { useBlocker } from 'react-router-dom'
+import { useEffect, useCallback, useRef } from 'react';
+import { useBlocker } from 'react-router-dom';
 
 interface UseGameGuardOptions {
-  onAutoSave: () => void
-  onShowExitModal: () => void
+  onAutoSave: () => void;
+  onShowExitModal: () => void;
   /** Return false to skip the autosave (e.g. mid-battle, when the server owns writes). */
-  canAutoSave?: () => boolean
+  canAutoSave?: () => boolean;
 }
 
 export function useGameGuard({ onAutoSave, onShowExitModal, canAutoSave }: UseGameGuardOptions) {
-  const blocker = useBlocker(
-    ({ currentLocation, nextLocation }) =>
-      currentLocation.pathname !== nextLocation.pathname
-  )
+  const blocker = useBlocker(({ currentLocation, nextLocation }) => currentLocation.pathname !== nextLocation.pathname);
 
-  const isBlockerActive = blocker.state === 'blocked'
+  const isBlockerActive = blocker.state === 'blocked';
 
   useEffect(() => {
     if (blocker.state === 'blocked') {
-      onShowExitModal()
+      onShowExitModal();
     }
-  }, [blocker.state, onShowExitModal])
+  }, [blocker.state, onShowExitModal]);
 
   const handleBlockerProceed = useCallback(() => {
-    if (blocker.state === 'blocked') blocker.proceed()
-  }, [blocker])
+    if (blocker.state === 'blocked') blocker.proceed();
+  }, [blocker]);
 
   const handleBlockerReset = useCallback(() => {
-    if (blocker.state === 'blocked') blocker.reset()
-  }, [blocker])
+    if (blocker.state === 'blocked') blocker.reset();
+  }, [blocker]);
 
   useEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
-      e.preventDefault()
-      e.returnValue = ''
-    }
-    window.addEventListener('beforeunload', handler)
-    return () => window.removeEventListener('beforeunload', handler)
-  }, [])
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, []);
 
   // Ref to hold the latest onAutoSave callback (avoids re-binding the event listener)
-  const autoSaveRef = useRef(onAutoSave)
-  autoSaveRef.current = onAutoSave
-  const canAutoSaveRef = useRef(canAutoSave)
-  canAutoSaveRef.current = canAutoSave
+  const autoSaveRef = useRef(onAutoSave);
+  autoSaveRef.current = onAutoSave;
+  const canAutoSaveRef = useRef(canAutoSave);
+  canAutoSaveRef.current = canAutoSave;
 
   useEffect(() => {
     const handler = () => {
       if (document.hidden && canAutoSaveRef.current?.() !== false) {
-        autoSaveRef.current()
+        autoSaveRef.current();
       }
-    }
-    document.addEventListener('visibilitychange', handler)
-    return () => document.removeEventListener('visibilitychange', handler)
-  }, [])
+    };
+    document.addEventListener('visibilitychange', handler);
+    return () => document.removeEventListener('visibilitychange', handler);
+  }, []);
 
   return {
     handleBlockerProceed,
     handleBlockerReset,
     isBlockerActive,
-  }
+  };
 }

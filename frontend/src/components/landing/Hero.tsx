@@ -1,5 +1,5 @@
-import { Link } from 'react-router-dom'
-import Button from '@/components/ui/Button'
+import { Link } from 'react-router-dom';
+import Button from '@/components/ui/Button';
 
 function Hero() {
   return (
@@ -15,25 +15,26 @@ function Hero() {
         </div>
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-semibold text-text-primary leading-tight">
-            Collect. Battle.{' '}
-            <span className="text-accent">Earn.</span>
+            Collect. Battle. <span className="text-accent">Earn.</span>
           </h1>
           <p className="mt-md text-lg text-text-secondary font-body max-w-lg mx-auto">
-            Summon cute familiar NFTs, craft powerful abilities, and battle
-            creatures in a magical world where your collection is truly yours.
+            Summon cute familiar NFTs, craft powerful abilities, and battle creatures in a magical world where your
+            collection is truly yours.
           </p>
           <div className="mt-xl flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/play/game">
               <Button size="lg">Start Playing</Button>
             </Link>
             <Link to="/app/collection">
-              <Button variant="secondary" size="lg">View Collection</Button>
+              <Button variant="secondary" size="lg">
+                View Collection
+              </Button>
             </Link>
           </div>
         </div>
       </div>
     </section>
-  )
+  );
 }
 
-export default Hero
+export default Hero;

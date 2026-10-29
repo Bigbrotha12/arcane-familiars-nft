@@ -65,7 +65,10 @@ function createSheetAnimation(scene: Phaser.Scene, key: string, config: SpriteSh
   if (scene.textures.get(key).frameTotal < 2) return;
   scene.anims.create({
     key,
-    frames: scene.anims.generateFrameNumbers(key, { start: 0, end: Math.max(0, scene.textures.get(key).frameTotal - 2) }),
+    frames: scene.anims.generateFrameNumbers(key, {
+      start: 0,
+      end: Math.max(0, scene.textures.get(key).frameTotal - 2),
+    }),
     frameRate: config.frameRate,
     repeat,
   });

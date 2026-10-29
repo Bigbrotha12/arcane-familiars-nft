@@ -14,14 +14,21 @@ import {
   validateDungeonExplore,
   validateParty,
 } from '@arcane-familiars/game-logic';
-import type { Bindings } from '../types';
-import { loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
-import { getErrorMessage, readBody } from '../utils/http';
-import {
-  persistCombatantResources,
-} from '../utils/activeBattle';
+import type { Bindings, Variables } from '../types';
+import { conditionalStateUpdate, getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { internalError, readBody } from '../utils/http';
 
-const explorationRouter = new Hono<{ Bindings: Bindings }>();
+const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+async function getActiveBattleRow(
+  db: D1Database,
+  anonymousId: string
+): Promise<{ battle_id: string; battle_json: string } | null> {
+  return db
+    .prepare('SELECT battle_id, battle_json FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    .bind(anonymousId)
+    .first<{ battle_id: string; battle_json: string }>();
+}
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -52,19 +59,17 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Invalid area id' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
-    if (!state.unlockedAreas.includes(areaId)) {
-      return c.json({ error: 'Area is not unlocked' }, 403);
+    if (await getActiveBattleRow(c.env.DB, anonymousId)) {
+      return c.json({ error: 'Cannot enter a dungeon during an active battle', code: 'BATTLE_ACTIVE' }, 409);
     }
 
-    if (state.activeBattle) {
-      return c.json({ error: 'Cannot enter a dungeon during an active battle' }, 409);
+    if (!state.unlockedAreas.includes(areaId)) {
+      return c.json({ error: 'Area is not unlocked' }, 403);
     }
 
     if (state.dungeon) {
@@ -95,8 +100,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     return c.json({ dungeon, area });
   } catch (error: unknown) {
-    console.error('Enter dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to enter dungeon' }, 500);
+    return internalError(c, error, 'Enter dungeon');
   }
 });
 
@@ -112,18 +116,16 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
-    if (state.activeBattle) {
-      return c.json({
-        error: 'Cannot explore while a battle is active; resume or abandon it',
-        code: 'BATTLE_ACTIVE',
-      }, 409);
+    if (await getActiveBattleRow(c.env.DB, anonymousId)) {
+      return c.json(
+        { error: 'Cannot explore while a battle is active; resume or abandon it', code: 'BATTLE_ACTIVE' },
+        409
+      );
     }
 
     if (!state.dungeon) {
@@ -203,8 +205,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
 
     return c.json({ room, encounter, enemy, treasure, treasureItem });
   } catch (error: unknown) {
-    console.error('Explore room error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to explore room' }, 500);
+    return internalError(c, error, 'Explore room');
   }
 });
 
@@ -220,15 +221,13 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, roomId, itemId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
-    if (state.activeBattle) {
-      return c.json({ error: 'Cannot collect treasure during an active battle' }, 409);
+    if (await getActiveBattleRow(c.env.DB, anonymousId)) {
+      return c.json({ error: 'Cannot collect treasure during an active battle', code: 'BATTLE_ACTIVE' }, 409);
     }
 
     if (!state.dungeon) {
@@ -270,8 +269,7 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     return c.json({ success: true, inventory: state.inventory });
   } catch (error: unknown) {
-    console.error('Collect treasure error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to collect treasure' }, 500);
+    return internalError(c, error, 'Collect treasure');
   }
 });
 
@@ -287,38 +285,67 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state: GameState = loaded.state;
+    const active = await getActiveBattleRow(c.env.DB, anonymousId);
 
-    // Idempotent exit: no active dungeon is a successful no-op (the dungeon is
-    // already cleared by a loss or boss victory).
-    if (!state.dungeon && !state.activeBattle) {
+    if (!state.dungeon && !active) {
       return c.json({ success: true });
     }
 
-    // Exiting mid-battle abandons it. Persist the combatant's resources before
-    // the dungeon is cleared; the battle lives in the same save document, so
-    // the clear and the dungeon exit commit together.
-    if (state.activeBattle) {
-      persistCombatantResources(state.dungeon, state.activeBattle.playerFamiliar);
+    // Exiting mid-battle abandons it: persist the combatant's HP/MP, then clear
+    // the dungeon and the battle row. A boss battle is forfeited; a normal
+    // encounter is left unresolved, same as flee.
+    let battleTurn = 0;
+    if (active) {
+      const battle = JSON.parse(active.battle_json) as {
+        turnCount: number;
+        playerFamiliar: {
+          familiarData: { id: string };
+          currentHp: number;
+          currentMp: number;
+        };
+      };
+      battleTurn = battle.turnCount;
+      if (state.dungeon) {
+        const id = battle.playerFamiliar.familiarData.id;
+        state.dungeon.partyHp[id] = Math.max(0, battle.playerFamiliar.currentHp);
+        state.dungeon.partyMp[id] = Math.max(0, battle.playerFamiliar.currentMp);
+      }
     }
 
     state.dungeon = null;
-    state.activeBattle = null;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
+    if (active) {
+      const stateStmt = conditionalStateUpdate(
+        c.env.DB,
+        state,
+        anonymousId,
+        loaded.version,
+        active.battle_id,
+        battleTurn
+      );
+      const battleStmt = c.env.DB.prepare(
+        `DELETE FROM active_battles
+           WHERE battle_id = ? AND anonymous_id = ?
+             AND json_extract(battle_json, '$.turnCount') = ?`
+      ).bind(active.battle_id, anonymousId, battleTurn);
+      const results = await c.env.DB.batch([stateStmt, battleStmt]);
+      if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+        return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+      }
+    } else {
+      const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+      if (!saved) {
+        return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+      }
     }
 
     return c.json({ success: true });
   } catch (error: unknown) {
-    console.error('Exit dungeon error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to exit dungeon' }, 500);
+    return internalError(c, error, 'Exit dungeon');
   }
 });
 

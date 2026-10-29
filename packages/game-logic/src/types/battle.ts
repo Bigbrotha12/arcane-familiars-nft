@@ -26,7 +26,7 @@ export enum ActionType {
   Ability,
   Defend,
   Item,
-  Run
+  Run,
 }
 
 export interface BattleAction {
@@ -53,7 +53,7 @@ export interface ActionResult {
 export enum Outcome {
   Win,
   Loss,
-  Continue
+  Continue,
 }
 
 /** One executed action within a resolved turn, in playback order. */
@@ -108,7 +108,7 @@ export enum BattleResult {
   Won,
   Lost,
   Active,
-  Fled
+  Fled,
 }
 export interface BattleState {
   id: string;

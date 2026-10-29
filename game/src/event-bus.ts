@@ -1,32 +1,32 @@
-type Listener = (...args: any[]) => void
+type Listener = (...args: any[]) => void;
 
 class EventBus {
-  private listeners = new Map<string, Set<Listener>>()
+  private listeners = new Map<string, Set<Listener>>();
 
   on(event: string, fn: Listener): void {
     if (!this.listeners.has(event)) {
-      this.listeners.set(event, new Set())
+      this.listeners.set(event, new Set());
     }
-    this.listeners.get(event)!.add(fn)
+    this.listeners.get(event)!.add(fn);
   }
 
   off(event: string, fn: Listener): void {
-    this.listeners.get(event)?.delete(fn)
+    this.listeners.get(event)?.delete(fn);
   }
 
   emit(event: string, ...args: any[]): void {
     this.listeners.get(event)?.forEach((fn) => {
       try {
-        fn(...args)
+        fn(...args);
       } catch (err) {
-        console.error(`[EventBus] Listener error for "${event}":`, err)
+        console.error(`[EventBus] Listener error for "${event}":`, err);
       }
-    })
+    });
   }
 
   clear(): void {
-    this.listeners.clear()
+    this.listeners.clear();
   }
 }
 
-export const gameEventBus = new EventBus()
+export const gameEventBus = new EventBus();

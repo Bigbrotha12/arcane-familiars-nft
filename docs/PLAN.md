@@ -1,3 +1,7 @@
+> # SUPERSEDED
+> **This document is outdated and does not reflect the current project.** It describes a 2023-era plan (Unity, webpack, MUI). The canonical, up-to-date project overview is [`README.md`](../README.md); workstream/roadmap detail lives in [`docs/PRODUCTION-DEPLOYMENT-GAP-PLAN.md`](./PRODUCTION-DEPLOYMENT-GAP-PLAN.md).
+> _Marked superseded as part of Workstream 6 (step 26), September 2026. Kept for historical reference only._
+
 # Arcane Familiars NFT - Project Plan
 
 ## 1. Project Overview

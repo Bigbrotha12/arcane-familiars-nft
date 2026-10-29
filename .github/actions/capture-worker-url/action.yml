@@ -1,0 +1,33 @@
+name: Capture Worker URL
+description: Build the workers.dev URL for an environment-scoped Worker deployment.
+
+inputs:
+  worker:
+    description: Worker base name (e.g. arcane-familiars-backend)
+    required: true
+  env:
+    description: Environment name (staging or production)
+    required: true
+  subdomain:
+    description: The account's workers.dev subdomain (e.g. acct from https://acct.workers.dev)
+    required: true
+
+outputs:
+  worker-url:
+    description: The derived workers.dev URL
+    value: ${{ steps.capture.outputs.worker-url }}
+
+runs:
+  using: composite
+  steps:
+    - id: capture
+      shell: bash
+      run: |
+        set -euo pipefail
+        if [ -z "${{ inputs.subdomain }}" ]; then
+          echo "::error::CF_WORKERS_SUBDOMAIN is not set. Find your workers.dev subdomain in the Cloudflare dashboard and set it as a repo variable."
+          exit 1
+        fi
+        WORKER_URL="https://${{ inputs.worker }}-${{ inputs.env }}.${{ inputs.subdomain }}.workers.dev"
+        echo "worker-url=${WORKER_URL}" >> "$GITHUB_OUTPUT"
+        echo "Derived Worker URL: ${WORKER_URL}"

@@ -1,10 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: [
-    './src/**/*.{js,jsx,ts,tsx}',
-    './dist/*.html',
-    './dist/*.js'
-  ],
+  content: ['./src/**/*.{js,jsx,ts,tsx}', './dist/*.html', './dist/*.js'],
   darkMode: ['selector', '[data-theme="dark"]'],
   theme: {
     fontFamily: {
@@ -44,11 +40,11 @@ module.exports = {
         lg: '20px',
       },
       spacing: {
-        'xs': '4px',
-        'sm': '8px',
-        'md': '16px',
-        'lg': '24px',
-        'xl': '32px',
+        xs: '4px',
+        sm: '8px',
+        md: '16px',
+        lg: '24px',
+        xl: '32px',
         '2xl': '48px',
         '3xl': '64px',
       },
@@ -68,4 +64,4 @@ module.exports = {
     },
   },
   plugins: [],
-}
+};

@@ -87,7 +87,7 @@ Severity: **P0** launch blocker, **P1** required for a credible v1, **P2** polis
 | P0.7 | Mid-battle refresh has no resume path | `ExplorationScene.ts:122-151` only restores boss rooms and pending treasure; active battles are not resumed | Player is returned to exploration with an unresolved encounter and can get lost/duplicate attempts | Add `GET /game/bootstrap` with active battle; resume BattleScene; add an explicit "abandon battle" path |
 | P0.8 | Boss runs cannot be abandoned | `BattleScene.handleExit` returns to world map with the dungeon still active; `run` is blocked for bosses | A player who cannot win is stuck in a dungeon they cannot exit cleanly | Add `POST /game/run/forfeit` and a Battle HUD "Forfeit run" action with confirmation |
 | P0.9 | No rate limiting or abuse controls | `backend/src/index.ts` has CORS only; no middleware | Trivial D1 cost DoS and reward farming via scripted requests | Per-IP/per-player rate limits, body size cap, action throttles, WAF rules |
-| P0.10 | Migration hygiene is unsafe | Both `0003_add_state_version.sql` and `0003_state_revision.sql` exist; `0004` adds `dungeon_runs.ended_at`, `0005` drops unused tables; `revision` and `dungeon_runs` are unused. The 2026-10-29 production snapshot is further ahead: it has migrations `0004`–`0010` (wallet bindings/challenges, guest marker, rate limits) that are not in the repo | Ambiguous migration history; production schema is not reproducible; renumbering applied files can corrupt D1 bookkeeping; auth/rate-limit work overlaps unknown deployed code | Freeze applied migrations, recover the deployed Worker/migration source, capture the real production schema with `wrangler d1 export`, add a timestamped reconciliation migration, and reset numbering only for local/dev. See `docs/MIGRATIONS.md` |
+| P0.10 | Migration hygiene is unsafe | Both `0003_add_state_version.sql` and `0003_state_revision.sql` existed; `0004` adds `dungeon_runs.ended_at`, `0005` drops unused tables. The 2026-10-29 upstream merge brought the production history (`0004`–`0010`: wallet bindings/challenges, guest marker, rate limits) and renumbered the older files | Resolved by the merge; new migrations must still sort after `0010` and be tested against the production snapshot | Freeze the merged history, test fresh-DB plus production-snapshot migrations, and never renumber applied files. See `docs/MIGRATIONS.md` |
 | P0.11 | CI does not test the game | `.github/workflows/ci.yml` has only `frontend` and `backend` jobs; the `game` (Phaser) workspace and `packages/game-logic` are neither built nor type-checked, and tests are not run | Regressions in combat/progression ship silently | Add unit tests, route integration tests, e2e smoke, lint, and build/type-check for all four workspaces |
 | P0.12 | Mobile is effectively unsupported | Fixed 800×600 canvas; HUD is scaled into the canvas box (`GamePage.tsx`, `useCanvasRect.ts`); battle/exploration input is still drawn in Phaser | Text and tap targets become unusably small; moving the HUD out of the canvas alone does not fix input | Make React the only input path; keep the canvas presentational; responsive shell; touch targets ≥ 44px; JS/asset budgets as exit criteria |
 | P0.13 | Combat state is not visible | `BattleScene.emitStateUpdate` never sends `statusEffects` or `cooldowns`; `AbilityOption` has no cooldown field | Players cannot see DoTs/buffs or why an ability is unavailable; combat becomes guesswork | Extend `GameStateSnapshot` and HUD; show status chips, cooldown badges, turn order, damage forecast |
@@ -107,12 +107,15 @@ Severity: **P0** launch blocker, **P1** required for a credible v1, **P2** polis
 | P0.27 | Guest accounts are an unbounded economy faucet | `saveManager.ts:15-22` grants 100 gold and 3 starters per new ID; no Turnstile/device limits | Cookie clearing or scripted guests farm the economy; no tradeable value in v1, but telemetry and future economy are polluted | Turnstile on guest creation, device/account velocity limits, economy invariants, per-account caps |
 | P0.28 | Session cookies will not work across the current origins | SPA on `*.pages.dev`, API on `*.workers.dev`; CORS does not set credentials; `SameSite=Lax` cookies are not sent cross-site | Auth as designed would silently fail in production | Put the API on the same registrable domain (e.g. `app.domain.com/api` proxied to the Worker) or use short-lived bearer tokens with refresh rotation; set `credentials: 'include'` and `Access-Control-Allow-Credentials` |
 
-**Status 2026-10-29:** P0.19–P0.26 are addressed on `fix/battle-state-integrity`.
-The battle now lives in `GameState.activeBattle`, so turn, rewards, inventory, and HP
-commit in one optimistic row write. Integration coverage is in
-`backend/test/battle-integrity.test.ts` (10 tests); action validation coverage is in
-`packages/game-logic`. P0.20/P0.21/P0.22/P0.23/P0.24/P0.25/P0.26 have regression tests.
-P0.27/P0.28 remain for the auth phase.
+**Status 2026-10-29:** P0.20–P0.26 are addressed on the merged `master`:
+room binding, restart rejection, abandon, bootstrap/resume, dungeon-mutation locks,
+0-HP start, invalid target, and useless-item rejection. Integration coverage is in
+`backend/test/battle-integrity.test.ts`; validation coverage is in
+`packages/game-logic`. P0.19 (two-row atomicity) still uses upstream's
+`conditionalStateUpdate` batch and should be revisited: the battle row and save row can
+still diverge if one conditional statement matches and the other does not. Moving the
+battle into `GameState.activeBattle` was prototyped but reverted to preserve the upstream
+auth/rate-limit architecture during the merge. P0.27/P0.28 remain for the auth phase.
 
 ### P1 — needed for a credible v1
 

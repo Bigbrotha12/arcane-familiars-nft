@@ -3,7 +3,7 @@
 // Inactive familiars: smaller arcs, positioned below-right of center
 // Status effects as horizontal divider between arcs
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 const mockParty: FamiliarState[] = [
   {
@@ -45,29 +45,26 @@ const mockParty: FamiliarState[] = [
     arcane: 18,
     affinity: 'water',
   },
-]
+];
 
 const mockStatusEffects = [
   { id: 'burn', icon: '🔥', duration: 2 },
   { id: 'shield', icon: '🛡️', duration: 3 },
   { id: 'regen', icon: '💚', duration: 1 },
-]
+];
 
 function CircularArcPartyPreview() {
-  const activeId = mockParty[0].id
-
   const renderArc = (familiar: FamiliarState, isActive: boolean) => {
-    const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-    const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
+    const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+    const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
 
-    const hpColor = hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444'
-    const size = isActive ? 88 : 72
-    const strokeWidth = isActive ? 6 : 5
-    const radius = (size - strokeWidth) / 2
-    const circumference = 2 * Math.PI * radius
+    const hpColor = hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444';
+    const size = isActive ? 88 : 72;
+    const strokeWidth = isActive ? 6 : 5;
+    const radius = (size - strokeWidth) / 2;
+    const circumference = 2 * Math.PI * radius;
 
-    const hpOffset = circumference * (1 - hpRatio * 0.75)
-    const mpOffset = circumference * (1 - mpRatio * 0.75)
+    const hpOffset = circumference * (1 - hpRatio * 0.75);
 
     return (
       <div className="flex flex-col items-center gap-1">
@@ -138,8 +135,8 @@ function CircularArcPartyPreview() {
           {familiar.name}
         </span>
       </div>
-    )
-  }
+    );
+  };
 
   return (
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
@@ -171,7 +168,7 @@ function CircularArcPartyPreview() {
         {renderArc(mockParty[2], false)}
       </div>
     </div>
-  )
+  );
 }
 
-export default CircularArcPartyPreview
+export default CircularArcPartyPreview;

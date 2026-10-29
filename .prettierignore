@@ -1,0 +1,11 @@
+node_modules
+dist
+build
+.wrangler
+**/package-lock.json
+**/worker-configuration.d.ts
+docs
+.github
+blockchain
+scripts
+README.md

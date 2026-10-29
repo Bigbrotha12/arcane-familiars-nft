@@ -12,25 +12,33 @@ function isOnCooldown(enemy: BattleFamiliar, abilityId: string): boolean {
  * 3. If has damage ability AND MP >= cost → use strongest damage (70% chance)
  * 4. Else → basic attack
  */
-export function selectEnemyAction(
-  enemy: BattleFamiliar,
-  player: BattleFamiliar,
-  rng: () => number,
-): BattleAction {
+export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar, rng: () => number): BattleAction {
   const hpPercent = enemy.currentHp / enemy.familiarData.stats.maxHp;
 
   // 1. Check for heal when low HP
   if (hpPercent < 0.3) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Ally && enemy.currentMp >= ability.mpCost) {
+      if (
+        ability &&
+        !isOnCooldown(enemy, abilityId) &&
+        ability.effectType === EffectType.Heal &&
+        ability.target === Target.Ally &&
+        enemy.currentMp >= ability.mpCost
+      ) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }
     // Also check self-heal abilities
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Heal && ability.target === Target.Self && enemy.currentMp >= ability.mpCost) {
+      if (
+        ability &&
+        !isOnCooldown(enemy, abilityId) &&
+        ability.effectType === EffectType.Heal &&
+        ability.target === Target.Self &&
+        enemy.currentMp >= ability.mpCost
+      ) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }
@@ -41,7 +49,12 @@ export function selectEnemyAction(
   if (!hasBuffs && rng() < 0.5) {
     for (const abilityId of enemy.familiarData.abilities) {
       const ability = getAbility(abilityId);
-      if (ability && !isOnCooldown(enemy, abilityId) && ability.effectType === EffectType.Buff && enemy.currentMp >= ability.mpCost) {
+      if (
+        ability &&
+        !isOnCooldown(enemy, abilityId) &&
+        ability.effectType === EffectType.Buff &&
+        enemy.currentMp >= ability.mpCost
+      ) {
         return { type: ActionType.Ability, abilityId, targetId: enemy.uid };
       }
     }

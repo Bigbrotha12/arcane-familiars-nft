@@ -25,13 +25,36 @@ import {
   ActionType,
   Outcome,
 } from '@arcane-familiars/game-logic';
-import type { Bindings } from '../types';
-import { loadGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import type { Bindings, Variables } from '../types';
+import { conditionalStateUpdate, getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
-import { getErrorMessage, readBody } from '../utils/http';
-import { persistCombatantResources } from '../utils/activeBattle';
+import { internalError, readBody } from '../utils/http';
 
-const gameBattleRouter = new Hono<{ Bindings: Bindings }>();
+const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+// Anti-farming: max completed battles (win or loss) per UTC calendar day per
+// account (WS4 step 18). Fleeing does not count.
+const MAX_BATTLES_PER_DAY = 20;
+
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function secondsUntilUtcMidnight(): number {
+  const now = new Date();
+  const nextMidnight = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  return Math.ceil((nextMidnight - now.getTime()) / 1000);
+}
+
+// Roll the day if needed, then count this completed battle toward the cap.
+function countCompletedBattle(state: GameState): void {
+  const day = todayUtc();
+  if (state.battlesDayUtc !== day) {
+    state.battlesDayUtc = day;
+    state.battlesToday = 0;
+  }
+  state.battlesToday = (state.battlesToday ?? 0) + 1;
+}
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
@@ -62,7 +85,7 @@ function ensureBattleUids(battle: BattleState): void {
 function getPersistedResources(
   dungeon: GameState['dungeon'],
   familiarId: string,
-  familiar: BattleFamiliar,
+  familiar: BattleFamiliar
 ): { currentHp: number; currentMp: number } {
   const maxHp = familiar.familiarData.stats.maxHp;
   const maxMp = familiar.familiarData.stats.maxMp;
@@ -73,6 +96,16 @@ function getPersistedResources(
     currentHp: typeof hp === 'number' && hp >= 0 ? Math.max(0, Math.min(hp, maxHp)) : familiar.familiarData.stats.hp,
     currentMp: typeof mp === 'number' && mp >= 0 ? Math.max(0, Math.min(mp, maxMp)) : familiar.familiarData.stats.mp,
   };
+}
+
+/**
+ * Write a combatant's final HP/MP back into the dungeon's per-member resource
+ * tables (voluntary swap-out, flee, end-of-turn persistence, KO relay).
+ */
+function persistCombatantResources(dungeon: GameState['dungeon'], familiar: BattleFamiliar): void {
+  if (!dungeon) return;
+  dungeon.partyHp[familiar.familiarData.id] = Math.max(0, familiar.currentHp);
+  dungeon.partyMp[familiar.familiarData.id] = Math.max(0, familiar.currentMp);
 }
 
 /**
@@ -112,19 +145,38 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Missing required fields: anonymousId, playerFamiliarId' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
 
-    if (state.activeBattle) {
-      return c.json({
-        error: 'A battle is already active; resume or abandon it',
-        code: 'BATTLE_ACTIVE',
-        battleId: state.activeBattle.id,
-      }, 409);
+    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+      .bind(anonymousId)
+      .first<{ battle_id: string }>();
+    if (activeBattle) {
+      return c.json(
+        {
+          error: 'A battle is already active; resume or abandon it',
+          code: 'BATTLE_ACTIVE',
+          battleId: activeBattle.battle_id,
+        },
+        409
+      );
+    }
+
+    // Daily battle cap: reject the start before any state/battle validation so
+    // the 403 fires even against a minimal state (testable) and no battle row or
+    // state write happens when the cap is exhausted.
+    const today = todayUtc();
+    const usedToday = state.battlesDayUtc === today ? (state.battlesToday ?? 0) : 0;
+    if (usedToday >= MAX_BATTLES_PER_DAY) {
+      return c.json(
+        {
+          error: `Daily battle limit reached (${MAX_BATTLES_PER_DAY}). Available again at ${today}T00:00:00Z`,
+        },
+        403,
+        { 'Retry-After': String(secondsUntilUtcMidnight()) }
+      );
     }
 
     const party = state.activeParty ?? [];
@@ -151,10 +203,13 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const playerFamiliar = buildIncomingCombatant(dungeon, playerFamiliarId);
     if (playerFamiliar.currentHp <= 0) {
-      return c.json({
-        error: 'That familiar has fainted; choose a living party member',
-        code: 'FAMILIAR_FAINTED',
-      }, 400);
+      return c.json(
+        {
+          error: 'That familiar has fainted; choose a living party member',
+          code: 'FAMILIAR_FAINTED',
+        },
+        400
+      );
     }
 
     // Enemy identity is derived from the persisted room encounter, never from the client.
@@ -165,7 +220,6 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     }
 
     const battleSeed = cryptoSeed();
-    const rng = seededRandom(battleSeed);
 
     let enemyFamiliar: BattleFamiliar;
     if (baseEnemy.isBoss) {
@@ -197,25 +251,30 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       seed: battleSeed,
     };
 
-    // The battle lives in the save document, so the encounter validation and
-    // the new battle commit in one optimistic write. There is no second table
-    // that can drift out of sync with the save.
-    state.activeBattle = battle;
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
-    }
+    // A battle row is created only after the active-battle guard above. Resume
+    // and abandon are the only ways to clear an existing row; the route never
+    // deletes a live battle to make room for a restart (which would restore HP).
+    await c.env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
+       VALUES (?, ?, ?, datetime('now'))`
+    )
+      .bind(battle.id, anonymousId, JSON.stringify(battle))
+      .run();
 
     return c.json({ battle });
   } catch (error: unknown) {
-    console.error('Start battle error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to start battle' }, 500);
+    return internalError(c, error, 'Start battle');
   }
 });
 
 gameBattleRouter.post('/game/battle/action', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; battleId: string; action: BattleAction; expectedTurnCount: number }>(c);
+    const body = await readBody<{
+      anonymousId: string;
+      battleId: string;
+      action: BattleAction;
+      expectedTurnCount?: number;
+    }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
@@ -224,28 +283,28 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     if (!anonymousId || !battleId || !action) {
       return c.json({ error: 'Missing required fields: anonymousId, battleId, action' }, 400);
     }
-    if (typeof expectedTurnCount !== 'number') {
-      return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
-    }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
-    const state = loaded.state;
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
 
-    const battle = state.activeBattle;
-    if (!battle || battle.id !== battleId) {
+    if (!row) {
       return c.json({ error: 'Battle not found' }, 404);
     }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
-    if (expectedTurnCount !== battle.turnCount) {
-      return c.json({ error: 'Battle state is stale; please refresh and retry', code: 'STALE_TURN' }, 409);
+    if (expectedTurnCount !== undefined && expectedTurnCount !== battle.turnCount) {
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
 
     const validation = validateBattleAction(action, battle, state.dungeon?.partyHp);
@@ -261,6 +320,23 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       if (!battle.playerFamiliar.familiarData.abilities.includes(action.abilityId)) {
         return c.json({ error: 'Player familiar does not know this ability' }, 400);
       }
+    }
+
+    // Anti-farming re-check: the guard at start is check-then-act, so a player
+    // at the cap could race `start` + `action` and let a battle that should
+    // never have started commit a cap increment. Re-check before resolution so
+    // the counter cannot exceed MAX_BATTLES_PER_DAY; a legitimate completion
+    // (19 -> win -> 20) is unaffected because this runs before the increment.
+    const today = todayUtc();
+    const usedToday = state.battlesDayUtc === today ? (state.battlesToday ?? 0) : 0;
+    if (usedToday >= MAX_BATTLES_PER_DAY) {
+      return c.json(
+        {
+          error: `Daily battle limit reached (${MAX_BATTLES_PER_DAY}). Available again at ${today}T00:00:00Z`,
+        },
+        403,
+        { 'Retry-After': String(secondsUntilUtcMidnight()) }
+      );
     }
 
     // Validate items BEFORE resolution; actual consumption and state effects
@@ -282,9 +358,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       // Validate state-level effects BEFORE consuming, so a failed use does
       // not eat the item.
       const revive = item.effects.find((e) => e.kind === 'revive_party');
-      const fainted = revive && state.dungeon
-        ? state.dungeon.party.filter((id) => (state.dungeon?.partyHp?.[id] ?? 0) <= 0)
-        : [];
+      const fainted =
+        revive && state.dungeon ? state.dungeon.party.filter((id) => (state.dungeon?.partyHp[id] ?? 0) <= 0) : [];
       if (revive && fainted.length === 0) {
         return c.json({ error: 'No fainted party members to revive' }, 400);
       }
@@ -299,13 +374,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const rng = seededRandom((battle.seed ?? cryptoSeed()) ^ (battle.turnCount + 1));
     const enemyAction = selectEnemyAction(battle.enemyFamiliar, battle.playerFamiliar, rng);
 
-    const { playerResult, enemyResult, updatedPlayerFamiliar, updatedEnemyFamiliar, steps: turnSteps, canceledActions } = resolveTurn(
-      action,
-      battle.playerFamiliar,
-      battle.enemyFamiliar,
-      enemyAction,
-      rng,
-    );
+    const {
+      playerResult,
+      enemyResult,
+      updatedPlayerFamiliar,
+      updatedEnemyFamiliar,
+      steps: turnSteps,
+      canceledActions,
+    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng);
 
     const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
     const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
@@ -332,7 +408,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           stateEffectNote = `gains ${effect.value} currency`;
         }
         if (effect.kind === 'revive_party' && state.dungeon) {
-          if (!state.dungeon.partyHp) state.dungeon.partyHp = {};
           for (const id of faintedPartyIds) {
             const data = getFamiliar(id);
             if (data) {
@@ -344,9 +419,18 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    battle.playerFamiliar = updateCooldowns(updatedPlayerFamiliar, playerActed && action.type === ActionType.Ability ? action.abilityId : undefined);
-    battle.enemyFamiliar = updateCooldowns(updatedEnemyFamiliar, enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined);
+    battle.playerFamiliar = updateCooldowns(
+      updatedPlayerFamiliar,
+      playerActed && action.type === ActionType.Ability ? action.abilityId : undefined
+    );
+    battle.enemyFamiliar = updateCooldowns(
+      updatedEnemyFamiliar,
+      enemyActed && enemyAction.type === ActionType.Ability ? enemyAction.abilityId : undefined
+    );
 
+    // Snapshot the turn count before mutating so the battle write below is
+    // conditional on the exact row this turn was computed from.
+    const turnBefore = battle.turnCount;
     battle.turnCount += 1;
     // A new turn begins: allow one free swap again (#10).
     battle.swapsThisTurn = 0;
@@ -362,11 +446,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     if (outcome === Outcome.Loss && state.dungeon) {
       const fallenId = battle.playerFamiliar.familiarData.id;
       const otherId = state.activeParty.find((id) => id !== fallenId);
-      if (
-        otherId !== undefined &&
-        getFamiliar(otherId) &&
-        (state.dungeon.partyHp?.[otherId] ?? 0) > 0
-      ) {
+      if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
         const incoming = buildIncomingCombatant(state.dungeon, otherId);
         forcedSwap = {
@@ -389,11 +469,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let rewards: BattleRewards | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
+      countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
 
       // Resolve the room the battle was started in. A player cannot move during
-      // a battle, but old battles persisted before roomId existed fall back to
-      // the current room.
+      // a battle, but legacy battles persisted before roomId existed fall back
+      // to the current room.
       const resolvedRoomId = resolveBattleRoomId(state.dungeon, battle);
       const room = resolvedRoomId && state.dungeon ? state.dungeon.rooms[resolvedRoomId] : undefined;
       if (room?.pendingEncounter) {
@@ -444,6 +525,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
+      countCompletedBattle(state);
       state.dungeon = null;
     } else {
       if (state.dungeon) {
@@ -474,23 +556,45 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    // One row write commits the turn, rewards, inventory, and battle together.
-    state.activeBattle = outcome === Outcome.Continue ? battle : null;
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
+    // Atomic: state + battle writes must succeed or fail together. Both
+    // statements are conditional on the rows read above, so a stale writer
+    // matches 0 rows and neither commit (D1 batch does not roll back a
+    // 0-row match on its own).
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, turnBefore);
+
+    const battleStmt =
+      outcome !== Outcome.Continue
+        ? c.env.DB.prepare(
+            `DELETE FROM active_battles
+               WHERE battle_id = ? AND anonymous_id = ?
+                 AND json_extract(battle_json, '$.turnCount') = ?`
+          ).bind(battleId, anonymousId, turnBefore)
+        : c.env.DB.prepare(
+            `UPDATE active_battles
+               SET battle_json = ?, updated_at = datetime('now')
+               WHERE battle_id = ? AND anonymous_id = ?
+                 AND json_extract(battle_json, '$.turnCount') = ?`
+          ).bind(JSON.stringify(battle), battleId, anonymousId, turnBefore);
+
+    const results = await c.env.DB.batch([stateStmt, battleStmt]);
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
     return c.json({ turnResult, state, turnCount: battle.turnCount });
   } catch (error: unknown) {
-    console.error('Battle action error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to process battle action' }, 500);
+    return internalError(c, error, 'Battle action');
   }
 });
 
 gameBattleRouter.post('/game/battle/swap', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; battleId: string; newFamiliarId: string; expectedTurnCount: number }>(c);
+    const body = await readBody<{
+      anonymousId: string;
+      battleId: string;
+      newFamiliarId: string;
+      expectedTurnCount?: number;
+    }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
@@ -499,28 +603,27 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     if (!anonymousId || !battleId || !newFamiliarId) {
       return c.json({ error: 'Missing required fields: anonymousId, battleId, newFamiliarId' }, 400);
     }
-    if (typeof expectedTurnCount !== 'number') {
-      return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
-    }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
-    const state = loaded.state;
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
 
-    const battle = state.activeBattle;
-    if (!battle || battle.id !== battleId) {
+    if (!row) {
       return c.json({ error: 'Battle not found' }, 404);
     }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
-    if (expectedTurnCount !== battle.turnCount) {
-      return c.json({ error: 'Battle state is stale; please refresh and retry', code: 'STALE_TURN' }, 409);
+    if (expectedTurnCount !== undefined && expectedTurnCount !== battle.turnCount) {
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
 
     if (newFamiliarId === battle.playerFamiliar.familiarData.id) {
@@ -532,6 +635,8 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'You can only swap once per turn' }, 400);
     }
 
+    const state = loaded.state;
+
     const party = state.activeParty ?? [];
     if (!party.includes(newFamiliarId)) {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
@@ -539,30 +644,37 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
 
     // A KO'd backup cannot be swapped into; this returns before any mutation,
     // so swapsThisTurn is not consumed by the rejected request.
-    if ((state.dungeon?.partyHp?.[newFamiliarId] ?? 0) <= 0) {
+    if ((state.dungeon?.partyHp[newFamiliarId] ?? 0) <= 0) {
       return c.json({ error: 'Cannot swap to a fainted familiar' }, 400);
     }
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
     battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
     battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
-    state.activeBattle = battle;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
+
+    const battleStmt = c.env.DB.prepare(
+      `UPDATE active_battles
+         SET battle_json = ?, updated_at = datetime('now')
+         WHERE battle_id = ? AND anonymous_id = ?
+           AND json_extract(battle_json, '$.turnCount') = ?`
+    ).bind(JSON.stringify(battle), battleId, anonymousId, battle.turnCount);
+
+    const results = await c.env.DB.batch([stateStmt, battleStmt]);
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
     return c.json({ battle });
   } catch (error: unknown) {
-    console.error('Swap familiar error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to swap familiar' }, 500);
+    return internalError(c, error, 'Swap familiar');
   }
 });
 
 gameBattleRouter.post('/game/battle/flee', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; battleId: string; expectedTurnCount: number }>(c);
+    const body = await readBody<{ anonymousId: string; battleId: string; expectedTurnCount?: number }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
@@ -571,27 +683,26 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
     if (!anonymousId || !battleId) {
       return c.json({ error: 'Missing required fields: anonymousId, battleId' }, 400);
     }
-    if (typeof expectedTurnCount !== 'number') {
-      return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
-    }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
-    const state = loaded.state;
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
 
-    const battle = state.activeBattle;
-    if (!battle || battle.id !== battleId) {
+    if (!row) {
       return c.json({ error: 'Battle not found' }, 404);
     }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
     }
 
-    if (expectedTurnCount !== battle.turnCount) {
-      return c.json({ error: 'Battle state is stale; please refresh and retry', code: 'STALE_TURN' }, 409);
+    if (expectedTurnCount !== undefined && expectedTurnCount !== battle.turnCount) {
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
 
     if (battle.isBoss) {
@@ -599,18 +710,27 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
     }
 
     battle.status = BattleResult.Fled;
-    persistCombatantResources(state.dungeon, battle.playerFamiliar);
-    state.activeBattle = null;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
+    const state = loaded.state;
+
+    persistCombatantResources(state.dungeon, battle.playerFamiliar);
+
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
+
+    const battleStmt = c.env.DB.prepare(
+      `DELETE FROM active_battles
+         WHERE battle_id = ? AND anonymous_id = ?
+           AND json_extract(battle_json, '$.turnCount') = ?`
+    ).bind(battleId, anonymousId, battle.turnCount);
+
+    const results = await c.env.DB.batch([stateStmt, battleStmt]);
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
     return c.json({ success: true, message: 'Successfully fled from battle', battle });
   } catch (error: unknown) {
-    console.error('Flee battle error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to flee from battle' }, 500);
+    return internalError(c, error, 'Flee battle');
   }
 });
 
@@ -629,39 +749,48 @@ gameBattleRouter.post('/game/battle/abandon', async (c) => {
       return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
     }
 
-    const loaded = await loadGameState(c.env.DB, anonymousId);
-    if (!loaded) {
-      return c.json({ error: 'Game state not found' }, 404);
-    }
-    const state = loaded.state;
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
 
-    const battle = state.activeBattle;
-    if (!battle || battle.id !== battleId) {
+    if (!row) {
       return c.json({ error: 'Battle not found' }, 404);
     }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
     if (expectedTurnCount !== battle.turnCount) {
-      return c.json({ error: 'Battle state is stale; please refresh and retry', code: 'STALE_TURN' }, 409);
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
+
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
 
     // Persist the active combatant's attrition. A non-boss abandon leaves the
     // room's encounter unresolved (same as flee); a boss abandon forfeits the
-    // run. Run-loot penalties are added with the run lifecycle work.
+    // run. Run-loot penalties land with the run lifecycle work.
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
     const forfeited = battle.isBoss;
     if (forfeited) {
       state.dungeon = null;
     }
-    state.activeBattle = null;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
-    if (!saved) {
-      return c.json({ error: 'Game state changed concurrently; please retry', code: 'STALE_STATE' }, 409);
+    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
+    const battleStmt = c.env.DB.prepare(
+      `DELETE FROM active_battles
+         WHERE battle_id = ? AND anonymous_id = ?
+           AND json_extract(battle_json, '$.turnCount') = ?`
+    ).bind(battleId, anonymousId, battle.turnCount);
+
+    const results = await c.env.DB.batch([stateStmt, battleStmt]);
+    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
     return c.json({ success: true, state, forfeited });
   } catch (error: unknown) {
-    console.error('Abandon battle error:', getErrorMessage(error));
-    return c.json({ error: 'Failed to abandon battle' }, 500);
+    return internalError(c, error, 'Abandon battle');
   }
 });
 

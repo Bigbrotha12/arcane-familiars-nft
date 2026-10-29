@@ -2,7 +2,7 @@ import { StatName } from '@/data/abilities';
 
 export enum ItemType {
   Consumable,
-  Equipment
+  Equipment,
 }
 
 /**
@@ -22,9 +22,7 @@ export type CombatItemEffect =
  * Effects applied by the backend to the save state (outside the battle
  * engine, which only sees the two active combatants).
  */
-export type StateItemEffect =
-  | { kind: 'revive_party'; percentage: number }
-  | { kind: 'grant_currency'; value: number };
+export type StateItemEffect = { kind: 'revive_party'; percentage: number } | { kind: 'grant_currency'; value: number };
 
 export type ItemEffectSpec = CombatItemEffect | StateItemEffect;
 
@@ -81,7 +79,10 @@ const elixir: ItemData = {
   id: 'elixir',
   name: 'Elixir',
   type: ItemType.Consumable,
-  effects: [{ kind: 'heal_hp', value: 40 }, { kind: 'heal_mp', value: 25 }],
+  effects: [
+    { kind: 'heal_hp', value: 40 },
+    { kind: 'heal_mp', value: 25 },
+  ],
   dropWeight: 1,
   icon: 'elixir',
 };

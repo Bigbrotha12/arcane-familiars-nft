@@ -5,27 +5,27 @@
 // Buttons have a uniform width: an optional icon in front of the label and a
 // min-width of icon width + 75px so every label gets the same footprint.
 
-import { ReactNode } from 'react'
-import Button from '@/components/ui/Button'
+import { ReactNode } from 'react';
+import Button from '@/components/ui/Button';
 
 export interface ActionBarItem {
-  key: string
-  label: string
-  icon?: ReactNode
-  primary?: boolean
-  disabled?: boolean
-  onClick: () => void
+  key: string;
+  label: string;
+  icon?: ReactNode;
+  primary?: boolean;
+  disabled?: boolean;
+  onClick: () => void;
 }
 
 interface ActionBarProps {
-  items: ActionBarItem[]
+  items: ActionBarItem[];
 }
 
 // icon width (1rem for the icon span) + 56px for the label
-const MIN_BUTTON_WIDTH = 'min-w-[72px]'
+const MIN_BUTTON_WIDTH = 'min-w-[72px]';
 
 function ActionBar({ items }: ActionBarProps) {
-  if (items.length === 0) return null
+  if (items.length === 0) return null;
 
   return (
     <div className="hud-frame pointer-events-auto flex flex-wrap items-center justify-center gap-1.5 rounded-md px-2 py-1.5">
@@ -38,17 +38,13 @@ function ActionBar({ items }: ActionBarProps) {
           onClick={onClick}
           className={`flex-1 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs`}
         >
-          {icon && (
-            <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none">
-              {icon}
-            </span>
-          )}
+          {icon && <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none">{icon}</span>}
           <span className="whitespace-nowrap">{label}</span>
         </Button>
       ))}
     </div>
-  )
+  );
 }
 
-export default ActionBar
-export { ActionBar }
+export default ActionBar;
+export { ActionBar };

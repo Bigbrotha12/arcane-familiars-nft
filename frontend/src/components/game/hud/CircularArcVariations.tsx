@@ -1,7 +1,7 @@
 // Multiple variations of circular arc party panel with 2 familiars
 // Shows different layouts: horizontal/vertical status, grayscale, overlapping
 
-import type { FamiliarState } from '@/game'
+import type { FamiliarState } from '@/game';
 
 const mockParty: FamiliarState[] = [
   {
@@ -30,7 +30,7 @@ const mockParty: FamiliarState[] = [
     arcane: 22,
     affinity: 'fire',
   },
-]
+];
 
 const mockStatusEffects = [
   { id: 'burn', icon: '🔥', duration: 2 },
@@ -43,35 +43,29 @@ const mockStatusEffects = [
   { id: 'haste', icon: '💨', duration: 2 },
   { id: 'blind', icon: '🌑', duration: 3 },
   { id: 'rage', icon: '💢', duration: 1 },
-]
+];
 
 function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80, nameOnTop: boolean = false) {
-  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0
-  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0
+  const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
+  const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
 
   // Grayscale for inactive
-  const hpColor = isActive
-    ? (hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444')
-    : '#6B7280'
-  const mpColor = isActive ? '#7C5CFC' : '#4B5563'
-  const textColor = isActive ? '#F0EFFF' : '#9CA3AF'
-  const subtextColor = isActive ? '#B8B5E0' : '#6B7280'
+  const hpColor = isActive ? (hpRatio > 0.5 ? '#2DD4BF' : hpRatio > 0.25 ? '#F59E0B' : '#EF4444') : '#6B7280';
+  const mpColor = isActive ? '#7C5CFC' : '#4B5563';
+  const textColor = isActive ? '#F0EFFF' : '#9CA3AF';
+  const subtextColor = isActive ? '#B8B5E0' : '#6B7280';
 
-  const strokeWidth = isActive ? 6 : 5
-  const radius = (size - strokeWidth) / 2
-  const circumference = 2 * Math.PI * radius
+  const strokeWidth = isActive ? 6 : 5;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
 
-  const hpOffset = circumference * (1 - hpRatio * 0.75)
-  const mpOffset = circumference * (1 - mpRatio * 0.75)
+  const hpOffset = circumference * (1 - hpRatio * 0.75);
 
   const nameLabel = (
-    <span
-      className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md"
-      style={{ color: textColor }}
-    >
+    <span className="max-w-20 truncate font-body text-[10px] font-medium drop-shadow-md" style={{ color: textColor }}>
       {familiar.name}
     </span>
-  )
+  );
 
   return (
     <div className="flex flex-col items-center gap-1">
@@ -132,15 +126,12 @@ function renderArc(familiar: FamiliarState, isActive: boolean, size: number = 80
       </div>
       {!nameOnTop && nameLabel}
     </div>
-  )
+  );
 }
 
 function renderStatusHorizontal(statusEffects: typeof mockStatusEffects, maxWidth: number = 200) {
   return (
-    <div
-      className="flex flex-wrap items-center justify-center gap-1"
-      style={{ maxWidth }}
-    >
+    <div className="flex flex-wrap items-center justify-center gap-1" style={{ maxWidth }}>
       {statusEffects.map((effect) => (
         <div
           key={effect.id}
@@ -156,15 +147,12 @@ function renderStatusHorizontal(statusEffects: typeof mockStatusEffects, maxWidt
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 function renderStatusVertical(statusEffects: typeof mockStatusEffects, maxHeight: number = 120) {
   return (
-    <div
-      className="flex flex-col items-center gap-1"
-      style={{ maxHeight, overflowY: 'auto' }}
-    >
+    <div className="flex flex-col items-center gap-1" style={{ maxHeight, overflowY: 'auto' }}>
       {statusEffects.map((effect) => (
         <div
           key={effect.id}
@@ -180,7 +168,7 @@ function renderStatusVertical(statusEffects: typeof mockStatusEffects, maxHeight
         </div>
       ))}
     </div>
-  )
+  );
 }
 
 export function ArcVariationA() {
@@ -190,21 +178,17 @@ export function ArcVariationA() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex flex-col items-center gap-6">
           {/* Active familiar - larger, offset left and up */}
-          <div className="relative -ml-16 -mt-8">
-            {renderArc(mockParty[0], true, 88)}
-          </div>
+          <div className="relative -ml-16 -mt-8">{renderArc(mockParty[0], true, 88)}</div>
 
           {/* Status effects - horizontal */}
           {renderStatusHorizontal(mockStatusEffects, 180)}
 
           {/* Inactive familiar - smaller, offset right and down */}
-          <div className="relative -mr-16 -mb-8">
-            {renderArc(mockParty[1], false, 72)}
-          </div>
+          <div className="relative -mr-16 -mb-8">{renderArc(mockParty[1], false, 72)}</div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationB() {
@@ -214,21 +198,17 @@ export function ArcVariationB() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex items-center gap-4">
           {/* Active familiar - offset left and up */}
-          <div className="relative -mt-12">
-            {renderArc(mockParty[0], true, 88)}
-          </div>
+          <div className="relative -mt-12">{renderArc(mockParty[0], true, 88)}</div>
 
           {/* Status effects - vertical */}
           {renderStatusVertical(mockStatusEffects, 100)}
 
           {/* Inactive familiar - offset right and down */}
-          <div className="relative -mb-12">
-            {renderArc(mockParty[1], false, 72)}
-          </div>
+          <div className="relative -mb-12">{renderArc(mockParty[1], false, 72)}</div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationC() {
@@ -238,21 +218,17 @@ export function ArcVariationC() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex flex-col items-center gap-4">
           {/* Active familiar - larger, offset left and up */}
-          <div className="relative -ml-20 -mt-12">
-            {renderArc(mockParty[0], true, 92)}
-          </div>
+          <div className="relative -ml-20 -mt-12">{renderArc(mockParty[0], true, 92)}</div>
 
           {/* Status effects - horizontal */}
           {renderStatusHorizontal(mockStatusEffects, 200)}
 
           {/* Inactive familiar - smaller, grayscale, offset right and down */}
-          <div className="relative -mr-20 -mb-12">
-            {renderArc(mockParty[1], false, 72)}
-          </div>
+          <div className="relative -mr-20 -mb-12">{renderArc(mockParty[1], false, 72)}</div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationD() {
@@ -262,21 +238,17 @@ export function ArcVariationD() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex items-center gap-6">
           {/* Active familiar - offset left and up */}
-          <div className="relative -mt-16">
-            {renderArc(mockParty[0], true, 88)}
-          </div>
+          <div className="relative -mt-16">{renderArc(mockParty[0], true, 88)}</div>
 
           {/* Status effects - vertical */}
           {renderStatusVertical(mockStatusEffects, 120)}
 
           {/* Inactive familiar - grayscale, offset right and down */}
-          <div className="relative -mb-16">
-            {renderArc(mockParty[1], false, 72)}
-          </div>
+          <div className="relative -mb-16">{renderArc(mockParty[1], false, 72)}</div>
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationE1() {
@@ -287,21 +259,17 @@ export function ArcVariationE1() {
       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
         <div className="flex flex-col items-center gap-2">
           {/* Active familiar - larger, offset left, name on top */}
-          <div className="relative -ml-12">
-            {renderArc(mockParty[0], true, 92, true)}
-          </div>
+          <div className="relative -ml-12">{renderArc(mockParty[0], true, 92, true)}</div>
 
           {/* Inactive familiar - smaller, grayscale, offset right, almost touching */}
-          <div className="relative -mr-12 -mt-1">
-            {renderArc(mockParty[1], false, 72)}
-          </div>
+          <div className="relative -mr-12 -mt-1">{renderArc(mockParty[1], false, 72)}</div>
 
           {/* Status effects - horizontal, below inactive */}
           {renderStatusHorizontal(mockStatusEffects, 160)}
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationE2() {
@@ -310,14 +278,10 @@ export function ArcVariationE2() {
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
       <div className="relative w-[200px] h-[280px]">
         {/* Active familiar - positioned with absolute */}
-        <div className="absolute top-0 left-1/2 -translate-x-[60%]">
-          {renderArc(mockParty[0], true, 92)}
-        </div>
+        <div className="absolute top-0 left-1/2 -translate-x-[60%]">{renderArc(mockParty[0], true, 92)}</div>
 
         {/* Inactive familiar - positioned almost touching below */}
-        <div className="absolute top-[85px] left-1/2 -translate-x-[40%]">
-          {renderArc(mockParty[1], false, 72)}
-        </div>
+        <div className="absolute top-[85px] left-1/2 -translate-x-[40%]">{renderArc(mockParty[1], false, 72)}</div>
 
         {/* Status effects - below both arcs */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
@@ -325,7 +289,7 @@ export function ArcVariationE2() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 export function ArcVariationE3() {
@@ -334,14 +298,10 @@ export function ArcVariationE3() {
     <div className="relative h-96 w-full rounded-lg border border-[#3B3870] bg-[#0A0A0F] overflow-hidden">
       <div className="relative w-[200px] h-[260px]">
         {/* Active familiar - positioned with absolute */}
-        <div className="absolute top-0 left-1/2 -translate-x-[60%]">
-          {renderArc(mockParty[0], true, 92)}
-        </div>
+        <div className="absolute top-0 left-1/2 -translate-x-[60%]">{renderArc(mockParty[0], true, 92)}</div>
 
         {/* Inactive familiar - almost touching */}
-        <div className="absolute top-[78px] left-1/2 -translate-x-[40%]">
-          {renderArc(mockParty[1], false, 72)}
-        </div>
+        <div className="absolute top-[78px] left-1/2 -translate-x-[40%]">{renderArc(mockParty[1], false, 72)}</div>
 
         {/* Status effects - below both arcs */}
         <div className="absolute bottom-0 left-1/2 -translate-x-1/2">
@@ -349,7 +309,7 @@ export function ArcVariationE3() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function CircularArcVariations() {
@@ -363,9 +323,7 @@ function CircularArcVariations() {
       </div>
 
       <div>
-        <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">
-          B. Vertical Status, Overlapping
-        </h3>
+        <h3 className="mb-3 font-display text-base font-medium text-[#B8B5E0]">B. Vertical Status, Overlapping</h3>
         <ArcVariationB />
       </div>
 
@@ -404,7 +362,7 @@ function CircularArcVariations() {
         <ArcVariationE3 />
       </div>
     </div>
-  )
+  );
 }
 
-export default CircularArcVariations
+export default CircularArcVariations;

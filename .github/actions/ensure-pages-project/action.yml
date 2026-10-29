@@ -1,0 +1,29 @@
+name: Ensure Pages project
+description: Create a Cloudflare Pages project if it does not already exist.
+
+inputs:
+  project-name:
+    description: Pages project name
+    required: true
+  production-branch:
+    description: The project's production branch (must match the deploy --branch)
+    required: false
+    default: production
+
+runs:
+  using: composite
+  steps:
+    - id: ensure
+      shell: bash
+      run: |
+        set -euo pipefail
+        NAME="${{ inputs.project-name }}"
+        BRANCH="${{ inputs.production-branch }}"
+        echo "Ensuring Pages project '${NAME}' exists (production branch: '${BRANCH}')..."
+        if npx wrangler pages project list --json 2>/dev/null \
+          | jq -e --arg n "$NAME" 'any(.[]; .["Project Name"] == $n)' >/dev/null 2>&1; then
+          echo "Pages project '${NAME}' already exists - skipping create."
+        else
+          npx wrangler pages project create "$NAME" --production-branch="$BRANCH"
+          echo "Pages project '${NAME}' created."
+        fi

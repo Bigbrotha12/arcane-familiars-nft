@@ -1,9 +1,9 @@
-type Rarity = 'common' | 'rare' | 'epic' | 'legendary'
+type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
 
 interface BadgeProps {
-  children: string
-  variant?: Rarity
-  className?: string
+  children: string;
+  variant?: Rarity;
+  className?: string;
 }
 
 const rarityStyles: Record<Rarity, string> = {
@@ -11,7 +11,7 @@ const rarityStyles: Record<Rarity, string> = {
   rare: 'bg-accent-light text-accent',
   epic: 'bg-[#FCE7F3] text-[#BE185D]',
   legendary: 'bg-[#FEF3C7] text-[#D97706]',
-}
+};
 
 function Badge({ children, variant = 'common', className = '' }: BadgeProps) {
   return (
@@ -25,7 +25,7 @@ function Badge({ children, variant = 'common', className = '' }: BadgeProps) {
     >
       {children}
     </span>
-  )
+  );
 }
 
-export default Badge
+export default Badge;

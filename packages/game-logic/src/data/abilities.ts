@@ -5,7 +5,7 @@ export enum EffectType {
   Debuff,
   Dot,
   Hot,
-  MpHeal
+  MpHeal,
 }
 
 export enum StatName {
@@ -13,19 +13,19 @@ export enum StatName {
   Defense,
   Arcane,
   Speed,
-  Hp
+  Hp,
 }
 
 export enum Target {
   Enemy,
   Self,
-  Ally
+  Ally,
 }
 
 export enum ScalingStat {
   None,
   Attack,
-  Arcane
+  Arcane,
 }
 
 export interface AbilityData {
