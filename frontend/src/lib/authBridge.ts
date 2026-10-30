@@ -1,4 +1,3 @@
-import { forceRefreshIdToken, getIdToken } from '@/lib/immutable';
 import { storeIdToken } from '@/lib/token';
 
 /**
@@ -31,11 +30,13 @@ export function installAuthBridge(): void {
 
   window.__arcaneAuth = {
     getIdToken: async () => {
+      const { getIdToken } = await import('@/lib/immutable');
       const token = await getIdToken();
       if (token) storeIdToken(token);
       return token ?? null;
     },
     refreshIdToken: async () => {
+      const { forceRefreshIdToken } = await import('@/lib/immutable');
       const token = await forceRefreshIdToken();
       if (token) storeIdToken(token);
       return token ?? null;

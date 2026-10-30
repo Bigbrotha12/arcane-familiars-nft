@@ -5,6 +5,7 @@ import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { Layout } from '../ui/layout';
 import { C } from '../ui/theme';
+import { audioManager } from '../audio/manager';
 
 export class ShopScene extends Phaser.Scene {
   private layout!: Layout;
@@ -19,7 +20,13 @@ export class ShopScene extends Phaser.Scene {
     super({ key: SCENE_KEYS.SHOP });
   }
 
+  preload(): void {
+    audioManager.preload(this, { music: ['town'], ambience: ['interior'], sfx: ['coin'] });
+  }
+
   create(): void {
+    audioManager.playMusic('town');
+    audioManager.playAmbience('interior');
     this.layout = new Layout(this);
     this.isBuying = false;
     this.rowTexts = [];
@@ -62,7 +69,10 @@ export class ShopScene extends Phaser.Scene {
       })
       .setOrigin(0, 0.5)
       .setInteractive({ useHandCursor: true });
-    back.on('pointerdown', () => this.scene.start(SCENE_KEYS.WORLD_MAP));
+    back.on('pointerdown', () => {
+      audioManager.playSfx('ui_cancel');
+      this.scene.start(SCENE_KEYS.WORLD_MAP);
+    });
     back.on('pointerover', () => back.setColor('#F0EFFF'));
     back.on('pointerout', () => back.setColor('#A5A3C4'));
 
@@ -136,6 +146,7 @@ export class ShopScene extends Phaser.Scene {
       buyBg.on('pointerover', () => buyBg.setFillStyle(0x6a4ae8));
       buyBg.on('pointerout', () => buyBg.setFillStyle(0x7c5cfc));
       buyBg.on('pointerdown', () => {
+        audioManager.playSfx('ui_click');
         this.buy(entry.itemId);
       });
 
@@ -154,8 +165,10 @@ export class ShopScene extends Phaser.Scene {
       this.state = result.state;
       const item = getItem(itemId);
       this.messageText.setText(`Purchased ${item?.name ?? itemId}.`);
+      audioManager.playSfx('coin');
       this.renderRows();
     } catch (err) {
+      audioManager.playSfx('ui_error');
       this.messageText.setText(err instanceof Error ? err.message : 'Purchase failed');
     } finally {
       this.isBuying = false;

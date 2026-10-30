@@ -1,13 +1,16 @@
 import Phaser from 'phaser';
 import { gameConfig } from './config';
+import { audioManager } from './audio/manager';
 
 export function createGame(parentId: string): Phaser.Game {
   const game = new Phaser.Game({
     ...gameConfig,
     parent: parentId,
   });
+  audioManager.attach(game);
   if (typeof window !== 'undefined' && (import.meta as any).env?.DEV) {
     (window as any).__arcaneGame = game;
+    (window as any).__arcaneAudio = audioManager;
   }
   return game;
 }

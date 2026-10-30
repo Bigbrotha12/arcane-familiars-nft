@@ -1,13 +1,18 @@
-import { useCallback, useEffect, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import Nav from '@/components/layout/Nav';
-import PassportLogin from '@/components/auth/PassportLogin';
-import { getIdToken, isLoggedIn } from '@/lib/immutable';
 import { installAuthBridge } from '@/lib/authBridge';
 import { readIdToken, clearIdToken, storeIdToken } from '@/lib/token';
 
+const PassportLogin = lazy(() => import('@/components/auth/PassportLogin'));
+
+// Load the Passport SDK only after the game shell has painted. The import is
+// cached by the module loader, so repeated auth refreshes do not re-fetch it.
+const loadAuth = () => import('@/lib/immutable');
+
 export default function PlayLayout() {
   const [signedIn, setSignedIn] = useState<boolean>(() => readIdToken() !== null);
+  const [authUiReady, setAuthUiReady] = useState(false);
 
   const refreshAuth = useCallback(async () => {
     const tokenPresent = readIdToken() !== null;
@@ -30,6 +35,7 @@ export default function PlayLayout() {
       return;
     }
     try {
+      const { getIdToken, isLoggedIn } = await loadAuth();
       const loggedIn = await isLoggedIn();
       setSignedIn(loggedIn);
       // Re-hydrate the session token so the game client (which reads
@@ -45,7 +51,13 @@ export default function PlayLayout() {
 
   useEffect(() => {
     installAuthBridge();
-    refreshAuth();
+    // Let the game canvas mount before pulling in the Passport SDK. The token,
+    // when present, is already in sessionStorage and usable by the game client.
+    const timer = window.setTimeout(() => {
+      setAuthUiReady(true);
+      void refreshAuth();
+    }, 900);
+    return () => window.clearTimeout(timer);
   }, [refreshAuth]);
 
   // The game client fires this when it exhausted its token refresh attempt, so
@@ -65,14 +77,16 @@ export default function PlayLayout() {
       <main className="flex-1 flex flex-col min-h-0">
         <Outlet />
       </main>
-      {!signedIn && (
+      {!signedIn && authUiReady && (
         <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50">
           <div className="flex items-center gap-3 rounded-lg bg-surface-card/95 backdrop-blur-md px-4 py-2 shadow-card border border-border">
             <span className="font-body text-xs text-text-secondary">
               Playing as guest — progress is saved on this browser for 24 hours
             </span>
             <span className="text-text-muted">·</span>
-            <PassportLogin onAuthChange={refreshAuth} />
+            <Suspense fallback={null}>
+              <PassportLogin onAuthChange={refreshAuth} />
+            </Suspense>
           </div>
         </div>
       )}

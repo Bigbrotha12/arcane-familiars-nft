@@ -8,6 +8,8 @@
   ],
   "scripts": {
     "dev": "npx concurrently -k -n backend,frontend -c blue,green \"npm run backend:dev\" \"npm run frontend:dev\"",
+    "audio:fetch": "bash scripts/fetch-audio-assets.sh",
+    "audio:check": "bash scripts/check-audio-assets.sh",
     "db:setup": "npm run db:setup --prefix backend",
     "game:dev": "npm run dev --prefix game",
     "game:build": "npm run build --prefix game",

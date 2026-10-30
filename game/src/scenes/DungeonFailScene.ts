@@ -6,6 +6,7 @@ import { SCENE_KEYS } from '../constants/scenes';
 import type { GameStateSnapshot } from '../events';
 import type { Inventory } from '@arcane-familiars/game-logic';
 import { Layout } from '../ui/layout';
+import { audioManager } from '../audio/manager';
 
 interface DungeonFailData {
   roomsExplored?: number;
@@ -36,7 +37,14 @@ export class DungeonFailScene extends Phaser.Scene {
     this.events.on('shutdown', this.onShutdown, this);
   }
 
+  preload(): void {
+    audioManager.preload(this, { music: ['defeat'], sfx: ['faint'] });
+  }
+
   create(): void {
+    audioManager.stopAmbience();
+    audioManager.playMusic('defeat');
+    audioManager.playSfx('faint');
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleEventExit);
@@ -173,7 +181,10 @@ export class DungeonFailScene extends Phaser.Scene {
     button.on('pointerout', () => {
       if (!this.isExiting) btnBg.setFillStyle(0x7c5cfc);
     });
-    button.on('pointerdown', () => this.handleExit(btnBg, btnText, errorText));
+    button.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      void this.handleExit(btnBg, btnText, errorText);
+    });
 
     const onEnter = () => this.handleExit(btnBg, btnText, errorText);
     const onSpace = () => this.handleExit(btnBg, btnText, errorText);
@@ -198,6 +209,7 @@ export class DungeonFailScene extends Phaser.Scene {
       await gameApiClient.exitDungeon();
       this.scene.start(SCENE_KEYS.WORLD_MAP);
     } catch (err) {
+      audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to exit dungeon';
       errorText.setText(message);
       btnText.setText('Return to World Map');

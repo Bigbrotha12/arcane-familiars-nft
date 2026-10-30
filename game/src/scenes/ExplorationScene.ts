@@ -16,6 +16,7 @@ import type {
   DungeonRoomSnapshot,
 } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
+import { audioManager } from '../audio/manager';
 
 interface ExplorationSceneData {
   areaId: string;
@@ -75,6 +76,11 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   preload(): void {
+    audioManager.preload(this, {
+      music: ['exploration', 'dungeon'],
+      ambience: ['forest', 'cave'],
+      sfx: ['door', 'footstep', 'encounter', 'loot', 'flee', 'ui_confirm', 'ui_cancel', 'ui_error'],
+    });
     const roomAreas: Record<string, string> = {
       verdantMeadow: 'verdant-meadow',
       crystalCaves: 'crystal-caves',
@@ -106,6 +112,7 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.area = area;
+    this.syncAreaAudio();
     this.explorationUI = new ExplorationUI(this);
     this.explorationUI.init(area);
     this.events.on('shutdown', this.onShutdown, this);
@@ -124,6 +131,13 @@ export class ExplorationScene extends Phaser.Scene {
     await this.loadDungeonState();
   }
 
+  private syncAreaAudio(): void {
+    const dungeonAreas = new Set(['crystalCaves', 'sunkenArchive']);
+    const caveAreas = new Set(['crystalCaves', 'emberHollow', 'frostpeakSummit', 'sunkenArchive']);
+    audioManager.playMusic(dungeonAreas.has(this.areaId) ? 'dungeon' : 'exploration');
+    audioManager.playAmbience(caveAreas.has(this.areaId) ? 'cave' : 'forest');
+  }
+
   private async loadDungeonState(): Promise<void> {
     try {
       const { state, battle } = await this.gameApi.bootstrap();
@@ -133,6 +147,7 @@ export class ExplorationScene extends Phaser.Scene {
         this.dungeon = state.dungeon;
         this.areaId = state.dungeon.areaId;
         this.area = AREAS[this.areaId];
+        this.syncAreaAudio();
 
         if (!this.area) {
           this.explorationUI.addLogMessage(`Unknown area: ${this.areaId}`);
@@ -208,6 +223,7 @@ export class ExplorationScene extends Phaser.Scene {
 
       this.explorationUI.showRoomInfo(currentRoom, this.currentRoomIndex, this.area!.roomCount, this.area!);
       this.explorationUI.addLogMessage(`Entering ${this.area!.name}...`);
+      audioManager.playSfx('door');
       this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to enter dungeon';
@@ -234,11 +250,15 @@ export class ExplorationScene extends Phaser.Scene {
       this.currentRoomIndex = roomIndex;
 
       this.explorationUI.showRoomInfo(result.room, roomIndex, this.area.roomCount, this.area);
+      audioManager.playSfx('footstep');
+      if (result.encounter) audioManager.playSfx('encounter');
+      if (result.treasure) audioManager.playSfx('loot');
 
       const isBossRoom = result.room.type === RoomType.Boss;
 
       if (isBossRoom) {
         this.explorationUI.addLogMessage('You sense a powerful presence...');
+        audioManager.playSfx('encounter');
         this.pendingEnemyId = this.area.bossId;
         this.bossActive = true;
         this.isProcessing = false;
@@ -290,6 +310,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.bossActive = false;
     this.pendingEnemyId = null;
     this.explorationUI.destroy();
+    audioManager.playSfx('encounter');
     this.scene.start(SCENE_KEYS.BATTLE, {
       enemyId,
       returnScene: SCENE_KEYS.EXPLORATION,
@@ -305,6 +326,7 @@ export class ExplorationScene extends Phaser.Scene {
     if (this.isProcessing || !this.explorationUI || this.explorationUI.isDestroyed()) return;
     this.encounterActive = false;
     this.pendingEnemyId = null;
+    audioManager.playSfx('flee');
     this.explorationUI.addLogMessage('You avoided the encounter.');
     if (this.pendingTreasureItemId) {
       this.treasureActive = true;
@@ -329,7 +351,9 @@ export class ExplorationScene extends Phaser.Scene {
         this.dungeon.runLoot = result.runLoot;
       }
       this.explorationUI.addLogMessage(`You took ${itemId}.`);
+      audioManager.playSfx('loot');
     } catch (err) {
+      audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to collect treasure';
       this.explorationUI.addLogMessage(message);
     }
@@ -350,6 +374,7 @@ export class ExplorationScene extends Phaser.Scene {
   private handleBossRetreat(): void {
     this.pendingEnemyId = null;
     this.bossActive = false;
+    audioManager.playSfx('flee');
     this.explorationUI.addLogMessage('You retreat from the boss chamber.');
     this.emitStateUpdate();
   }
@@ -367,6 +392,7 @@ export class ExplorationScene extends Phaser.Scene {
     }
 
     this.explorationUI.destroy();
+    audioManager.playSfx('ui_cancel');
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
     this.scene.start(SCENE_KEYS.WORLD_MAP);
   }
@@ -555,7 +581,9 @@ export class ExplorationScene extends Phaser.Scene {
       this.fullGameState = state;
       const name = getFamiliar(familiarId)?.name ?? familiarId;
       this.explorationUI.addLogMessage(`${name} takes the lead.`);
+      audioManager.playSfx('ui_confirm');
     } catch (err) {
+      audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to swap party leader';
       this.explorationUI.addLogMessage(`Error: ${message}`);
     } finally {

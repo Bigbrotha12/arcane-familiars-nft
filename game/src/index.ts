@@ -20,4 +20,5 @@ export type {
   ExploreDirection,
   OverlayMode,
   BattlePhase,
+  UiSfxName,
 } from './events';

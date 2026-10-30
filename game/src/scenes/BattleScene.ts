@@ -30,6 +30,7 @@ import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData } from '../utils/familiarState';
 import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
 import { effectAnimKey, getFamiliarSprites } from '../sprites/registry';
+import { audioManager } from '../audio/manager';
 import type {
   GameStateSnapshot,
   FamiliarState,
@@ -69,6 +70,14 @@ export class BattleScene extends Phaser.Scene {
     [Outcome.Loss]: BattleResult.Lost,
     [Outcome.Continue]: BattleResult.Active,
   };
+  private static readonly BOSS_IDS = new Set([
+    'meadowGuardian',
+    'caveWarden',
+    'shadowLord',
+    'emberTitan',
+    'frostQueen',
+    'archiveKeeper',
+  ]);
   private gameState: GameState | null = null;
   private timers: Phaser.Time.TimerEvent[] = [];
   private battleUI!: BattleUI;
@@ -105,6 +114,25 @@ export class BattleScene extends Phaser.Scene {
   }
 
   preload(): void {
+    audioManager.preload(this, {
+      music: ['battle', 'boss', 'defeat'],
+      sfx: [
+        'attack',
+        'hit',
+        'crit',
+        'block',
+        'spell',
+        'buff',
+        'heal',
+        'faint',
+        'victory',
+        'level_up',
+        'loot',
+        'coin',
+        'encounter',
+        'flee',
+      ],
+    });
     preloadFamiliarAssets(this);
     // Load battle background images
     this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
@@ -117,6 +145,8 @@ export class BattleScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     this.layout = new Layout(this);
+    audioManager.stopAmbience();
+    audioManager.playMusic(BattleScene.BOSS_IDS.has(this.enemyId) ? 'boss' : 'battle');
 
     // Shared design-space background (fallback backdrop + optional art + tint).
     this.sceneBackground = new SceneBackground(this, this.layout);
@@ -183,6 +213,7 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleBattleSetupError(message: string): void {
+    audioManager.playSfx('ui_error');
     this.battleUI.hideConnecting();
     this.battleUI.addLogMessage(message);
     this.battleUI.addLogMessage('Returning to the world map...');
@@ -261,11 +292,34 @@ export class BattleScene extends Phaser.Scene {
     this.emitStateUpdate();
   }
 
+  private playActionSound(action: BattleAction): void {
+    switch (action.type) {
+      case ActionType.Attack:
+        audioManager.playSfx('attack');
+        break;
+      case ActionType.Ability:
+        audioManager.playSfx('spell');
+        break;
+      case ActionType.Defend:
+        audioManager.playSfx('block');
+        break;
+      case ActionType.Item:
+        audioManager.playSfx('heal');
+        break;
+      case ActionType.Run:
+        audioManager.playSfx('flee');
+        break;
+      default:
+        audioManager.playSfx('ui_click');
+    }
+  }
+
   private async handleAction(action: BattleAction): Promise<void> {
     if (this.isProcessingAction || !this.battleState) return;
     this.isProcessingAction = true;
     this.phase = 'acting';
     this.emitStateUpdate();
+    this.playActionSound(action);
 
     try {
       const result = await gameApiClient.battleAction(this.battleState.id, action, this.battleState.turnCount);
@@ -403,6 +457,7 @@ export class BattleScene extends Phaser.Scene {
     this.isProcessingAction = true;
     this.phase = 'acting';
     this.emitStateUpdate();
+    audioManager.playSfx('flee');
 
     this.battleUI.addLogMessage('Attempting to flee...');
 
@@ -466,6 +521,7 @@ export class BattleScene extends Phaser.Scene {
       this.activateIncomingFamiliar(result.battle.playerFamiliar);
 
       this.battleUI.addLogMessage(`Switched to ${result.battle.playerFamiliar.familiarData.name}!`);
+      audioManager.playSfx('ui_confirm');
 
       this.isProcessingAction = false;
       this.phase = 'menu';
@@ -599,6 +655,14 @@ export class BattleScene extends Phaser.Scene {
     if (result.value <= 0) return;
     if (!this.battleState) return;
 
+    if (isDamage) {
+      audioManager.playSfx(result.isCritical ? 'crit' : 'hit', { volume: 0.75 });
+    } else if (result.effectType === EffectType.MpHeal) {
+      audioManager.playSfx('buff', { volume: 0.6 });
+    } else {
+      audioManager.playSfx('heal', { volume: 0.7 });
+    }
+
     const enemyUid = this.battleState.enemyFamiliar.uid;
     if (!result.targetId || !enemyUid) return;
     const targetIsEnemy = result.targetId === enemyUid;
@@ -619,6 +683,16 @@ export class BattleScene extends Phaser.Scene {
   }
 
   private handleVictory(rewards?: BattleRewards): void {
+    audioManager.playSfx('victory');
+    if (rewards?.currency) {
+      this.time.delayedCall(260, () => audioManager.playSfx('coin'));
+    }
+    if (rewards?.items.length) {
+      this.time.delayedCall(420, () => audioManager.playSfx('loot'));
+    }
+    if (rewards?.levelUp) {
+      this.time.delayedCall(650, () => audioManager.playSfx('level_up'));
+    }
     this.battleUI.addLogMessage('Battle won!');
     this.battleOutcome = {
       outcome: 'victory',
@@ -641,6 +715,8 @@ export class BattleScene extends Phaser.Scene {
     currency: number;
     items: { itemId: string; name: string; quantity: number }[];
   }): void {
+    audioManager.playSfx('faint');
+    audioManager.playMusic('defeat', { fadeMs: 600 });
     this.battleUI.addLogMessage('You were defeated...');
     this.battleOutcome = { outcome: 'defeat', lostLoot };
     this.phase = 'outcome';

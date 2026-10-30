@@ -7,6 +7,7 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
+import { audioManager } from '../audio/manager';
 
 interface AreaCard {
   areaId: string;
@@ -59,6 +60,8 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   async create(): Promise<void> {
+    audioManager.playMusic('main');
+    audioManager.stopAmbience();
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
@@ -130,7 +133,10 @@ export class WorldMapScene extends Phaser.Scene {
       })
       .setOrigin(1, 0.5)
       .setInteractive({ useHandCursor: true });
-    shopText.on('pointerdown', () => this.scene.start(SCENE_KEYS.SHOP));
+    shopText.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.scene.start(SCENE_KEYS.SHOP);
+    });
     shopText.on('pointerover', () => shopText.setColor('#A78BFA'));
     shopText.on('pointerout', () => shopText.setColor('#7C5CFC'));
 
@@ -254,11 +260,15 @@ export class WorldMapScene extends Phaser.Scene {
         border.on('pointerover', () => border.setFillStyle(0x2d2a5e));
         border.on('pointerout', () => border.setFillStyle(0x1e1b4b));
         border.on('pointerdown', () => {
+          audioManager.playSfx('ui_click');
           this.openArea(area.id);
         });
       } else {
         border.setInteractive();
-        border.on('pointerover', () => this.showMessage('Not yet unlocked'));
+        border.on('pointerover', () => {
+          audioManager.playSfx('ui_error', { volume: 0.5 });
+          this.showMessage('Not yet unlocked');
+        });
         border.on('pointerout', () => this.hideMessage());
       }
 
@@ -357,6 +367,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
+          audioManager.playSfx('ui_click');
           this.openArea(card.areaId);
         }
       }
@@ -366,6 +377,7 @@ export class WorldMapScene extends Phaser.Scene {
       if (this.selectedCardIndex >= 0 && this.selectedCardIndex < this.cards.length) {
         const card = this.cards[this.selectedCardIndex];
         if (card.unlocked) {
+          audioManager.playSfx('ui_click');
           this.openArea(card.areaId);
         }
       }
@@ -392,6 +404,7 @@ export class WorldMapScene extends Phaser.Scene {
     this.selectedCardIndex = index;
 
     if (index >= 0 && index < this.cards.length) {
+      audioManager.playSfx('ui_hover', { volume: 0.45 });
       const card = this.cards[index];
       card.border.setStrokeStyle(this.layout.s(3), 0xa78bfa);
 

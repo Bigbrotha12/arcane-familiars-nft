@@ -1,6 +1,13 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { GameStateSnapshot, PhaserGame, BattleEndedPayload, BattleActionName, PlayerActionPayload } from '@/game';
+import type {
+  GameStateSnapshot,
+  PhaserGame,
+  BattleEndedPayload,
+  BattleActionName,
+  PlayerActionPayload,
+  UiSfxName,
+} from '@/game';
 import type { gameEventBus, GameEvent } from '@/game';
 import GameToolbar from '@/components/game/GameToolbar';
 import ExitModal from '@/components/game/ExitModal';
@@ -28,13 +35,26 @@ export default function GamePage() {
   const [showExitModal, setShowExitModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
+  const [gameReady, setGameReady] = useState(false);
+  const [muted, setMuted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('af_audio_muted') === '1';
+    } catch {
+      return false;
+    }
+  });
   const eventBusCleanupRef = useRef<(() => void) | null>(null);
+
+  const playUiSfx = useCallback((sound: UiSfxName = 'click') => {
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.UI_SFX, { sound });
+  }, []);
 
   const handleSave = useCallback(() => {
     if (!gameModuleRef.current) return;
+    playUiSfx('click');
     setSaving(true);
     gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME);
-  }, []);
+  }, [playUiSfx]);
 
   const autoSave = useCallback(() => {
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME);
@@ -44,34 +64,60 @@ export default function GamePage() {
   // clobber battle results with a stale snapshot.
   const canAutoSave = useCallback(() => gameStateRef.current?.currentScene !== 'battle', []);
 
-  const handlePlayerAction = useCallback((action: BattleActionName, payload?: PlayerActionPayload['payload']) => {
-    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.PLAYER_ACTION, { action, payload });
-  }, []);
+  const handlePlayerAction = useCallback(
+    (action: BattleActionName, payload?: PlayerActionPayload['payload']) => {
+      playUiSfx('click');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.PLAYER_ACTION, { action, payload });
+    },
+    [playUiSfx]
+  );
 
   const handleBattleContinue = useCallback(() => {
+    playUiSfx('confirm');
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.BATTLE_CONTINUE);
     setBattleOutcome(null);
-  }, []);
+  }, [playUiSfx]);
 
-  const handleNavigate = useCallback((roomId: string) => {
-    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.NAVIGATE_ROOM, { roomId });
-  }, []);
+  const handleNavigate = useCallback(
+    (roomId: string) => {
+      playUiSfx('click');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.NAVIGATE_ROOM, { roomId });
+    },
+    [playUiSfx]
+  );
 
   const handleCollectTreasure = useCallback(() => {
+    playUiSfx('confirm');
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.COLLECT_TREASURE);
-  }, []);
+  }, [playUiSfx]);
 
   const handleFleeEncounter = useCallback(() => {
+    playUiSfx('cancel');
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.FLEE_ENCOUNTER);
-  }, []);
+  }, [playUiSfx]);
 
   const handleStartBattle = useCallback(() => {
+    playUiSfx('confirm');
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.START_BATTLE);
+  }, [playUiSfx]);
+
+  const handlePartySwap = useCallback(
+    (familiarId: string) => {
+      playUiSfx('click');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.PARTY_SWAP_REQUESTED, { familiarId });
+    },
+    [playUiSfx]
+  );
+
+  const handleToggleMute = useCallback(() => {
+    setMuted((value) => !value);
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.TOGGLE_MUTE);
   }, []);
 
-  const handlePartySwap = useCallback((familiarId: string) => {
-    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.PARTY_SWAP_REQUESTED, { familiarId });
-  }, []);
+  const handleOpenExit = useCallback(() => {
+    playUiSfx('click');
+    setShowExitModal(true);
+  }, [playUiSfx]);
 
   const cleanupGame = useCallback(() => {
     if (gameRef.current) {
@@ -164,20 +210,22 @@ export default function GamePage() {
 
   const { handleBlockerProceed, handleBlockerReset, isBlockerActive } = useGameGuard({
     onAutoSave: autoSave,
-    onShowExitModal: () => setShowExitModal(true),
+    onShowExitModal: handleOpenExit,
     canAutoSave,
   });
 
   const canvasRect = useCanvasRect(containerRef, gameState);
 
   const handleCancelExit = useCallback(() => {
+    playUiSfx('cancel');
     setShowExitModal(false);
     handleBlockerReset();
-  }, [handleBlockerReset]);
+  }, [handleBlockerReset, playUiSfx]);
 
   // Modal handlers — check isBlockerActive to decide between resuming a blocked
   // navigation and exiting to the in-game world map.
   const handleSaveAndExitFromModal = useCallback(async () => {
+    playUiSfx('confirm');
     if (isBlockerActive) {
       await handleSaveAndExit();
       handleBlockerProceed();
@@ -193,9 +241,10 @@ export default function GamePage() {
     } else {
       navigate('/play');
     }
-  }, [isBlockerActive, handleSaveAndExit, handleBlockerProceed, saveGame, navigate]);
+  }, [isBlockerActive, handleSaveAndExit, handleBlockerProceed, saveGame, navigate, playUiSfx]);
 
   const handleExitWithoutSaveFromModal = useCallback(() => {
+    playUiSfx('cancel');
     if (isBlockerActive) {
       handleBlockerProceed();
       return;
@@ -206,7 +255,7 @@ export default function GamePage() {
     } else {
       navigate('/play');
     }
-  }, [isBlockerActive, handleBlockerProceed, navigate]);
+  }, [isBlockerActive, handleBlockerProceed, navigate, playUiSfx]);
 
   // Mount Phaser game and subscribe to EventBus events
   useEffect(() => {
@@ -226,6 +275,7 @@ export default function GamePage() {
 
         const onStateUpdate = (state: GameStateSnapshot) => {
           gameStateRef.current = state;
+          setGameReady(true);
           setGameState(state);
         };
         const onSaveComplete = (result: { success: boolean }) => {
@@ -238,6 +288,7 @@ export default function GamePage() {
         };
         const onBattleEnded = (outcome: BattleEndedPayload) => setBattleOutcome(outcome);
         const onSceneChanged = (payload: { scene: string; areaId?: string }) => {
+          setGameReady(true);
           if (payload.scene !== 'battle') {
             setBattleOutcome(null);
           }
@@ -320,9 +371,23 @@ export default function GamePage() {
 
   return (
     <div className="relative flex-1 flex flex-col min-h-0 bg-[#0A0A0F]">
-      <GameToolbar gameState={gameState} onSave={handleSave} onExit={() => setShowExitModal(true)} saving={saving} />
+      <GameToolbar
+        gameState={gameState}
+        onSave={handleSave}
+        onExit={handleOpenExit}
+        onToggleMute={handleToggleMute}
+        muted={muted}
+        saving={saving}
+      />
 
       <div ref={containerRef} id="game-container" className="flex-1 relative min-h-0 overflow-hidden">
+        {!gameReady && !initError && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div className="rounded-md border border-border bg-surface-card/95 px-lg py-md shadow-card">
+              <p className="animate-pulse font-body text-sm text-text-secondary">Loading game…</p>
+            </div>
+          </div>
+        )}
         {gameState && (
           <div
             className="pointer-events-none absolute z-10"

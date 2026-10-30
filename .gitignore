@@ -13,6 +13,7 @@ docs/*
 !docs/PRODUCTION-READINESS.md
 !docs/IMPLEMENTATION-PLAN.md
 !docs/MIGRATIONS.md
+!docs/AUDIO-PIPELINE.md
 
 # environment
 .env
@@ -24,6 +25,9 @@ frontend/public/app/*
 build
 dist
 game/dist/*
+
+# downloaded audio assets (populate with `npm run audio:fetch`)
+game/public/assets/audio/
 
 # dependencies
 node_modules

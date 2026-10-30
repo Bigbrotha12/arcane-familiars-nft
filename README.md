@@ -53,6 +53,17 @@ of the playable game app and is not yet started.
 npm install
 ```
 
+### Audio assets
+Audio files are intentionally not committed. After installing, fetch them once:
+
+```bash
+npm run audio:fetch   # requires curl, unzip, python3, and ffmpeg
+npm run audio:check
+```
+
+See [docs/AUDIO-PIPELINE.md](./docs/AUDIO-PIPELINE.md) for sources, licenses, manual
+fallback, and the deploy note.
+
 ### Run backend + frontend together (development)
 ```bash
 npm run dev        # backend http://localhost:8787, frontend http://localhost:8080

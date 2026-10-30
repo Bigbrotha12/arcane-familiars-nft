@@ -1,8 +1,32 @@
-# Sprite Generation Scripts
+# Scripts
+
+Helper scripts for sprite generation and audio assets.
+
+## Audio
+
+### fetch-audio-assets.sh
+
+Download and prepare the game's ignored audio assets (music, SFX, ambience).
+
+```bash
+npm run audio:fetch
+```
+
+Requires `curl`, `unzip`, `python3`, and `ffmpeg`. See
+[docs/AUDIO-PIPELINE.md](../docs/AUDIO-PIPELINE.md) for licenses, manual
+fallback, and the deployment note.
+
+### check-audio-assets.sh
+
+Verify that every audio file expected by the game is present.
+
+```bash
+npm run audio:check
+```
+
+## Sprite generation
 
 Helper scripts for the video-based idle animation workflow. See [docs/SPRITE-WORKFLOW.md](../docs/SPRITE-WORKFLOW.md) for the full process.
-
-## Scripts
 
 ### extract-frames.sh
 

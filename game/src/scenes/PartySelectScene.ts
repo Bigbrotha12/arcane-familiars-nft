@@ -16,6 +16,7 @@ import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
 import { preloadFamiliarPortraits } from '../sprites/loader';
 import { safeFamiliarTextureKey } from '../sprites/registry';
+import { audioManager } from '../audio/manager';
 
 interface PartySelectData {
   areaId: string;
@@ -128,7 +129,8 @@ export class PartySelectScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     if (!this.areaId) return;
-
+    audioManager.playMusic('main');
+    audioManager.stopAmbience();
     this.layout = new Layout(this);
 
     // Wire EventBus for save, exit, and scene change notification
@@ -191,6 +193,7 @@ export class PartySelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
 
     this.backText.on('pointerdown', () => {
+      audioManager.playSfx('ui_cancel');
       this.scene.start(SCENE_KEYS.WORLD_MAP);
     });
     this.backText.on('pointerover', () => this.backText.setColor(COLORS.TEXT_HOVER));
@@ -264,6 +267,7 @@ export class PartySelectScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
 
       goBackText.on('pointerdown', () => {
+        audioManager.playSfx('ui_cancel');
         this.scene.start(SCENE_KEYS.WORLD_MAP);
       });
       goBackText.on('pointerover', () => goBackText.setColor(COLORS.TEXT_HOVER));
@@ -282,7 +286,10 @@ export class PartySelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    this.pagePrev.on('pointerdown', () => this.changePage(-1));
+    this.pagePrev.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.changePage(-1);
+    });
 
     this.pageText = this.add
       .text(this.layout.x(400), this.layout.y(530), '', {
@@ -300,7 +307,10 @@ export class PartySelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5)
       .setInteractive({ useHandCursor: true });
-    this.pageNext.on('pointerdown', () => this.changePage(1));
+    this.pageNext.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.changePage(1);
+    });
 
     this.renderPage();
     this.setupConfirmButton();
@@ -453,12 +463,14 @@ export class PartySelectScene extends Phaser.Scene {
     this.confirmBg.setInteractive({ useHandCursor: true });
     this.confirmBg.on('pointerdown', () => {
       if (this.selectedIds.length === MAX_PARTY_SIZE && !this.isSaving && !this._hasShownTerminalError) {
+        audioManager.playSfx('ui_confirm');
         this.confirmParty();
       }
     });
   }
 
   private toggleCard(card: FamiliarCard): void {
+    audioManager.playSfx(card.selected ? 'ui_cancel' : 'ui_confirm', { volume: 0.7 });
     if (card.selected) {
       card.selected = false;
       card.border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
@@ -513,6 +525,7 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       this.saveRetryCount++;
+      audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to save';
 
       if (this.saveRetryCount >= MAX_SAVE_ATTEMPTS) {

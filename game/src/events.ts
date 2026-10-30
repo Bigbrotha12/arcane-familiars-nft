@@ -14,7 +14,11 @@ export enum GameEvent {
   OVERLAY_MODE_CHANGED = 'game:overlayModeChanged',
   BATTLE_CONTINUE = 'game:battleContinue', // React → Phaser: user dismissed outcome, continue
   PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
+  TOGGLE_MUTE = 'game:toggleMute', // React → Phaser: toggle music/SFX mute
+  UI_SFX = 'game:uiSfx', // React → Phaser: play a UI sound
 }
+
+export type UiSfxName = 'click' | 'confirm' | 'cancel' | 'error' | 'hover';
 
 export interface StatusEffectView {
   id: string;
