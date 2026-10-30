@@ -363,7 +363,18 @@ export class BattleScene extends Phaser.Scene {
       } else if (outcome === Outcome.Win) {
         this.handleVictory(rewards);
       } else if (outcome === Outcome.Loss) {
-        this.handleDefeat(turnResult.lostLoot);
+        this.handleDefeat(
+          turnResult.lostLoot
+            ? {
+                currency: turnResult.lostLoot.currency,
+                items: turnResult.lostLoot.items.map((item) => ({
+                  itemId: item.itemId,
+                  name: getItem(item.itemId)?.name ?? item.itemId,
+                  quantity: item.quantity,
+                })),
+              }
+            : undefined
+        );
       } else {
         this.phase = 'menu';
       }
@@ -626,7 +637,10 @@ export class BattleScene extends Phaser.Scene {
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
   }
 
-  private handleDefeat(lostLoot?: { currency: number; items: { itemId: string; quantity: number }[] }): void {
+  private handleDefeat(lostLoot?: {
+    currency: number;
+    items: { itemId: string; name: string; quantity: number }[];
+  }): void {
     this.battleUI.addLogMessage('You were defeated...');
     this.battleOutcome = { outcome: 'defeat', lostLoot };
     this.phase = 'outcome';
@@ -782,7 +796,7 @@ export class BattleScene extends Phaser.Scene {
       party,
       isBoss: this.battleState.isBoss,
       runLootCurrency: runLoot.currency,
-      runLootItems: runLoot.items.map((item) => item.itemId),
+      runLootItemCount: runLoot.items.reduce((sum, item) => sum + item.quantity, 0),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }
@@ -802,22 +816,38 @@ export class BattleScene extends Phaser.Scene {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
 
+    let result: Awaited<ReturnType<typeof gameApiClient.abandonBattle>> | undefined;
     try {
       if (this.battleState) {
-        await gameApiClient.abandonBattle(this.battleState.id, this.battleState.turnCount);
+        result = await gameApiClient.abandonBattle(this.battleState.id, this.battleState.turnCount);
       }
     } catch (err) {
-      // Do not trap the player on a failed abandon; bootstrap will reconcile an
-      // orphaned row on the next load.
-      console.error('Abandon battle error:', err);
+      // Stay in the battle if the server did not confirm the abandon. Leaving
+      // would keep the battle row alive and silently resume the fight later.
+      this.isLeavingBattle = false;
+      const status = (err as Error & { status?: number }).status;
+      if (status === 404) {
+        this.battleUI.addLogMessage('The battle has already ended.');
+        this.scene.start(SCENE_KEYS.WORLD_MAP);
+        return;
+      }
+      this.battleUI.addLogMessage('Could not leave the battle; please try again.');
+      this.phase = 'menu';
+      this.emitStateUpdate();
+      return;
     }
 
     this.battleUI.destroy();
     this.sceneBackground?.destroy();
     this.sceneBackground = undefined;
 
-    if (this.battleState?.isBoss) {
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+    if (result?.forfeited) {
+      this.scene.start(SCENE_KEYS.DUNGEON_FAIL, {
+        roomsExplored: this.roomsExplored,
+        enemiesDefeated: this.enemiesDefeated,
+        lostLoot: result.lostLoot,
+        forfeited: true,
+      });
       return;
     }
     this.scene.start(this.returnScene, {

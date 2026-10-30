@@ -424,7 +424,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // applied here rather than in the battle engine, which only sees the two
     // active combatants.
     if (action.type === ActionType.Item && action.itemId && playerActed && consumedItem) {
-      consumeOwnedItem(state, action.itemId);
+      const consumed = consumeOwnedItem(state, action.itemId);
+      if (!consumed) {
+        return c.json({ error: 'You do not own this item' }, 400);
+      }
 
       for (const effect of consumedItem.effects) {
         if (effect.kind === 'grant_currency') {
@@ -829,7 +832,9 @@ gameBattleRouter.post('/game/battle/abandon', async (c) => {
     // run. Run-loot penalties land with the run lifecycle work.
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
     const forfeited = battle.isBoss;
+    let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
     if (forfeited) {
+      lostLoot = discardRunLoot(state);
       state.dungeon = null;
     }
 
@@ -845,7 +850,7 @@ gameBattleRouter.post('/game/battle/abandon', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state, forfeited });
+    return c.json({ success: true, state, forfeited, lostLoot });
   } catch (error: unknown) {
     return internalError(c, error, 'Abandon battle');
   }

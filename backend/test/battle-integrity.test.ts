@@ -42,10 +42,6 @@ function post(path: string, body: Record<string, unknown>, ip = '10.0.0.1'): Req
   });
 }
 
-function get(path: string, ip = '10.0.0.1'): Request {
-  return new Request(`https://example.com${path}`, { headers: { 'CF-Connecting-IP': ip } });
-}
-
 function makeCombatant(familiarId: string, hp: number, mp: number, isAlly: boolean): BattleFamiliar {
   const data = getFamiliar(familiarId);
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
@@ -283,13 +279,28 @@ describe('battle integrity', () => {
     expect(((await res.json()) as { error: string }).error).toBe('Invalid target');
   });
 
+  it('rejects a guest trying to bootstrap an account-keyed save', async () => {
+    const anonId = 'anon-account-key';
+    const db = (env as unknown as Bindings).DB;
+    await db
+      .prepare(
+        `INSERT INTO game_states (anonymous_id, state_json, version, updated_at, is_anonymous)
+         VALUES (?, ?, 1, datetime('now'), 0)`
+      )
+      .bind(anonId, JSON.stringify(makeState(anonId)))
+      .run();
+
+    const res = await fetchApp(post('/api/game/bootstrap', { anonymousId: anonId }, '10.0.0.9'));
+    expect(res.status).toBe(403);
+  });
+
   it('cleans an orphaned battle on bootstrap', async () => {
     const anonId = 'anon-orphan-bootstrap';
     const state = makeState(anonId);
     state.dungeon = null;
     await seed(anonId, state, makeBattle('battle-orphan'));
 
-    const res = await fetchApp(get(`/api/game/bootstrap?anonymousId=${anonId}`));
+    const res = await fetchApp(post('/api/game/bootstrap', { anonymousId: anonId }, '10.0.0.1'));
     expect(res.status).toBe(200);
     expect(((await res.json()) as { battle: unknown }).battle).toBeNull();
     expect(await battleCount(anonId)).toBe(0);

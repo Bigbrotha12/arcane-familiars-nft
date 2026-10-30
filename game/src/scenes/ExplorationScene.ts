@@ -450,7 +450,7 @@ export class ExplorationScene extends Phaser.Scene {
       treasureActive: this.treasureActive,
       bossRoom: this.bossActive,
       runLootCurrency: getRunLoot(this.dungeon).currency,
-      runLootItems: getRunLoot(this.dungeon).items.map((item) => item.itemId),
+      runLootItemCount: getRunLoot(this.dungeon).items.reduce((sum, item) => sum + item.quantity, 0),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }

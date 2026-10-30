@@ -1,12 +1,7 @@
 import { Hono } from 'hono';
 import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import {
-  getOrCreateGameState,
-  hasActiveBattle,
-  saveGameStateIfVersion,
-  saveGameStateIfVersionNoBattle,
-} from '../utils/saveManager';
+import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
 import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
@@ -43,15 +38,24 @@ gameStateRouter.post('/game/state/load', async (c) => {
  * orphaned rows (battle without a dungeon, missing room, or already-resolved
  * encounter) so the unique one-battle index cannot strand the player.
  */
-gameStateRouter.get('/game/bootstrap', async (c) => {
+gameStateRouter.post('/game/bootstrap', async (c) => {
   try {
-    const anonymousId = c.req.query('anonymousId');
-    if (!anonymousId) {
-      return c.json({ error: 'Missing required query: anonymousId' }, 400);
+    const body = await readBody<{ anonymousId: string }>(c);
+    if (!body?.anonymousId) {
+      return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
 
+    const anonymousId = body.anonymousId;
     const isGuest = c.get('isGuest') ?? false;
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+
+    // A guest must never be able to read or write an account-keyed save by
+    // presenting a Passport subject. readBody binds authenticated body ids to
+    // accountKey, but this explicit provenance check covers the guest path.
+    if (isGuest && !loaded.isAnonymous) {
+      return c.json({ error: 'Guest session cannot access an account save' }, 403);
+    }
+
     const state = loaded.state;
     const active = await getActiveBattleRow(c.env.DB, anonymousId);
 
@@ -121,7 +125,7 @@ gameStateRouter.post('/game/state/party', async (c) => {
 
     state.activeParty = [...activeParty];
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }

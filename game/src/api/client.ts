@@ -149,7 +149,7 @@ class GameApiClient {
   }
 
   async bootstrap(): Promise<{ state: GameState; battle: BattleState | null }> {
-    return this.request('GET', `/api/game/bootstrap?anonymousId=${encodeURIComponent(this.anonymousId)}`);
+    return this.request('POST', '/api/game/bootstrap', { anonymousId: this.anonymousId });
   }
 
   async setParty(activeParty: string[]): Promise<{ success: boolean; state: GameState }> {
@@ -233,7 +233,7 @@ class GameApiClient {
   async abandonBattle(
     battleId: string,
     expectedTurnCount: number
-  ): Promise<{ success: boolean; state: GameState; forfeited: boolean }> {
+  ): Promise<{ success: boolean; state: GameState; forfeited: boolean; lostLoot?: Inventory }> {
     return this.request('POST', '/api/game/battle/abandon', {
       anonymousId: this.anonymousId,
       battleId,

@@ -63,7 +63,7 @@ export interface GameStateSnapshot {
   treasureActive?: boolean;
   bossRoom?: boolean;
   runLootCurrency?: number;
-  runLootItems?: string[];
+  runLootItemCount?: number;
 }
 
 export interface SaveResult {
@@ -123,7 +123,7 @@ export interface BattleEndedPayload {
   };
   lostLoot?: {
     currency: number;
-    items: { itemId: string; quantity: number }[];
+    items: { itemId: string; name: string; quantity: number }[];
   };
 }
 

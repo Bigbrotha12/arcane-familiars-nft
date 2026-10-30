@@ -54,7 +54,7 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
               )}
               {outcome.lostLoot.items.length > 0 && (
                 <p className="font-body text-xs text-[#F0EFFF]">
-                  Lost: {outcome.lostLoot.items.map((item) => `${item.itemId} x${item.quantity}`).join(', ')}
+                  Lost: {outcome.lostLoot.items.map((item) => `${item.name} x${item.quantity}`).join(', ')}
                 </p>
               )}
             </div>

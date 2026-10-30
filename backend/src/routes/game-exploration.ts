@@ -19,12 +19,7 @@ import {
   bankRunLoot,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import {
-  getOrCreateGameState,
-  hasActiveBattle,
-  saveGameStateIfVersion,
-  saveGameStateIfVersionNoBattle,
-} from '../utils/saveManager';
+import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
 import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
@@ -102,7 +97,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
 
     state.dungeon = dungeon;
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
@@ -238,6 +233,10 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
 
     if (!state.dungeon) {
       return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    if (roomId !== state.dungeon.currentRoomId) {
+      return c.json({ error: 'You are not in that room' }, 400);
     }
 
     const room = state.dungeon.rooms[roomId];

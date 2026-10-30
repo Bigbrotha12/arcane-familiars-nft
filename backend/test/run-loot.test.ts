@@ -93,13 +93,13 @@ async function seed(anonId: string, state: GameState): Promise<void> {
     .run();
 }
 
-async function seedBattle(anonId: string, battleId: string): Promise<void> {
+async function seedBattle(anonId: string, battleId: string, isBoss = false): Promise<void> {
   const battle: BattleState = {
     id: battleId,
     roomId: 'room-1',
     playerFamiliar: combatant('yellowFighter', 1, 60),
     enemyFamiliar: combatant('yellowFighter', 999, 60),
-    isBoss: false,
+    isBoss,
     turnCount: 0,
     status: BattleResult.Active,
     swapsThisTurn: 0,
@@ -150,6 +150,31 @@ describe('run loot', () => {
     expect(body.state.dungeon).toBeNull();
   });
 
+  it('discards and reports run loot when a boss run is abandoned', async () => {
+    const anonId = 'anon-run-loot-boss-abandon';
+    await seed(anonId, makeState(anonId));
+    await seedBattle(anonId, 'battle-run-loot-boss-abandon', true);
+
+    const res = await fetchApp(
+      post(
+        '/api/game/battle/abandon',
+        { anonymousId: anonId, battleId: 'battle-run-loot-boss-abandon', expectedTurnCount: 0 },
+        '10.8.0.4'
+      )
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      forfeited: boolean;
+      lostLoot?: { currency: number; items: { itemId: string; quantity: number }[] };
+    };
+    expect(body.forfeited).toBe(true);
+    expect(body.lostLoot?.currency).toBe(50);
+    expect(body.lostLoot?.items).toEqual([{ itemId: 'potion_small', quantity: 2 }]);
+    const state = await readState(anonId);
+    expect(state.dungeon).toBeNull();
+    expect(state.inventory.currency).toBe(100);
+  });
+
   it('banks run loot on exit', async () => {
     const anonId = 'anon-run-loot-exit';
     await seed(anonId, makeState(anonId));
@@ -163,6 +188,27 @@ describe('run loot', () => {
       { itemId: 'potion_small', quantity: 2 },
     ]);
     expect(state.dungeon).toBeNull();
+  });
+
+  it('rejects collecting treasure from a room the player is not in', async () => {
+    const anonId = 'anon-run-loot-remote-room';
+    const state = makeState(anonId);
+    state.dungeon!.rooms['room-2'] = {
+      ...state.dungeon!.rooms['room-1'],
+      id: 'room-2',
+      pendingEncounter: undefined,
+      pendingTreasure: { itemId: 'fire_bomb', looted: false },
+    };
+    await seed(anonId, state);
+
+    const res = await fetchApp(
+      post(
+        '/api/game/dungeon/collect-treasure',
+        { anonymousId: anonId, roomId: 'room-2', itemId: 'fire_bomb' },
+        '10.8.0.5'
+      )
+    );
+    expect(res.status).toBe(400);
   });
 
   it('collects treasure into run loot, not the bank', async () => {

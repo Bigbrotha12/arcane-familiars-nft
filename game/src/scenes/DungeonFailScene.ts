@@ -4,16 +4,21 @@ import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import type { GameStateSnapshot } from '../events';
+import type { Inventory } from '@arcane-familiars/game-logic';
 import { Layout } from '../ui/layout';
 
 interface DungeonFailData {
   roomsExplored?: number;
   enemiesDefeated?: number;
+  lostLoot?: Inventory;
+  forfeited?: boolean;
 }
 
 export class DungeonFailScene extends Phaser.Scene {
   private roomsExplored = 0;
   private enemiesDefeated = 0;
+  private lostLoot?: Inventory;
+  private forfeited = false;
   private activeTweens: Phaser.Tweens.Tween[] = [];
   private isExiting = false;
   private keyboardHandlers: { enter: () => void; space: () => void } | null = null;
@@ -25,6 +30,8 @@ export class DungeonFailScene extends Phaser.Scene {
   init(data: DungeonFailData): void {
     this.roomsExplored = data.roomsExplored ?? 0;
     this.enemiesDefeated = data.enemiesDefeated ?? 0;
+    this.lostLoot = data.lostLoot;
+    this.forfeited = data.forfeited ?? false;
     this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
   }
@@ -75,7 +82,7 @@ export class DungeonFailScene extends Phaser.Scene {
     this.events.on('destroy', this.cleanupTweens, this);
 
     this.add
-      .text(width / 2, height * TITLE_Y_RATIO, 'Defeated', {
+      .text(width / 2, height * TITLE_Y_RATIO, this.forfeited ? 'Run Forfeited' : 'Defeated', {
         fontSize: layout.font(36),
         fontFamily: 'Fredoka',
         fontStyle: '600',
@@ -84,12 +91,19 @@ export class DungeonFailScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(width / 2, height * SUBTITLE_Y_RATIO, 'Your party has fallen... all loot found this run is lost.', {
-        fontSize: layout.font(16),
-        fontFamily: 'DM Sans',
-        fontStyle: '400',
-        color: '#A5A3C4',
-      })
+      .text(
+        width / 2,
+        height * SUBTITLE_Y_RATIO,
+        this.forfeited
+          ? 'You left the boss fight; all loot found this run is lost.'
+          : 'Your party has fallen... all loot found this run is lost.',
+        {
+          fontSize: layout.font(16),
+          fontFamily: 'DM Sans',
+          fontStyle: '400',
+          color: '#A5A3C4',
+        }
+      )
       .setOrigin(0.5);
 
     this.add.rectangle(width / 2, height * DIVIDER_Y_RATIO, DIVIDER_WIDTH, layout.s(1), 0x3b3870);
@@ -111,6 +125,23 @@ export class DungeonFailScene extends Phaser.Scene {
         color: '#A5A3C4',
       })
       .setOrigin(0.5);
+
+    if (this.lostLoot && (this.lostLoot.currency > 0 || this.lostLoot.items.length > 0)) {
+      const itemCount = this.lostLoot.items.reduce((sum, item) => sum + item.quantity, 0);
+      this.add
+        .text(
+          width / 2,
+          height * ENEMIES_STAT_Y_RATIO + layout.s(24),
+          `Lost run loot: ${this.lostLoot.currency}g, ${itemCount} item${itemCount === 1 ? '' : 's'}`,
+          {
+            fontSize: layout.font(13),
+            fontFamily: 'JetBrains Mono',
+            fontStyle: '500',
+            color: '#FBBF24',
+          }
+        )
+        .setOrigin(0.5);
+    }
 
     const btnBg = this.add.rectangle(0, 0, BUTTON_WIDTH, BUTTON_HEIGHT, 0x7c5cfc);
 

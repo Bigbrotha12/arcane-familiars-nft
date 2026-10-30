@@ -1,7 +1,7 @@
 import { Hono } from 'hono';
 import { getShopEntry, getItem } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { getOrCreateGameState, saveGameStateIfVersion } from '../utils/saveManager';
+import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
 
 const shopRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -27,6 +27,10 @@ shopRouter.post('/game/shop/buy', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: 'Cannot shop during an active battle' }, 409);
+    }
+
     if (state.inventory.currency < entry.price) {
       return c.json({ error: 'Not enough currency' }, 400);
     }
@@ -39,7 +43,7 @@ shopRouter.post('/game/shop/buy', async (c) => {
       state.inventory.items.push({ itemId, quantity: 1 });
     }
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
