@@ -1,4 +1,5 @@
 import { getProvider } from '@/lib/immutable';
+import { gameApiClient } from '@arcane-familiars/game/api-client';
 
 const PASSPORT_WALLET_KEY = 'af_passport_wallet';
 
@@ -140,6 +141,11 @@ export async function adoptGuestGame(idToken: string): Promise<AdoptGuestGameRes
     if (!res.ok) return { adopted: false, reason: `http-${res.status}` };
 
     const data = (await res.json()) as { adopted: boolean; reason?: string };
+    if (data.adopted === true) {
+      // The guest capability has been consumed; rotate it so the next account
+      // on this browser cannot adopt or write to the same guest row.
+      gameApiClient.rotateGuestIdentity();
+    }
     return { adopted: data.adopted === true, reason: data.reason };
   } catch (err) {
     console.warn('Guest game adoption failed (non-blocking):', err);

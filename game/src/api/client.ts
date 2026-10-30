@@ -144,6 +144,13 @@ class GameApiClient {
     return res.json() as Promise<T>;
   }
 
+  /** Drop the guest bearer id after adoption/logout so another account on this browser cannot inherit it. */
+  rotateGuestIdentity(): string {
+    this.anonymousId = randomId();
+    localStorage.setItem('af_anonymous_id', this.anonymousId);
+    return this.anonymousId;
+  }
+
   async loadGameState(): Promise<{ state: GameState }> {
     return this.request('POST', '/api/game/state/load', { anonymousId: this.anonymousId });
   }

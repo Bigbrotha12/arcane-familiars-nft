@@ -3,6 +3,7 @@ import Button from '@/components/ui/Button';
 import { login, logout, isLoggedIn, getIdToken, getWalletAddress } from '@/lib/immutable';
 import { storeIdToken, clearIdToken } from '@/lib/token';
 import { bindWallet, clearBoundWallet, adoptGuestGame } from '@/lib/wallet';
+import { gameApiClient } from '@arcane-familiars/game/api-client';
 
 interface PassportLoginProps {
   onAuthChange?: (signedIn: boolean) => void;
@@ -98,6 +99,7 @@ export default function PassportLogin({ onAuthChange }: PassportLoginProps) {
     try {
       clearIdToken();
       clearBoundWallet();
+      gameApiClient.rotateGuestIdentity();
       await logout();
       setAddress('');
       setAdoptNotice(null);
