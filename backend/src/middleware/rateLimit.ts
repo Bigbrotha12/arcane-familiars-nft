@@ -34,8 +34,8 @@ export interface RateLimitOptions {
  * FAIL-OPEN: if the D1 read/write fails the request is ALLOWED through — a
  * rate-limiter outage must never take the game down.
  *
- * RACE TOLERANCE: two concurrent requests may both pass the check and
- * increment. That is an accepted soft limit; no transactions/batches.
+ * ATOMIC COUNT: a single upsert counts the request before allowing it, so
+ * concurrent requests at a fresh key/window cannot all pass uncounted.
  */
 export function createRateLimitMiddleware(
   opts: RateLimitOptions = {}
@@ -55,34 +55,34 @@ export function createRateLimitMiddleware(
       const now = Date.now();
       const key = clientIp(c);
 
-      const row = await c.env.DB.prepare('SELECT window_start, count FROM rate_limits WHERE key = ?')
-        .bind(key)
+      // One atomic count-before-allow upsert. A reset window is detected inside
+      // the same statement, so concurrent requests cannot all observe an empty
+      // bucket and slip through uncounted.
+      const row = await c.env.DB.prepare(
+        `INSERT INTO rate_limits (key, window_start, count, updated_at)
+         VALUES (?, ?, 1, datetime('now'))
+         ON CONFLICT(key) DO UPDATE SET
+           count = CASE
+             WHEN excluded.window_start - rate_limits.window_start >= ? THEN 1
+             ELSE rate_limits.count + 1
+           END,
+           window_start = CASE
+             WHEN excluded.window_start - rate_limits.window_start >= ? THEN excluded.window_start
+             ELSE rate_limits.window_start
+           END,
+           updated_at = datetime('now')
+         RETURNING window_start, count`
+      )
+        .bind(key, now, windowMs, windowMs)
         .first<{ window_start: number; count: number }>();
 
-      if (!row) {
-        await c.env.DB.prepare('INSERT INTO rate_limits (key, window_start, count) VALUES (?, ?, 1)')
-          .bind(key, now)
-          .run();
-        return next();
-      }
-
-      // Window expired → start a fresh window counting this request.
-      if (now - row.window_start >= windowMs) {
-        await c.env.DB.prepare('UPDATE rate_limits SET window_start = ?, count = 1 WHERE key = ?').bind(now, key).run();
-        return next();
-      }
-
-      if (row.count >= maxRequests) {
-        // Actual seconds left until the window resets, not the full window.
+      if (row && row.count > maxRequests) {
         const retryAfter = Math.ceil((row.window_start + windowMs - now) / 1000);
         return c.json(TOO_MANY_REQUESTS, 429, {
-          'Retry-After': String(retryAfter),
+          'Retry-After': String(Math.max(1, retryAfter)),
         });
       }
 
-      await c.env.DB.prepare("UPDATE rate_limits SET count = count + 1, updated_at = datetime('now') WHERE key = ?")
-        .bind(key)
-        .run();
       return next();
     } catch (err) {
       // Fail-open: never 500 the game because the limiter itself failed.
@@ -108,9 +108,7 @@ export async function cleanupRateLimits(db: D1Database, windowMs: number = WINDO
 }
 
 function clientIp(c: GameContext): string {
-  const cf = c.req.header('CF-Connecting-IP');
-  if (cf) return cf;
-  const xff = c.req.header('x-forwarded-for');
-  if (xff) return xff.split(',')[0].trim();
-  return 'unknown';
+  // Cloudflare sets this at the edge. Do not trust a client-supplied
+  // x-forwarded-for fallback for a security counter.
+  return c.req.header('CF-Connecting-IP') ?? 'unknown';
 }

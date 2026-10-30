@@ -137,7 +137,7 @@ describe('rate limit middleware', () => {
     expect((await fetchLimited(g, '/api/ping', '1.0.0.6')).status).toBe(429);
   });
 
-  it('fallbacks to x-forwarded-for when CF-Connecting-IP is absent', async () => {
+  it('does not trust x-forwarded-for when CF-Connecting-IP is absent', async () => {
     const h = makeLimitedApp({ maxRequests: 1 });
     const ctx = createExecutionContext();
     const res = await h.fetch(
@@ -149,8 +149,8 @@ describe('rate limit middleware', () => {
     );
     await waitOnExecutionContext(ctx);
     expect(res.status).toBe(200);
-    // Key derived from the first x-forwarded-for entry.
-    expect(await rateLimitRow('10.0.0.1')).not.toBeNull();
+    expect(await rateLimitRow('10.0.0.1')).toBeNull();
+    expect(await rateLimitRow('unknown')).not.toBeNull();
   });
 
   it('does not let rotating Bearer tokens bypass the per-IP budget', async () => {
@@ -199,6 +199,21 @@ describe('rate limit middleware', () => {
 });
 
 describe('real app wiring', () => {
+  it('counts concurrent requests atomically', async () => {
+    const ip = '9.9.9.8';
+    const responses = await Promise.all(
+      Array.from({ length: 20 }, () =>
+        fetchApp(
+          new Request('https://example.com/api/nope', {
+            headers: { 'CF-Connecting-IP': ip },
+          })
+        )
+      )
+    );
+    expect(responses.every((res) => res.status !== 429)).toBe(true);
+    expect((await rateLimitRow(ip))?.count).toBe(20);
+  });
+
   it('rate-limits /api/* through the full production app (121st request from one IP → 429)', async () => {
     const ip = '9.9.9.9';
     let status = 0;
@@ -214,7 +229,7 @@ describe('real app wiring', () => {
     // First 120 allowed (404 here, but not 429); the 121st is rejected.
     expect(status).toBe(429);
     const row = await rateLimitRow(ip);
-    expect(row?.count).toBe(120);
+    expect(row?.count).toBe(121);
   });
 
   it('keeps /api/health reachable even when the limiter has fired', async () => {
