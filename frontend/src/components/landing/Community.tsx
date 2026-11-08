@@ -6,8 +6,8 @@ function Community() {
       <div className="max-w-content mx-auto px-lg text-center">
         <h2 className="text-3xl md:text-4xl font-display font-semibold">Join the Arcane</h2>
         <p className="mt-sm text-white/80 font-body max-w-md mx-auto">
-          The best battles are fought together. Join our community to trade strategies, show off your collection, and
-          shape the future of Arcane Familiars.
+          The best battles are fought together. Join the community to share strategies, show off your team, and shape
+          the future of Arcane Familiars.
         </p>
         <div className="mt-xl flex flex-col sm:flex-row items-center justify-center gap-3">
           <Button variant="secondary" size="lg" className="!bg-white !text-accent hover:!bg-white/90">

@@ -16,18 +16,16 @@ export default function TermsOfService() {
         <section>
           <h2 className="text-xl font-display font-semibold text-text-primary mb-3">Description of Service</h2>
           <p>
-            Arcane Familiars is a free-to-play web game in early access. You may play as a guest or connect an Ethereum
-            wallet via Immutable Passport to persist your save data. The service is not yet monetized and no purchases
-            are available at this time.
+            Arcane Familiars is a free-to-play web game in early access. You may play as a guest or create an email
+            account to persist your save data. The service is not monetized and no purchases are available at this time.
           </p>
         </section>
 
         <section>
           <h2 className="text-xl font-display font-semibold text-text-primary mb-3">Accounts &amp; Guest Play</h2>
           <p>
-            Guest sessions are temporary; save data is purged after 24 hours of inactivity. Wallet-connected accounts
-            persist save data keyed to your IMX Passport ID. You are responsible for securing your own wallet and
-            credentials.
+            Guest sessions are temporary; save data is purged after 24 hours of inactivity. Email accounts persist save
+            data across sessions and devices. You are responsible for keeping your email account and password secure.
           </p>
         </section>
 

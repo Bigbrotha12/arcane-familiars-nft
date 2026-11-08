@@ -1,12 +1,8 @@
 const steps = [
-  { step: '1', title: 'Connect Your Wallet', desc: 'Link MetaMask or WalletConnect to get started.' },
-  { step: '2', title: 'Summon a Familiar', desc: 'Mint your first familiar NFT and discover its unique traits.' },
-  { step: '3', title: 'Level Up & Learn', desc: 'Battle creatures to earn XP and unlock powerful abilities.' },
-  {
-    step: '4',
-    title: 'Trade & Earn',
-    desc: 'Sell your familiars on the marketplace or keep building your dream team.',
-  },
+  { step: '1', title: 'Create an Account', desc: 'Sign up with email to keep your progress across devices.' },
+  { step: '2', title: 'Choose Your Party', desc: 'Pick two familiars and prepare for a dungeon run.' },
+  { step: '3', title: 'Explore & Battle', desc: 'Clear rooms, fight creatures, and collect run loot.' },
+  { step: '4', title: 'Level Up & Recruit', desc: 'Grow your team, unlock abilities, and recruit new familiars.' },
 ];
 
 function HowItWorks() {

@@ -3,7 +3,6 @@ import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-log
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
-import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -50,7 +49,7 @@ gameStateRouter.post('/game/bootstrap', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     // A guest must never be able to read or write an account-keyed save by
-    // presenting a Passport subject. readBody binds authenticated body ids to
+    // presenting a user id. readBody binds authenticated body ids to
     // accountKey, but this explicit provenance check covers the guest path.
     if (isGuest && !loaded.isAnonymous) {
       return c.json({ error: 'Guest session cannot access an account save' }, 403);
@@ -105,16 +104,7 @@ gameStateRouter.post('/game/state/party', async (c) => {
       return c.json({ error: 'Cannot change party during an active battle' }, 409);
     }
 
-    // Fieldable set is the persisted grants plus (flag-gated) on-chain
-    // ownership. With the flag off this is exactly playerFamiliars and no
-    // extra read happens.
-    const fieldable = await resolveFieldableFamiliars(
-      c.env.DB,
-      c.get('accountKey'),
-      state,
-      isOwnershipAuthorityEnabled(c.env)
-    );
-    const validation = validateParty(activeParty, fieldable);
+    const validation = validateParty(activeParty, state.playerFamiliars);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }
@@ -206,16 +196,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
 
     const reordered = reorderToLead(state.activeParty);
 
-    // Resolved only past the no-op short-circuit above, so the common
-    // already-leading case stays a single state read. Flag off (default) is
-    // exactly playerFamiliars, no extra D1 read.
-    const fieldable = await resolveFieldableFamiliars(
-      c.env.DB,
-      c.get('accountKey'),
-      state,
-      isOwnershipAuthorityEnabled(c.env)
-    );
-    const validation = validateParty(reordered, fieldable);
+    const validation = validateParty(reordered, state.playerFamiliars);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }

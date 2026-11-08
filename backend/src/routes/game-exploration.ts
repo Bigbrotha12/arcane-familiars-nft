@@ -21,7 +21,6 @@ import {
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
-import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -73,13 +72,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Already in a dungeon' }, 409);
     }
 
-    const fieldable = await resolveFieldableFamiliars(
-      c.env.DB,
-      c.get('accountKey'),
-      state,
-      isOwnershipAuthorityEnabled(c.env)
-    );
-    const partyValidation = validateParty(state.activeParty, fieldable);
+    const partyValidation = validateParty(state.activeParty, state.playerFamiliars);
     if (!partyValidation.valid) {
       return c.json({ error: partyValidation.error ?? 'Party is invalid' }, 400);
     }

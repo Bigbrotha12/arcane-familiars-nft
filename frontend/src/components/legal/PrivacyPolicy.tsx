@@ -8,15 +8,13 @@ export default function PrivacyPolicy() {
         <section>
           <h2 className="text-xl font-display font-semibold text-text-primary mb-3">What We Collect</h2>
           <p>
-            When you connect a wallet or play as a guest, we collect two identifiers: your{' '}
-            <strong>IMX Passport ID</strong> and your <strong>Ethereum address</strong>. These are used solely to
-            associate and persist your in-game save data. We do not require an email address or any other personal
-            information.
+            When you create an account, we collect your <strong>email address</strong> and a securely hashed password.
+            These are used solely to authenticate you and associate your in-game save data. If you play as a guest, we
+            do not collect an email address.
           </p>
           <p>
-            If you play as a guest without connecting a wallet, your browser stores a random, client-generated anonymous
-            identifier (not an email or real name) that we use solely to key your guest game-save data. We do not treat
-            this identifier as personal data.
+            If you play as a guest, your browser stores a random, client-generated anonymous identifier that we use
+            solely to key your guest game-save data. We do not treat this identifier as personal data.
           </p>
         </section>
 
@@ -43,7 +41,7 @@ export default function PrivacyPolicy() {
           <p>
             Game-save state is stored in a Cloudflare D1 database keyed to your account identifier. D1 backups are
             retained for up to 30 days via Cloudflare D1 Time Travel. Guest-session data is purged after 24 hours of
-            inactivity.
+            inactivity. Account passwords are stored as salted PBKDF2 hashes, never plaintext.
           </p>
         </section>
 

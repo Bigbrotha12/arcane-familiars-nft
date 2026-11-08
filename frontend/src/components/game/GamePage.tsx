@@ -320,6 +320,15 @@ export default function GamePage() {
     };
   }, []);
 
+  // Signing in or out changes the account key. Reload once so every Phaser
+  // scene and API request starts from the new save rather than the old guest
+  // or account snapshot.
+  useEffect(() => {
+    const onAuthChanged = () => window.location.reload();
+    window.addEventListener('af:auth-changed', onAuthChanged);
+    return () => window.removeEventListener('af:auth-changed', onAuthChanged);
+  }, []);
+
   useEffect(() => {
     if (!gameModuleRef.current || !gameState) return;
 

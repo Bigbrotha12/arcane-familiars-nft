@@ -25,7 +25,7 @@ function CreatureShowcase() {
         <div className="text-center mb-xl">
           <h2 className="text-3xl md:text-4xl font-display font-semibold text-text-primary">Meet the Familiars</h2>
           <p className="mt-sm text-text-secondary font-body max-w-lg mx-auto">
-            Each familiar is a unique NFT with its own stats, abilities, and personality.
+            Each familiar has its own stats, abilities, personality, and elemental affinity.
           </p>
         </div>
 

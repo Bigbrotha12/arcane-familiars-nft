@@ -5,7 +5,7 @@ type GameContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 // Fixed-window budget for ALL /api/* traffic: 120 requests per 60s per client
 // identity. Enough for normal play loops; tight enough to stop UUID-spam
-// abuse from minting junk D1 rows. The window is lazily reset: the first
+// abuse from creating junk D1 rows. The window is lazily reset: the first
 // request in a new 60s window starts a fresh counter instead of waiting for a
 // background sweep.
 export const WINDOW_MS = 60_000;
@@ -24,7 +24,7 @@ export interface RateLimitOptions {
  * KEY STRATEGY: the counter key is ALWAYS the client IP. This middleware runs
  * before the auth middleware (see `index.ts`), so any `Authorization` header is
  * unverified here. Keying on the raw token let a client rotate a bogus
- * `Bearer <random>` on every request to mint a fresh bucket and bypass the
+ * `Bearer <random>` on every request to create a fresh bucket and bypass the
  * limit entirely; keying on a token hash only helps if the token is verified,
  * which is not this middleware's job. IP-only is the only pre-auth key an
  * attacker cannot trivially vary. Trade-off: players behind one NAT/proxy share

@@ -60,7 +60,7 @@ export function catalogEntry(row: CatalogFamiliar): CollectionEntry {
 }
 
 /**
- * Map an owned species id (`GET /api/game/owned-familiars`) into a display entry
+ * Map an in-game familiar species id into a display entry
  * using the local game-logic metadata, which is the authoritative source for
  * name/stats/rarity/affinity. Unknown ids still render (with the styled
  * placeholder) so a newly added species never silently disappears from a

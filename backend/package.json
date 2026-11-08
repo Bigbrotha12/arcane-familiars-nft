@@ -19,9 +19,7 @@
   },
   "dependencies": {
     "@arcane-familiars/game-logic": "*",
-    "hono": "^4.12.32",
-    "jose": "^6.2.10",
-    "viem": "^2.18.8"
+    "hono": "^4.12.32"
   },
   "devDependencies": {
     "@cloudflare/vitest-pool-workers": "^0.22.0",

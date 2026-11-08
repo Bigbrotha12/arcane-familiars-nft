@@ -20,34 +20,18 @@ function randomId(): string {
   return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10, 16).join('')}`;
 }
 
-const PASSPORT_ID_TOKEN_KEY = 'af_passport_id_token';
-
-// Fired when a token refresh attempt fails and the client falls back to guest
-// play, so the signed-in shell can update instead of the player silently
-// continuing on a different account key.
 const AUTH_EXPIRED_EVENT = 'af:auth-expired';
 
-/**
- * The frontend installs this on `window` (see frontend/src/lib/authBridge.ts).
- * The game package cannot import the frontend's Immutable auth libs, so the
- * provider is a runtime contract rather than a build-time dependency.
- */
-interface ArcaneAuthBridge {
-  getIdToken: () => Promise<string | null>;
-  refreshIdToken: () => Promise<string | null>;
+function csrfToken(): string | null {
+  if (typeof window === 'undefined') return null;
+  return (window as unknown as { __arcaneCsrfToken?: string }).__arcaneCsrfToken ?? null;
 }
 
-function authBridge(): ArcaneAuthBridge | undefined {
-  if (typeof window === 'undefined') return undefined;
-  return (window as unknown as { __arcaneAuth?: ArcaneAuthBridge }).__arcaneAuth;
-}
+let csrfCheckAttempted = false;
 
-function clearStoredToken(): void {
-  try {
-    sessionStorage.removeItem(PASSPORT_ID_TOKEN_KEY);
-  } catch {
-    // ignore storage failures
-  }
+function setCsrfToken(value: string | null): void {
+  if (typeof window === 'undefined') return;
+  (window as unknown as { __arcaneCsrfToken?: string }).__arcaneCsrfToken = value ?? undefined;
 }
 
 class GameApiClient {
@@ -65,73 +49,43 @@ class GameApiClient {
     }
   }
 
-  private getToken(): string | null {
+  private async ensureCsrfToken(): Promise<void> {
+    if (csrfToken() || csrfCheckAttempted) return;
+    csrfCheckAttempted = true;
     try {
-      return sessionStorage.getItem(PASSPORT_ID_TOKEN_KEY);
+      const res = await fetch(`${this.baseUrl}/api/auth/me`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data = (await res.json()) as { csrfToken?: string | null };
+      setCsrfToken(data.csrfToken ?? null);
     } catch {
-      return null;
+      // Guest play needs no CSRF token.
     }
   }
 
-  /**
-   * Resolve the token for a request. When signed in, prefer a fresh token from
-   * the auth bridge (which silently renews an expired ID token); fall back to
-   * the cached session token. Returns null for guests.
-   */
-  private async resolveToken(): Promise<string | null> {
-    const cached = this.getToken();
-    if (!cached) return null;
-
-    const bridge = authBridge();
-    if (!bridge) return cached;
-
-    try {
-      const token = await bridge.getIdToken();
-      return token ?? cached;
-    } catch {
-      return cached;
-    }
-  }
-
-  /** Single fetch with an explicit token. No auth/refresh logic. */
-  private async send(method: string, url: string, body: string | undefined, token: string | null): Promise<Response> {
+  private async request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
+    if (method !== 'GET' && method !== 'HEAD') await this.ensureCsrfToken();
+    const url = `${this.baseUrl}${path}`;
+    const serialized = body ? JSON.stringify(body) : undefined;
     const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
+    const csrf = csrfToken();
+    if (csrf) headers['X-CSRF-Token'] = csrf;
 
-    const options: RequestInit = { method, headers };
-    if (body !== undefined) options.body = body;
-
+    let res: Response;
     try {
-      return await fetch(url, options);
+      res = await fetch(url, {
+        method,
+        credentials: 'include',
+        headers,
+        body: serialized,
+      });
     } catch (err) {
       throw new Error(`Network error: ${(err as Error).message}`, { cause: err });
     }
-  }
 
-  // Guest sessions (no Passport id token in session storage) are still fully
-  // persisted by the backend, keyed by a client-generated anonymous id.
-  private async request<T>(method: string, path: string, body?: Record<string, unknown>): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
-    const serialized = body ? JSON.stringify(body) : undefined;
-
-    let res = await this.send(method, url, serialized, await this.resolveToken());
-
-    // An ID token that the backend rejects (expired/rotated) must not silently
-    // downgrade the player to their guest key. Refresh once and retry; if the
-    // session is genuinely gone, drop the token and continue as a guest while
-    // telling the shell so the UI is honest about it.
     if (res.status === 401) {
-      const bridge = authBridge();
-      const refreshed = bridge ? await bridge.refreshIdToken().catch(() => null) : null;
-
-      if (refreshed) {
-        res = await this.send(method, url, serialized, refreshed);
-      } else {
-        clearStoredToken();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
-        }
-        res = await this.send(method, url, serialized, null);
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+        window.dispatchEvent(new CustomEvent('af:auth-changed'));
       }
     }
 
@@ -246,18 +200,6 @@ class GameApiClient {
       battleId,
       expectedTurnCount,
     });
-  }
-
-  async getOwnedFamiliars(): Promise<string[]> {
-    const token = this.getToken();
-    if (!token) return [];
-
-    try {
-      const result = await this.request<{ familiars: string[]; synced: boolean }>('GET', '/api/game/owned-familiars');
-      return result.familiars || [];
-    } catch {
-      return [];
-    }
   }
 }
 

@@ -15,11 +15,11 @@ function Hero() {
         </div>
         <div className="text-center">
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-display font-semibold text-text-primary leading-tight">
-            Collect. Battle. <span className="text-accent">Earn.</span>
+            Collect. Battle. <span className="text-accent">Bond.</span>
           </h1>
           <p className="mt-md text-lg text-text-secondary font-body max-w-lg mx-auto">
-            Summon cute familiar NFTs, craft powerful abilities, and battle creatures in a magical world where your
-            collection is truly yours.
+            Summon cute familiars, master elemental abilities, and explore a magical world with the companions you
+            collect.
           </p>
           <div className="mt-xl flex flex-col sm:flex-row items-center justify-center gap-3">
             <Link to="/play/game">
@@ -27,7 +27,7 @@ function Hero() {
             </Link>
             <Link to="/app/collection">
               <Button variant="secondary" size="lg">
-                View Collection
+                Browse Codex
               </Button>
             </Link>
           </div>

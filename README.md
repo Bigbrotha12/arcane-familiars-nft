@@ -1,8 +1,8 @@
 # Arcane Familiars
 
-A browser-based NFT creature-collector game integrated with the Immutable X (IMX) L2 marketplace. Summon familiars, battle with turn-based combat, and trade on-chain — all from your browser.
+A browser-based creature-collector game. Summon familiars, battle with turn-based combat, explore six regions, and grow your team — all from your browser.
 
-> **Status:** Playable content-complete slice — 6 regions, 25 familiars, 26 abilities, 20 items, server-authoritative combat, party swapping, KO relay, shops, and familiar leveling. Blockchain/NFT deployment remains a separate milestone.
+> **Status:** Playable content-complete slice — 6 regions, 25 familiars, 26 abilities, 20 items, server-authoritative combat, party swapping, KO relay, shops, and familiar leveling. Email/password accounts keep saves across devices; guests can play without signing in.
 
 ## Project Structure
 
@@ -28,7 +28,6 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - **Hono** on Cloudflare Workers (edge runtime)
 - **Cloudflare D1** (SQLite) for persistent storage
 - **TypeScript** with type-safe env bindings
-- Proxies Immutable X API for asset/balance data
 
 ### Game
 - **Phaser 4** scenes embedded in the React app (`game/`), bridged via an event bus
@@ -36,12 +35,10 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - Server-authoritative battles: the client sends actions, the Worker resolves the full turn and returns a replayable result (ordered steps, canceled actions, forced swaps)
 - HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
 
-### Blockchain
-The legacy **Immutable X (StarkEx)** contracts — a Hardhat/Truffle hybrid with a custom
-ERC-721/ERC-2981 proxy and a `Mintable`/`IMX_Bridge` bridge — were **retired** (StarkEx is
-sunset; see `docs/BLOCKCHAIN-IMPLEMENTATION-PLAN.md`). The blockchain/NFT workstream now
-targets **Immutable Chain** (zkEVM) and is tracked separately in that plan; it is not part
-of the playable game app and is not yet started.
+### Accounts & saves
+Players can create an email/password account to keep progress across sessions and devices.
+Guest play remains available, keyed by a browser-local anonymous ID. Passwords are stored as
+salted PBKDF2 hashes; sessions are opaque HttpOnly cookies with a 30-day TTL, CSRF protection, and credential-scoped CORS.
 
 ## Getting Started
 
@@ -84,7 +81,7 @@ npm run frontend:dev   # http://localhost:8080
 
 ## Game Mechanics
 
-Players summon **familiars** — creature NFTs with unique stats and abilities:
+Players summon **familiars** — creatures with unique stats and abilities:
 
 | Stat | Description |
 |------|-------------|
@@ -112,9 +109,9 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 |-------|-------|--------|
 | 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
 | 2 — Game Prototype | Phaser 4 engine, core game loop, dungeons, battles, items, party | Done |
-| 3 — Blockchain | Retired legacy StarkEx contracts; Immutable Chain (zkEVM) + Immutable SDK track | Legacy StarkEx contracts retired (BC0); Immutable Chain workstream planned, not started |
-| 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing + Immutable Passport sign-in/wallet binding done; mint/collection/marketplace pending |
-| 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
+| 3 — Accounts | Email/password registration, login, sessions, guest adoption | Implemented |
+| 4 — MVP Polish | Landing, codex, onboarding, content art/audio | In progress |
+| 5 — Launch | Production deploy, monitoring, final QA | Planned |
 
 ## CI
 

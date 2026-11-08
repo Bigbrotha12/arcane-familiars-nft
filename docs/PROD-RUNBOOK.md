@@ -16,7 +16,7 @@ Run once per environment before enabling deploy jobs. All authenticated steps ar
 - [ ] GitHub Actions repo variables:
   - `CF_WORKERS_SUBDOMAIN` — **required**; the account's workers.dev subdomain (e.g. `acct` from `https://acct.workers.dev`), used to build the `VITE_BACKEND_URL`.
   - `BACKUP_R2_BUCKET` — optional; if set, the WS1 pre-migration D1 dump in `deploy.yml` is also uploaded to R2. Not required — D1 Time Travel is the DR mechanism.
-- [ ] Worker secrets: **none required** — auth is Immutable Passport OIDC verification via the public JWKS (`IMMUTABLE_*` vars are non-secret `vars`, not secrets) and there is no backend-issued JWT. `JWT_SECRET` from the original WS2 design is not used.
+- [ ] Worker secrets: **none required** — auth uses local email/password accounts with PBKDF2 hashes and opaque D1-backed sessions. Sessions are HttpOnly cookies; the SPA uses credentialed CORS and a double-submit CSRF header.
 - [ ] GitHub `production` environment exists (created automatically on first use) — it scopes the prod job's secrets/vars; **no protection rules required** (solo dev: the push to `master` is the approval).
 - [ ] Staging D1 `arcane-familiars-staging` exists; `backend/wrangler.jsonc` `env.staging` carries its id (`e9c91f6d-ced2-4590-b6e5-4ff03eddf704`). If it is ever recreated, run `wrangler d1 create arcane-familiars-staging` and update that id (the deploy job's preflight rejects the `00000000-…` placeholder).
 - [ ] Pages projects `arcane-familiars` + `arcane-familiars-staging` — **auto-created** by the deploy workflow (`.github/actions/ensure-pages-project`) on first deploy; nothing to pre-create.
@@ -68,9 +68,9 @@ The `d1-backup-*` GitHub artifacts contain **full player game-state dumps** — 
 
 ## Identity & guest access (WS2 step 13 superseded)
 
-Prod allows **anonymous guest trial play** by product decision — no wallet sign-in is required before `/api/game/*` works. Guests are keyed by a client-generated UUID (`af_anonymous_id`, localStorage), persisted as `is_anonymous = 1`, and purged after 24h inactivity (cron).
+Prod allows **anonymous guest play** — no account is required before `/api/game/*` works. Guests are keyed by a client-generated UUID (`af_anonymous_id`, localStorage), persisted as `is_anonymous = 1`, and purged after 24h inactivity (cron).
 
-On Passport sign-in, `POST /api/auth/adopt` re-keys a guest state to the wallet `sub` (session restore; the WS4 cap counters carry across). **Caveat:** adopt does not prove UUID ownership — anyone who knows a guest UUID can adopt it. Accepted for a non-monetized slice; re-review at monetization (plan §2.A / §2.L / WS2 step 13).
+On sign-in/register, `POST /api/auth/adopt` can re-key a guest state to the new account (session restore). **Caveat:** adopt does not prove UUID ownership — anyone who knows a guest UUID can adopt it. Accepted for a non-monetized slice; re-review before monetization.
 
 ## Alert rule (via Notifications API — per L7/R13, WS5 step 20)
 
@@ -85,14 +85,14 @@ The incident-SLA link still applies — create the rule **once, before** relying
 ## Anti-farming — daily battle cap (WS4 step 18, R18)
 
 - **Decision:** daily battle cap implemented — max **20 completed battles (win or loss) per UTC calendar day per account**, enforced server-side at `POST /api/game/battle/start` (403 + Retry-After to UTC midnight) and incremented in `battle/action` on Win/Loss; fleeing does not count. The counter lives in `state_json` (`battlesToday`/`battlesDayUtc`, `YYYY-MM-DD` UTC day) and resets automatically when the UTC day changes.
-- **Enforcement boundary / accepted risk:** hard per-account cap for authenticated (Passport) users; **per-browser-profile for guests** — clearing site data resets the anonymous id and grants a fresh cap the same day (accepted; identity is client-generated for guests). The guest purge (24h inactivity cron) also resets the cap for guests.
+- **Enforcement boundary / accepted risk:** hard per-account cap for authenticated users; **per-browser-profile for guests** — clearing site data resets the anonymous id and grants a fresh cap the same day (accepted; identity is client-generated for guests). The guest purge (24h inactivity cron) also resets the cap for guests.
 - **Owner:** Bigbrotha12 (repo owner).
-- **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization/NFT link (per plan P1 sequencing); suggested re-review date: at monetization planning.
+- **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization; suggested re-review date: at monetization planning.
 - **Race guard (F1):** the state+battle writes are both conditional (version + battle-row turnCount), so a stale writer cannot commit a cap increment (match-or-both-no-op). Additionally, `battle/action` re-checks the cap after loading state and before resolution, which closes the start check-then-act race — a concurrent `start` + `action` at 19/20 cannot slip a 21st increment, and the counter cannot exceed 20.
 
 ## Post-WS6 cleanup — stale secrets (manual operator step)
 
-WS6 removed dead env vars (`INFURA_API_KEY`, `ETHERSCAN_API_KEY`) from tracked files. These variables are unused by the current code. **Manually remove** any remaining `INFURA_API_KEY` (or other dead RPC/blockchain keys) from:
+WS6 removed dead env vars (`INFURA_API_KEY`, `ETHERSCAN_API_KEY`) from tracked files. These variables are unused by the current code. **Manually remove** any remaining `INFURA_API_KEY` (or other dead RPC keys) from:
 
 - `backend/.dev.vars` (gitignored — not committed)
 - any local `backend/.env` or shell environment (`export` / `.env` sourcing)

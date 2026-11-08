@@ -7,8 +7,8 @@ import PrivacyPolicy from '@/components/legal/PrivacyPolicy';
 import TermsOfService from '@/components/legal/TermsOfService';
 const FamiliarStatusPreview = lazy(() => import('@/components/game/hud/FamiliarStatusPreview'));
 
-// Route-level code splitting keeps the Immutable/Passport SDK and the Phaser
-// game shell out of the initial landing-page bundle.
+// Route-level code splitting keeps the game shell and HUD out of the initial
+// landing-page bundle.
 const PlayLayout = lazy(() => import('@/components/layout/PlayLayout'));
 const GamePage = lazy(() => import('@/components/game/GamePage'));
 const CollectionPage = lazy(() => import('@/components/collection/CollectionPage'));
@@ -21,28 +21,10 @@ function RouteLoading(): JSX.Element {
   );
 }
 
-/**
- * Minimal callback page for the Immutable Passport OAuth redirect. The SDK's
- * popup login flow redirects to `${origin}/callback` after authentication; the
- * SPA must be routable here so the `@imtbl/auth` SDK can load, exchange the
- * authorization code for tokens, and postMessage the result back to the opener.
- */
-function CallbackHandler() {
-  return (
-    <div className="h-screen flex items-center justify-center bg-surface-primary">
-      <p className="font-body text-sm text-text-secondary">Completing sign-in…</p>
-    </div>
-  );
-}
-
 const router = createBrowserRouter([
   {
     path: '/',
     element: <LandingPage />,
-  },
-  {
-    path: '/callback',
-    element: <CallbackHandler />,
   },
   {
     path: '/privacy',
@@ -68,9 +50,6 @@ const router = createBrowserRouter([
           </Suspense>
         ),
       },
-      { path: 'marketplace', element: <ComingSoon /> },
-      { path: 'minter', element: <ComingSoon /> },
-      { path: 'bridge', element: <ComingSoon /> },
       { path: 'other', element: <ComingSoon /> },
       { path: '*', element: <ComingSoon /> },
     ],

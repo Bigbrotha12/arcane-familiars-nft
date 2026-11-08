@@ -27,7 +27,7 @@ export function internalError(
  *
  * When an authenticated request carries a token-derived account key (set on
  * the context by the auth middleware), it overrides the body-provided
- * `anonymousId`. This lets the game handlers use the Passport `sub` as the
+ * `anonymousId`. This lets the game handlers use the authenticated user id as the
  * account key without any handler changes — a forged body anonymousId is
  * never trusted over the verified token-derived key.
  */

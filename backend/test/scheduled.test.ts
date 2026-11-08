@@ -7,7 +7,7 @@ import type { Bindings } from '../src/types';
 /**
  * Drives the `scheduled` export (cron cleanup) directly against the shared
  * in-memory D1 to verify the chunked guest-TTL / orphan-battle / expired
- * challenge purges without needing a real Cloudflare cron invocation.
+ * session purges without needing a real Cloudflare cron invocation.
  */
 
 function makeEnv(environment: string): Bindings {
@@ -19,7 +19,7 @@ async function rowExists(table: string, column: string, value: string): Promise<
 }
 
 describe('scheduled cleanup', () => {
-  it('purges stale guests, orphaned battles, and expired challenges but keeps fresh/authed rows', async () => {
+  it('purges stale guests, orphaned battles, and expired sessions but keeps fresh/authed rows', async () => {
     const db = env.DB;
 
     // Stale guest state (older than the 24h TTL).
@@ -70,17 +70,24 @@ describe('scheduled cleanup', () => {
       )
       .run();
 
-    // Expired challenge (beyond the 10-min margin) and a fresh one.
+    // Expired session and a fresh one. Sessions have an FK to users.
     await db
       .prepare(
-        `INSERT INTO wallet_challenges (sub, nonce, message, wallet_address, created_at)
-         VALUES ('sub-expired', 'nonce-1', 'msg', '0x1', datetime('now', '-11 minutes'))`
+        `INSERT INTO users (user_id, email, password_hash, password_salt, password_iterations)
+         VALUES ('user-expired', 'expired@example.com', 'hash', 'salt', 120000),
+                ('user-fresh', 'fresh@example.com', 'hash', 'salt', 120000)`
       )
       .run();
     await db
       .prepare(
-        `INSERT INTO wallet_challenges (sub, nonce, message, wallet_address, created_at)
-         VALUES ('sub-fresh', 'nonce-2', 'msg', '0x2', datetime('now'))`
+        `INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
+         VALUES ('expired-session', 'user-expired', datetime('now', '-1 day'), datetime('now'))`
+      )
+      .run();
+    await db
+      .prepare(
+        `INSERT INTO sessions (token_hash, user_id, expires_at, created_at)
+         VALUES ('fresh-session', 'user-fresh', datetime('now', '+1 day'), datetime('now'))`
       )
       .run();
 
@@ -102,8 +109,8 @@ describe('scheduled cleanup', () => {
     expect(await rowExists('active_battles', 'battle_id', 'battle-orphan')).toBe(false);
     expect(await rowExists('active_battles', 'battle_id', 'battle-fresh')).toBe(true);
 
-    // Expired challenge purged; fresh challenge kept.
-    expect(await rowExists('wallet_challenges', 'sub', 'sub-expired')).toBe(false);
-    expect(await rowExists('wallet_challenges', 'sub', 'sub-fresh')).toBe(true);
+    // Expired session purged; fresh session kept.
+    expect(await rowExists('sessions', 'token_hash', 'expired-session')).toBe(false);
+    expect(await rowExists('sessions', 'token_hash', 'fresh-session')).toBe(true);
   });
 });

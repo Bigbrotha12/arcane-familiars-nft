@@ -48,7 +48,7 @@ export async function loadGameState(db: D1Database, anonymousId: string): Promis
  * Load an existing state or create (and persist) a default one. Uses an
  * idempotent INSERT so concurrent first loads cannot collide.
  *
- * Guest sessions (no Passport token) are persisted exactly like signed-in
+ * Guest sessions (no session token) are persisted exactly like signed-in
  * users, but marked `is_anonymous = 1` so a future cleanup job can purge
  * stale guest rows.
  */
