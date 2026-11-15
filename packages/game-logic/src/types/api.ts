@@ -1,5 +1,5 @@
 import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
-import type { Area, DungeonState, Room } from '@/types/exploration';
+import type { Area, DungeonState, RestHeal, Room } from '@/types/exploration';
 import type { GameState, Inventory } from '@/types/gameState';
 
 export interface LoadStateRequest {
@@ -41,6 +41,8 @@ export interface ExploreResponse {
   enemy: string | null;
   treasure: boolean;
   treasureItem: string | null;
+  /** Present only on the first visit to a rest shrine. */
+  rest?: RestHeal;
 }
 
 export interface CollectTreasureRequest {

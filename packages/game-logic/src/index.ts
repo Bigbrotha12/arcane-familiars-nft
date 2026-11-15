@@ -10,6 +10,7 @@ export * from '@/data/abilities';
 export * from '@/data/areas';
 export * from '@/data/items';
 export * from '@/data/shop';
+export * from '@/data/balance';
 
 // Utils
 export * from '@/utils/battleEngine';

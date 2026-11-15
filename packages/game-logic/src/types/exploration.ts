@@ -20,6 +20,8 @@ export enum RoomType {
   Normal,
   Deadend,
   Boss,
+  /** Safe room that restores party HP/MP once per run. */
+  Rest,
 }
 
 export interface Room {
@@ -32,8 +34,20 @@ export interface Room {
   treasureChance: number;
   treasurePool: TreasureEntry[];
   cleared: boolean;
+  /** Rest rooms only: whether this run's one-time heal has been taken. */
+  rested?: boolean;
   pendingEncounter?: { enemyId: string; resolved: boolean; level?: number };
   pendingTreasure?: { itemId: string; looted: boolean };
+}
+
+/** HP/MP actually restored to one party member at a rest shrine. */
+export interface RestHealAmount {
+  hp: number;
+  mp: number;
+}
+
+export interface RestHeal {
+  healed: Record<string, RestHealAmount>;
 }
 
 export interface TreasureEntry {

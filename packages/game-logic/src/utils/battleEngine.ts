@@ -11,6 +11,7 @@ import {
 import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/abilities';
 import { getAbility } from '@/data/abilities';
 import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
+import { BALANCE, affinityEffectiveness, affinityMultiplier, type AffinityEffectiveness } from '@/data/balance';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -27,27 +28,96 @@ function toStatName(scalingStat: ScalingStat): StatName {
   return StatName.Arcane;
 }
 
+export interface DamageOptions {
+  /** The defender is guarding this turn (its action was Defend). */
+  defenderGuarding?: boolean;
+}
+
+/**
+ * Damage for a direct hit (basic attack or damaging ability).
+ *
+ * Order of operations, fixed by contract:
+ *   base      = attackerStat * multiplier * defenseScale / (defenseScale + defenderStat)
+ *   x affinity, x crit, x variance, x guard, x boss charge
+ * then clamped to a minimum of 1 and rounded.
+ *
+ * RNG draw order is also fixed: the crit roll is drawn first, then the variance
+ * roll, and both are always drawn so a seeded run consumes exactly two values
+ * per damaging hit regardless of the outcome.
+ */
 export function calculateDamage(
   attacker: BattleFamiliar,
   defender: BattleFamiliar,
   abilityMultiplier: number,
   scalingStat: ScalingStat,
-  rng: () => number
-): { damage: number; isCritical: boolean } {
+  rng: () => number,
+  options: DamageOptions = {}
+): { damage: number; isCritical: boolean; effectiveness: AffinityEffectiveness } {
+  const { damage, isCritical, effectiveness } = rollDamage(
+    attacker,
+    defender,
+    abilityMultiplier,
+    scalingStat,
+    rng,
+    options
+  );
+  return { damage, isCritical, effectiveness };
+}
+
+/** Internal roll that also reports whether the guard reduced the hit. */
+function rollDamage(
+  attacker: BattleFamiliar,
+  defender: BattleFamiliar,
+  abilityMultiplier: number,
+  scalingStat: ScalingStat,
+  rng: () => number,
+  options: DamageOptions = {}
+): { damage: number; isCritical: boolean; effectiveness: AffinityEffectiveness; guarded: boolean } {
   const offensiveStat =
     scalingStat === ScalingStat.Arcane ? attacker.familiarData.stats.arcane : attacker.familiarData.stats.attack;
   const attackerStat = getEffectiveStat(offensiveStat, attacker.statusEffects, toStatName(scalingStat));
   const defenderStat = getEffectiveStat(defender.familiarData.stats.defense, defender.statusEffects, StatName.Defense);
 
-  let baseDamage = attackerStat * abilityMultiplier - defenderStat / 2;
+  const isCritical = rng() < BALANCE.critChance;
+  const varianceRoll = rng();
+  const variance = 1 - BALANCE.damageVariance + varianceRoll * BALANCE.damageVariance * 2;
 
-  const isCritical = rng() < 0.1;
+  const effectiveness = affinityEffectiveness(attacker.familiarData.affinity, defender.familiarData.affinity);
+
+  let rawDamage = (attackerStat * abilityMultiplier * BALANCE.defenseScale) / (BALANCE.defenseScale + defenderStat);
+  rawDamage *= affinityMultiplier(attacker.familiarData.affinity, defender.familiarData.affinity);
   if (isCritical) {
-    baseDamage *= 1.5;
+    rawDamage *= BALANCE.critMultiplier;
   }
+  rawDamage *= variance;
 
-  const damage = Math.max(1, Math.round(baseDamage));
-  return { damage, isCritical };
+  let total = rawDamage;
+  if (options.defenderGuarding) {
+    total *= BALANCE.guardDamageTaken;
+  }
+  if (attacker.charged) {
+    total *= BALANCE.bossChargeMultiplier;
+  }
+  const damage = Math.max(1, Math.round(total));
+
+  // "guarded" means the guard actually reduced the rounded result — at the
+  // 1-damage floor it is not reported as a reduction.
+  let unguardedRaw = rawDamage;
+  if (attacker.charged) {
+    unguardedRaw *= BALANCE.bossChargeMultiplier;
+  }
+  const guarded = options.defenderGuarding === true && Math.max(1, Math.round(unguardedRaw)) > damage;
+
+  return { damage, isCritical, effectiveness, guarded };
+}
+
+/** Log suffix for affinity / guard modifiers, appended to a hit's description. */
+function damageSuffix(effectiveness: AffinityEffectiveness, guarded: boolean): string {
+  let suffix = '';
+  if (effectiveness === 'strong') suffix += " It's super effective!";
+  else if (effectiveness === 'weak') suffix += " It's not very effective…";
+  if (guarded) suffix += ' (guarded)';
+  return suffix;
 }
 
 /**
@@ -124,6 +194,15 @@ export function resolveTurn(
           { who: 'player', action: playerAction },
         ];
 
+  // Defend is a stance for the WHOLE turn, decided before initiative is
+  // resolved: a guard applies even to a hit that lands before the guarding
+  // actor's own slot. It is transient — no status effect is created and
+  // nothing persists into the next turn.
+  const guardingUids = new Set<string>();
+  if (playerAction.type === ActionType.Defend) guardingUids.add(playerFamiliar.uid);
+  if (enemyAction.type === ActionType.Defend) guardingUids.add(enemyFamiliar.uid);
+  const isGuarding = (familiar: BattleFamiliar): boolean => guardingUids.has(familiar.uid);
+
   let playerCurrent = playerFamiliar;
   let enemyCurrent = enemyFamiliar;
   const steps: TurnStep[] = [];
@@ -155,9 +234,16 @@ export function resolveTurn(
       continue;
     }
 
-    const result = executeAction(action, actorPre, opponentPre, rng);
+    const execution = executeAction(action, actorPre, opponentPre, rng, isGuarding);
+    const result = execution.result;
     let actorPost = applyActionResult(actorPre, result);
     const opponentPost = applyActionResult(opponentPre, result);
+
+    // Charge is carried on the actor, not in the result, so the client can see
+    // a charged boss before it unleashes. A damaging action spends it; every
+    // other action leaves it intact.
+    if (execution.consumedCharge) actorPost = { ...actorPost, charged: false };
+    if (execution.gainedCharge) actorPost = { ...actorPost, charged: true };
 
     // Deduct MP for ability use (same gate as before: known ability and the
     // actor had enough MP when it executed).
@@ -265,7 +351,12 @@ function applyActionResult(familiar: BattleFamiliar, result: ActionResult): Batt
  * the merged result carries a single targetId, so the enemy-targeted half
  * wins and the rest is dropped. No shipped item mixes targets.
  */
-function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleFamiliar): ActionResult {
+function applyItemEffects(
+  item: ItemData,
+  source: BattleFamiliar,
+  enemy: BattleFamiliar,
+  isGuarding: (familiar: BattleFamiliar) => boolean
+): ActionResult {
   const descriptions: string[] = [];
   let damage = 0;
   let hpHeal = 0;
@@ -363,10 +454,20 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
     }
   }
 
-  const description =
+  // Item damage is flat (no affinity, crit, variance or charge). Only the
+  // target's guard scales it, exactly like a direct hit.
+  let guarded = false;
+  if (damage > 0 && isGuarding(enemy)) {
+    const reduced = Math.max(1, Math.round(damage * BALANCE.guardDamageTaken));
+    guarded = Math.max(1, Math.round(damage)) > reduced;
+    damage = reduced;
+  }
+
+  let description =
     descriptions.length > 0
       ? `${source.familiarData.name} uses ${item.name}: ${descriptions.join(', ')}`
       : `${source.familiarData.name} uses ${item.name}`;
+  if (guarded) description += ' (guarded)';
 
   if (damage > 0 || enemyStatus) {
     return {
@@ -376,6 +477,7 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
       isCritical: false,
       description,
       appliedEffects: enemyStatus ? [enemyStatus] : undefined,
+      guarded: guarded || undefined,
     };
   }
 
@@ -404,12 +506,21 @@ function applyItemEffects(item: ItemData, source: BattleFamiliar, enemy: BattleF
   };
 }
 
+interface ExecutionOutcome {
+  result: ActionResult;
+  /** A stored charge was spent by this damaging action. */
+  consumedCharge: boolean;
+  /** This action stored a charge. */
+  gainedCharge: boolean;
+}
+
 function executeAction(
   action: BattleAction,
   source: BattleFamiliar,
   target: BattleFamiliar,
-  rng: () => number
-): ActionResult {
+  rng: () => number,
+  isGuarding: (familiar: BattleFamiliar) => boolean = () => false
+): ExecutionOutcome {
   let actualTarget: BattleFamiliar;
 
   if (action.type === ActionType.Item) {
@@ -426,13 +537,26 @@ function executeAction(
   }
 
   if (action.type === ActionType.Attack) {
-    const { damage, isCritical } = calculateDamage(source, actualTarget, 1.0, ScalingStat.Attack, rng);
+    const { damage, isCritical, effectiveness, guarded } = rollDamage(
+      source,
+      actualTarget,
+      1.0,
+      ScalingStat.Attack,
+      rng,
+      { defenderGuarding: isGuarding(actualTarget) }
+    );
     return {
-      effectType: EffectType.Damage,
-      targetId: actualTarget.uid,
-      value: damage,
-      isCritical,
-      description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
+      result: {
+        effectType: EffectType.Damage,
+        targetId: actualTarget.uid,
+        value: damage,
+        isCritical,
+        description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}`,
+        effectiveness: effectiveness === 'neutral' ? undefined : effectiveness,
+        guarded: guarded || undefined,
+      },
+      consumedCharge: source.charged === true,
+      gainedCharge: false,
     };
   }
 
@@ -440,43 +564,83 @@ function executeAction(
     const ability = getAbility(action.abilityId);
     if (!ability) {
       return {
-        effectType: EffectType.Damage,
-        targetId: actualTarget.uid,
-        value: 0,
-        isCritical: false,
-        description: 'Unknown ability used',
+        result: {
+          effectType: EffectType.Damage,
+          targetId: actualTarget.uid,
+          value: 0,
+          isCritical: false,
+          description: 'Unknown ability used',
+        },
+        consumedCharge: false,
+        gainedCharge: false,
       };
     }
     if (source.currentMp < ability.mpCost) {
       return {
-        effectType: EffectType.Damage,
-        targetId: actualTarget.uid,
-        value: 0,
-        isCritical: false,
-        description: `${source.familiarData.name} does not have enough MP to use ${ability.name}`,
+        result: {
+          effectType: EffectType.Damage,
+          targetId: actualTarget.uid,
+          value: 0,
+          isCritical: false,
+          description: `${source.familiarData.name} does not have enough MP to use ${ability.name}`,
+        },
+        consumedCharge: false,
+        gainedCharge: false,
       };
     }
-    return executeAbility(ability, source, actualTarget, rng);
+    return {
+      result: executeAbility(ability, source, actualTarget, rng, isGuarding),
+      // Only a direct damaging ability spends the charge; buffs, heals and
+      // DoT-setting abilities leave it intact.
+      consumedCharge: ability.effectType === EffectType.Damage && source.charged === true,
+      gainedCharge: false,
+    };
   }
 
   if (action.type === ActionType.Defend) {
+    // Guard halves direct damage for the whole turn (computed in resolveTurn);
+    // executing the stance also recovers a slice of max MP, capped by what is
+    // actually missing so `value` is the MP truly restored.
+    const maxMp = source.familiarData.stats.maxMp;
+    const restoredMp = Math.max(0, Math.min(maxMp - source.currentMp, Math.round(maxMp * BALANCE.guardMpRestore)));
     return {
-      effectType: EffectType.Buff,
-      targetId: source.uid,
-      value: 1.5,
-      isCritical: false,
-      description: `${source.familiarData.name} defends`,
-      appliedEffects: [createDefendEffect()],
+      result: {
+        effectType: EffectType.MpHeal,
+        targetId: source.uid,
+        value: restoredMp,
+        isCritical: false,
+        description: `${source.familiarData.name} guards and recovers ${restoredMp} MP`,
+      },
+      consumedCharge: false,
+      gainedCharge: false,
+    };
+  }
+
+  if (action.type === ActionType.Charge) {
+    return {
+      result: {
+        effectType: EffectType.Buff,
+        targetId: source.uid,
+        value: 0,
+        isCritical: false,
+        description: `${source.familiarData.name} is gathering power!`,
+      },
+      consumedCharge: false,
+      gainedCharge: true,
     };
   }
 
   if (action.type === ActionType.Run) {
     return {
-      effectType: EffectType.Damage,
-      targetId: source.uid,
-      value: 0,
-      isCritical: false,
-      description: `${source.familiarData.name} attempts to flee`,
+      result: {
+        effectType: EffectType.Damage,
+        targetId: source.uid,
+        value: 0,
+        isCritical: false,
+        description: `${source.familiarData.name} attempts to flee`,
+      },
+      consumedCharge: false,
+      gainedCharge: false,
     };
   }
 
@@ -484,23 +648,35 @@ function executeAction(
     const item = getItem(action.itemId);
     if (!item || item.type !== ItemType.Consumable) {
       return {
-        effectType: EffectType.Damage,
-        targetId: source.uid,
-        value: 0,
-        isCritical: false,
-        description: `Unknown or non-consumable item: ${action.itemId}`,
+        result: {
+          effectType: EffectType.Damage,
+          targetId: source.uid,
+          value: 0,
+          isCritical: false,
+          description: `Unknown or non-consumable item: ${action.itemId}`,
+        },
+        consumedCharge: false,
+        gainedCharge: false,
       };
     }
 
-    return applyItemEffects(item, source, target);
+    return {
+      result: applyItemEffects(item, source, target, isGuarding),
+      consumedCharge: false,
+      gainedCharge: false,
+    };
   }
 
   return {
-    effectType: EffectType.Damage,
-    targetId: actualTarget.uid,
-    value: 0,
-    isCritical: false,
-    description: 'No action taken',
+    result: {
+      effectType: EffectType.Damage,
+      targetId: actualTarget.uid,
+      value: 0,
+      isCritical: false,
+      description: 'No action taken',
+    },
+    consumedCharge: false,
+    gainedCharge: false,
   };
 }
 
@@ -508,10 +684,18 @@ function executeAbility(
   ability: AbilityData,
   source: BattleFamiliar,
   target: BattleFamiliar,
-  rng: () => number
+  rng: () => number,
+  isGuarding: (familiar: BattleFamiliar) => boolean = () => false
 ): ActionResult {
   if (ability.effectType === EffectType.Damage) {
-    const { damage, isCritical } = calculateDamage(source, target, ability.multiplier, ability.scalingStat, rng);
+    const { damage, isCritical, effectiveness, guarded } = rollDamage(
+      source,
+      target,
+      ability.multiplier,
+      ability.scalingStat,
+      rng,
+      { defenderGuarding: isGuarding(target) }
+    );
 
     const statusEffects = ability.statusEffect
       ? [
@@ -530,13 +714,18 @@ function executeAbility(
       targetId: target.uid,
       value: damage,
       isCritical,
-      description: `${source.familiarData.name} uses ${ability.name} for ${damage} damage${isCritical ? ' (Critical!)' : ''}`,
+      description: `${source.familiarData.name} uses ${ability.name} for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}`,
       appliedEffects: statusEffects,
+      effectiveness: effectiveness === 'neutral' ? undefined : effectiveness,
+      guarded: guarded || undefined,
     };
   }
 
   if (ability.effectType === EffectType.Heal) {
-    const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier);
+    // Bosses have several times a normal familiar's HP, so a %-of-max heal
+    // would undo whole turns of the player's work; scale theirs down.
+    const healScale = source.familiarData.isBoss ? BALANCE.bossHealScale : 1;
+    const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier * healScale);
 
     const statusEffects = ability.statusEffect
       ? [
@@ -645,26 +834,6 @@ export function checkBattleOutcome(playerFamiliar: BattleFamiliar, enemyFamiliar
   if (enemyFamiliar.currentHp <= 0) return Outcome.Win;
   if (playerFamiliar.currentHp <= 0) return Outcome.Loss;
   return Outcome.Continue;
-}
-
-function createDefendEffect(): StatusEffect {
-  return {
-    abilityId: 'defend',
-    type: EffectType.Buff,
-    stat: StatName.Defense,
-    value: 1.5,
-    turnsRemaining: 1,
-  };
-}
-
-/**
- * Apply defend action: temporary 1.5x defense for the current round.
- */
-export function applyDefend(familiar: BattleFamiliar): BattleFamiliar {
-  return {
-    ...familiar,
-    statusEffects: [...familiar.statusEffects, createDefendEffect()],
-  };
 }
 
 /**

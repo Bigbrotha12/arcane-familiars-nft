@@ -1,18 +1,59 @@
 import { ActionType, type BattleAction, type BattleFamiliar } from '@/types/battle';
 import { getAbility, Target, EffectType } from '@/data/abilities';
+import { BALANCE } from '@/data/balance';
 
 function isOnCooldown(enemy: BattleFamiliar, abilityId: string): boolean {
   return (enemy.cooldowns?.[abilityId] ?? 0) > 0;
 }
 
 /**
+ * Strongest affordable, off-cooldown ability of the requested kind.
+ * `directOnly` restricts the search to abilities that deal immediate damage —
+ * a charged boss must not spend its stored power on a DoT applicator that deals
+ * no direct damage.
+ */
+function strongestDamageAbility(enemy: BattleFamiliar, directOnly: boolean): string | undefined {
+  let best: { id: string; multiplier: number } | null = null;
+  for (const abilityId of enemy.familiarData.abilities) {
+    const ability = getAbility(abilityId);
+    if (!ability) continue;
+    if (isOnCooldown(enemy, abilityId)) continue;
+    if (enemy.currentMp < ability.mpCost) continue;
+    const damaging = ability.effectType === EffectType.Damage || (!directOnly && ability.effectType === EffectType.Dot);
+    if (!damaging) continue;
+    if (!best || ability.multiplier > best.multiplier) {
+      best = { id: abilityId, multiplier: ability.multiplier };
+    }
+  }
+  return best?.id;
+}
+
+/**
  * Select an enemy action using a priority-based decision tree:
+ * 0. Boss only: already charged → unleash the strongest direct damaging
+ *    ability, else basic attack (no RNG draw).
  * 1. If HP < 30% AND has heal ability AND MP >= heal cost → use heal
- * 2. If has buff available AND not already buffed → use buff (50% chance)
- * 3. If has damage ability AND MP >= cost → use strongest damage (70% chance)
- * 4. Else → basic attack
+ * 2. Boss only: if rng() < bossChargeChance → gather power (Charge)
+ * 3. If has buff available AND not already buffed → use buff (50% chance)
+ * 4. If has damage ability AND MP >= cost → use strongest damage (70% chance)
+ * 5. Else → basic attack
+ *
+ * The boss charge roll is inserted before the buff check, so non-boss enemies
+ * draw exactly the same RNG sequence they always have.
  */
 export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar, rng: () => number): BattleAction {
+  const isBoss = enemy.familiarData.isBoss === true;
+
+  // 0. A charged boss always unleashes: strongest direct damage ability if one
+  // is usable, otherwise a basic attack.
+  if (isBoss && enemy.charged) {
+    const abilityId = strongestDamageAbility(enemy, true);
+    if (abilityId) {
+      return { type: ActionType.Ability, abilityId, targetId: player.uid };
+    }
+    return { type: ActionType.Attack, targetId: player.uid };
+  }
+
   const hpPercent = enemy.currentHp / enemy.familiarData.stats.maxHp;
 
   // 1. Check for heal when low HP
@@ -44,7 +85,12 @@ export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar,
     }
   }
 
-  // 2. Check for buff if not already buffed
+  // 2. Boss telegraphed heavy attack.
+  if (isBoss && rng() < BALANCE.bossChargeChance) {
+    return { type: ActionType.Charge, targetId: enemy.uid };
+  }
+
+  // 3. Check for buff if not already buffed
   const hasBuffs = enemy.statusEffects.some((e) => e.type === EffectType.Buff);
   if (!hasBuffs && rng() < 0.5) {
     for (const abilityId of enemy.familiarData.abilities) {
@@ -60,27 +106,14 @@ export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar,
     }
   }
 
-  // 3. Use strongest damage ability (70% chance)
+  // 4. Use strongest damage ability (70% chance)
   if (rng() < 0.7) {
-    let bestDamageAbility: { id: string; multiplier: number } | null = null;
-    for (const abilityId of enemy.familiarData.abilities) {
-      const ability = getAbility(abilityId);
-      if (
-        ability &&
-        !isOnCooldown(enemy, abilityId) &&
-        (ability.effectType === EffectType.Damage || ability.effectType === EffectType.Dot) &&
-        enemy.currentMp >= ability.mpCost
-      ) {
-        if (!bestDamageAbility || ability.multiplier > bestDamageAbility.multiplier) {
-          bestDamageAbility = { id: abilityId, multiplier: ability.multiplier };
-        }
-      }
-    }
-    if (bestDamageAbility) {
-      return { type: ActionType.Ability, abilityId: bestDamageAbility.id, targetId: player.uid };
+    const abilityId = strongestDamageAbility(enemy, false);
+    if (abilityId) {
+      return { type: ActionType.Ability, abilityId, targetId: player.uid };
     }
   }
 
-  // 4. Basic attack
+  // 5. Basic attack
   return { type: ActionType.Attack, targetId: player.uid };
 }

@@ -1,7 +1,9 @@
-import { type Area, type Room, type DungeonState, RoomType } from '@/types/exploration';
-import type { FamiliarData } from '@/data/familiars';
+import { type Area, type Room, type DungeonState, RoomType, type RestHealAmount } from '@/types/exploration';
+import { getFamiliar, type FamiliarData } from '@/data/familiars';
+import { BALANCE } from '@/data/balance';
 import { ITEMS } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
+import { scaleFamiliarStats } from '@/utils/progression';
 import { emptyInventory } from '@/utils/runLoot';
 
 /**
@@ -80,21 +82,24 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   rooms['room_0'] = startRoom;
   roomIds.push('room_0');
 
-  // Create normal rooms
+  // Create normal rooms. Longer dungeons swap one main-path room for a rest
+  // shrine so an attrition run has a single breather and a routing decision.
   const normalCount = area.roomCount - 2;
+  const restIndex = area.roomCount >= 6 ? Math.round(normalCount * 0.6) : -1;
   for (let i = 0; i < normalCount; i++) {
     const nameIdx = randomInRange(rng, 0, ROOM_NAMES.length - 1);
     const descIdx = randomInRange(rng, 0, ROOM_DESCRIPTIONS.length - 1);
     const depth = (i + 1) / normalCount;
+    const isRest = i === restIndex;
     const room: Room = {
       id: `room_${i + 1}`,
-      name: ROOM_NAMES[nameIdx],
-      description: ROOM_DESCRIPTIONS[descIdx],
-      type: RoomType.Normal,
+      name: isRest ? 'Quiet Shrine' : ROOM_NAMES[nameIdx],
+      description: isRest ? 'Soft light pools around an old stone shrine.' : ROOM_DESCRIPTIONS[descIdx],
+      type: isRest ? RoomType.Rest : RoomType.Normal,
       exits: [],
-      encounterChance: 0.3 + depth * 0.3,
-      treasureChance: 0.15 + depth * 0.1,
-      treasurePool: TREASURE_POOL.map((entry) => ({ ...entry })),
+      encounterChance: isRest ? 0 : 0.3 + depth * 0.3,
+      treasureChance: isRest ? 0 : 0.15 + depth * 0.1,
+      treasurePool: isRest ? [] : TREASURE_POOL.map((entry) => ({ ...entry })),
       cleared: false,
     };
     rooms[room.id] = room;
@@ -105,7 +110,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   const bossRoom: Room = {
     id: `room_${normalCount + 1}`,
     name: 'Boss Chamber',
-    description: `The ${area.bossId} awaits in the final chamber.`,
+    description: `The ${getFamiliar(area.bossId)?.name ?? area.bossId} awaits in the final chamber.`,
     type: RoomType.Boss,
     exits: [],
     encounterChance: 0,
@@ -201,6 +206,39 @@ export function selectEnemy(area: Area, rng: () => number): string | null {
   if (area.encounterPool.length === 0) return null;
   const idx = randomInRange(rng, 0, area.encounterPool.length - 1);
   return area.encounterPool[idx];
+}
+
+/**
+ * Apply the one-time rest-shrine heal to a dungeon's party.
+ *
+ * Fainted members (hp <= 0) are skipped and stay down: a shrine is a breather,
+ * not a revive. Each living member regains `restHealFraction` of its
+ * level-scaled max HP and MP, capped at that max. Returns the amount actually
+ * restored per familiar id.
+ */
+export function healPartyAtRest(
+  dungeon: DungeonState,
+  familiarLevels: Record<string, number> = {}
+): Record<string, RestHealAmount> {
+  const healed: Record<string, RestHealAmount> = {};
+
+  for (const familiarId of dungeon.party ?? []) {
+    const base = getFamiliar(familiarId);
+    const currentHp = dungeon.partyHp[familiarId];
+    if (!base || typeof currentHp !== 'number' || currentHp <= 0) continue;
+
+    const max = scaleFamiliarStats(base.stats, familiarLevels[familiarId] ?? 1);
+    const currentMp = dungeon.partyMp[familiarId] ?? 0;
+
+    const hpRestored = Math.max(0, Math.min(max.maxHp - currentHp, Math.round(max.maxHp * BALANCE.restHealFraction)));
+    const mpRestored = Math.max(0, Math.min(max.maxMp - currentMp, Math.round(max.maxMp * BALANCE.restHealFraction)));
+
+    dungeon.partyHp[familiarId] = currentHp + hpRestored;
+    dungeon.partyMp[familiarId] = currentMp + mpRestored;
+    healed[familiarId] = { hp: hpRestored, mp: mpRestored };
+  }
+
+  return healed;
 }
 
 /**

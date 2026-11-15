@@ -118,6 +118,16 @@ describe('validateBattleAction', () => {
     });
   });
 
+  describe('charge', () => {
+    it('rejects Charge from the player as an unknown action type', () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Charge };
+      const result = validateBattleAction(action, state);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Unknown action type');
+    });
+  });
+
   describe('item', () => {
     it('requires itemId', () => {
       const state = createBattleState();

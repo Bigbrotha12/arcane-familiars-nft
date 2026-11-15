@@ -12,6 +12,9 @@ export interface BattleFamiliar {
   statusEffects: StatusEffect[];
   cooldowns: Record<string, number>;
   isAlly: boolean;
+  /** Set by ActionType.Charge and spent by the next damaging action
+   *  (boss telegraphed heavy attack). Persisted with the battle JSON. */
+  charged?: boolean;
 }
 
 export interface StatusEffect {
@@ -28,6 +31,8 @@ export enum ActionType {
   Defend,
   Item,
   Run,
+  /** Enemy-only: gather power, doubling the next damaging action. */
+  Charge,
 }
 
 export interface BattleAction {
@@ -49,6 +54,10 @@ export interface ActionResult {
   mpValue?: number;
   /** Removes Debuff/Dot status effects from the target (item cleanse). */
   cleanse?: boolean;
+  /** Affinity matchup that scaled a direct hit (omitted when neutral). */
+  effectiveness?: 'strong' | 'weak';
+  /** True when the target's Defend guard reduced this result's damage. */
+  guarded?: boolean;
 }
 
 export enum Outcome {
@@ -109,6 +118,12 @@ export interface BattleRewards {
   xp?: number;
   /** Number of levels gained by the active familiar. */
   levelUp?: number;
+  /** XP awarded to the party member who did not land the winning blow. */
+  benchXp?: number;
+  /** Species id of that bench party member. */
+  benchFamiliarId?: string;
+  /** Number of levels gained by the bench party member. */
+  benchLevelUp?: number;
   /** Species id recruited after a non-boss victory. */
   recruitedFamiliar?: string;
   /** Display name of the recruited familiar. */
@@ -130,6 +145,9 @@ export interface BattleState {
   playerFamiliar: BattleFamiliar;
   enemyFamiliar: BattleFamiliar;
   isBoss: boolean;
+  /** Level the enemy was scaled to at battle start (drives XP). Optional for
+   *  battles persisted before the field existed. */
+  enemyLevel?: number;
   turnCount: number;
   status: BattleResult;
   swapsThisTurn?: number;

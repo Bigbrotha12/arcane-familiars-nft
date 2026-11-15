@@ -44,7 +44,9 @@ function itemAction(itemId: string): BattleAction {
 }
 
 function useItem(item: ItemData, player = makePlayer(), enemy = makeEnemy()) {
-  const enemyAction: BattleAction = { type: ActionType.Defend };
+  // Run is inert in the engine (0 damage, no effects), so item assertions are
+  // not disturbed by the enemy's action. Defend would guard and halve bombs.
+  const enemyAction: BattleAction = { type: ActionType.Run };
   const result = resolveTurn(itemAction(item.id), player, enemy, enemyAction, makeRng());
   return result;
 }
@@ -139,6 +141,21 @@ describe('item effects in battle', () => {
     expect(playerResult.targetId).not.toBe(updatedPlayerFamiliar.uid);
     expect(updatedEnemyFamiliar.currentHp).toBe(90 - 25);
     expect(updatedPlayerFamiliar.currentHp).toBe(60);
+  });
+
+  it('bomb damage is flat but is halved by an active guard', () => {
+    const enemy = makeEnemy(); // maxHp/hp 90
+    const { playerResult, updatedEnemyFamiliar } = resolveTurn(
+      itemAction('fire_bomb'),
+      makePlayer(),
+      enemy,
+      { type: ActionType.Defend },
+      makeRng()
+    );
+    // 25 * guardDamageTaken = 12.5 → 13
+    expect(updatedEnemyFamiliar.currentHp).toBe(90 - 13);
+    expect(playerResult.guarded).toBe(true);
+    expect(playerResult.description).toContain('(guarded)');
   });
 
   it('frost_bomb damages and slows the enemy', () => {

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   generateDungeon,
+  healPartyAtRest,
   rollEncounter,
   rollTreasure,
   selectTreasure,
@@ -9,8 +10,9 @@ import {
 } from '../dungeonEngine';
 import { seededRandom } from '../mathUtils';
 import { AREAS } from '../../data/areas';
+import { BALANCE } from '../../data/balance';
 import { RoomType } from '../../types/exploration';
-import type { Room } from '../../types/exploration';
+import type { Room, DungeonState } from '../../types/exploration';
 
 function makeRng(seed = 42): () => number {
   return seededRandom(seed);
@@ -70,6 +72,113 @@ describe('generateDungeon', () => {
     const boss = dungeon.rooms[ids[ids.length - 1]];
     const prev = ids[ids.length - 2];
     expect(boss.exits.some((e) => e.roomId === prev)).toBe(true);
+  });
+});
+
+describe('rest shrine generation', () => {
+  function restRooms(dungeon: DungeonState): Room[] {
+    return Object.values(dungeon.rooms).filter((room) => room.type === RoomType.Rest);
+  }
+
+  it('places exactly one shrine in areas with 6+ rooms and none below that', () => {
+    for (const area of Object.values(AREAS)) {
+      const shrines = restRooms(generateDungeon(area, 7));
+      expect(shrines, `${area.id} (roomCount ${area.roomCount})`).toHaveLength(area.roomCount >= 6 ? 1 : 0);
+    }
+  });
+
+  it('marks the shrine as a safe room with the designed name and description', () => {
+    const shrine = restRooms(generateDungeon(AREAS.crystalCaves, 7))[0];
+    expect(shrine.name).toBe('Quiet Shrine');
+    expect(shrine.description).toBe('Soft light pools around an old stone shrine.');
+    expect(shrine.encounterChance).toBe(0);
+    expect(shrine.treasureChance).toBe(0);
+    expect(shrine.treasurePool).toEqual([]);
+    expect(shrine.rested).toBeUndefined();
+  });
+
+  it('never replaces the start or boss room', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 11);
+      const shrine = restRooms(dungeon)[0];
+      if (!shrine) continue;
+      expect(shrine.id).not.toBe('room_0');
+      expect(shrine.type).not.toBe(RoomType.Boss);
+      const boss = Object.values(dungeon.rooms).find((room) => room.type === RoomType.Boss);
+      expect(shrine.id).not.toBe(boss?.id);
+    }
+  });
+
+  it('sits at the documented index on the main path', () => {
+    const area = AREAS.shadowForest; // roomCount 7 -> 5 normal rooms
+    const normalCount = area.roomCount - 2;
+    const expectedId = `room_${Math.round(normalCount * 0.6) + 1}`;
+    expect(restRooms(generateDungeon(area, 42))[0].id).toBe(expectedId);
+  });
+
+  it('keeps every room reachable from the entrance', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 23);
+      const seen = new Set<string>(['room_0']);
+      const queue = ['room_0'];
+      while (queue.length > 0) {
+        const room = dungeon.rooms[queue.shift()!];
+        for (const exit of room.exits) {
+          if (seen.has(exit.roomId)) continue;
+          seen.add(exit.roomId);
+          queue.push(exit.roomId);
+        }
+      }
+      expect(seen.size, area.id).toBe(Object.keys(dungeon.rooms).length);
+    }
+  });
+});
+
+describe('healPartyAtRest', () => {
+  function dungeonWithParty(hp: Record<string, number>, mp: Record<string, number>): DungeonState {
+    const dungeon = generateDungeon(AREAS.crystalCaves, 42);
+    dungeon.party = Object.keys(hp);
+    dungeon.partyHp = { ...hp };
+    dungeon.partyMp = { ...mp };
+    return dungeon;
+  }
+
+  it('restores the configured fraction of max HP and MP', () => {
+    const dungeon = dungeonWithParty({ whiteDog: 40 }, { whiteDog: 10 });
+    const healed = healPartyAtRest(dungeon);
+
+    const expectedHp = Math.round(120 * BALANCE.restHealFraction);
+    const expectedMp = Math.round(80 * BALANCE.restHealFraction);
+    expect(healed.whiteDog).toEqual({ hp: expectedHp, mp: expectedMp });
+    expect(dungeon.partyHp.whiteDog).toBe(40 + expectedHp);
+    expect(dungeon.partyMp.whiteDog).toBe(10 + expectedMp);
+  });
+
+  it('caps healing at the level-scaled max and reports only the amount restored', () => {
+    const dungeon = dungeonWithParty({ whiteDog: 100 }, { whiteDog: 60 });
+    const healed = healPartyAtRest(dungeon);
+
+    expect(healed.whiteDog).toEqual({ hp: 20, mp: 20 });
+    expect(dungeon.partyHp.whiteDog).toBe(120);
+    expect(dungeon.partyMp.whiteDog).toBe(80);
+  });
+
+  it('uses familiar levels when computing the cap', () => {
+    const dungeon = dungeonWithParty({ whiteDog: 100 }, { whiteDog: 60 });
+    healPartyAtRest(dungeon, { whiteDog: 2 });
+
+    expect(dungeon.partyHp.whiteDog).toBe(127);
+    expect(dungeon.partyMp.whiteDog).toBe(85);
+  });
+
+  it('skips fainted members and never revives them', () => {
+    const dungeon = dungeonWithParty({ whiteDog: 40, yellowFighter: 0 }, { whiteDog: 10, yellowFighter: 30 });
+    const healed = healPartyAtRest(dungeon);
+
+    expect(healed.yellowFighter).toBeUndefined();
+    expect(dungeon.partyHp.yellowFighter).toBe(0);
+    expect(dungeon.partyMp.yellowFighter).toBe(30);
+    expect(healed.whiteDog.hp).toBeGreaterThan(0);
   });
 });
 
