@@ -7,6 +7,7 @@ import type { GameStateSnapshot } from '../events';
 import type { Inventory } from '@arcane-familiars/game-logic';
 import { Layout } from '../ui/layout';
 import { audioManager } from '../audio/manager';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface DungeonFailData {
   roomsExplored?: number;
@@ -53,6 +54,7 @@ export class DungeonFailScene extends Phaser.Scene {
 
     const { width, height } = this.scale;
     const layout = new Layout(this);
+    fadeIn(this);
 
     const SKULL_Y_RATIO = 0.25;
     const TITLE_Y_RATIO = 0.38;
@@ -207,7 +209,7 @@ export class DungeonFailScene extends Phaser.Scene {
 
     try {
       await gameApiClient.exitDungeon();
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     } catch (err) {
       audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to exit dungeon';
@@ -237,7 +239,7 @@ export class DungeonFailScene extends Phaser.Scene {
   private handleEventExit = (): void => {
     if (!this.isExiting) {
       this.isExiting = true;
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     }
   };
 

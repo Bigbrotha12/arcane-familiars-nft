@@ -6,6 +6,7 @@ import { SCENE_KEYS } from '../constants/scenes';
 import { Layout } from '../ui/layout';
 import { C } from '../ui/theme';
 import { audioManager } from '../audio/manager';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 
 export class ShopScene extends Phaser.Scene {
   private layout!: Layout;
@@ -28,6 +29,7 @@ export class ShopScene extends Phaser.Scene {
     audioManager.playMusic('town');
     audioManager.playAmbience('interior');
     this.layout = new Layout(this);
+    fadeIn(this);
     this.isBuying = false;
     this.rowTexts = [];
     this.rowObjects = [];
@@ -71,7 +73,7 @@ export class ShopScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
     back.on('pointerdown', () => {
       audioManager.playSfx('ui_cancel');
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     });
     back.on('pointerover', () => back.setColor('#F0EFFF'));
     back.on('pointerout', () => back.setColor('#A5A3C4'));

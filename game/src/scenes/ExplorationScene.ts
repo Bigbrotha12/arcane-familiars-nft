@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import type { DungeonState, Area, Room } from '@arcane-familiars/game-logic';
+import type { DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType, getFamiliar, getRunLoot, Directions } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI } from '../ui/ExplorationUI';
@@ -14,9 +14,11 @@ import type {
   NavigateRoomPayload,
   PartySwapPayload,
   DungeonRoomSnapshot,
+  EncounterSnapshot,
 } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 import { audioManager } from '../audio/manager';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface ExplorationSceneData {
   areaId: string;
@@ -79,7 +81,7 @@ export class ExplorationScene extends Phaser.Scene {
     audioManager.preload(this, {
       music: ['exploration', 'dungeon'],
       ambience: ['forest', 'cave'],
-      sfx: ['door', 'footstep', 'encounter', 'loot', 'flee', 'ui_confirm', 'ui_cancel', 'ui_error'],
+      sfx: ['door', 'footstep', 'encounter', 'loot', 'flee', 'heal', 'ui_confirm', 'ui_cancel', 'ui_error'],
     });
     const roomAreas: Record<string, string> = {
       verdantMeadow: 'verdant-meadow',
@@ -115,6 +117,10 @@ export class ExplorationScene extends Phaser.Scene {
     this.syncAreaAudio();
     this.explorationUI = new ExplorationUI(this);
     this.explorationUI.init(area);
+    fadeIn(this);
+    // Scenes are restarted constantly; drop any listener from a previous run
+    // or every shutdown would fire onShutdown once per past restart.
+    this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
 
     // Wire EventBus for save/exit
@@ -173,7 +179,7 @@ export class ExplorationScene extends Phaser.Scene {
         // server's combat HP/MP instead of starting a fresh fight.
         if (battle) {
           this.explorationUI.destroy();
-          this.scene.start(SCENE_KEYS.BATTLE, {
+          fadeToScene(this, SCENE_KEYS.BATTLE, {
             enemyId: battle.enemyFamiliar.familiarData.id,
             returnScene: SCENE_KEYS.EXPLORATION,
             areaId: this.areaId,
@@ -232,7 +238,7 @@ export class ExplorationScene extends Phaser.Scene {
   }
 
   private async navigateToRoom(roomId: string): Promise<void> {
-    if (this.isProcessing || !this.dungeon || !this.area) return;
+    if (this.isProcessing || this.explorationUI?.isDestroyed() || !this.dungeon || !this.area) return;
     this.isProcessing = true;
     this.encounterActive = false;
     this.treasureActive = false;
@@ -242,6 +248,9 @@ export class ExplorationScene extends Phaser.Scene {
 
     try {
       const result = await this.gameApi.exploreRoom(roomId);
+      // The player can leave during the round-trip; touching the destroyed UI
+      // container afterwards throws inside Phaser's renderer.
+      if (this.explorationUI?.isDestroyed()) return;
       this.dungeon.currentRoomId = roomId;
       this.dungeon.rooms[roomId] = { ...this.dungeon.rooms[roomId], ...result.room };
       this.visitedRoomIds.add(roomId);
@@ -288,6 +297,8 @@ export class ExplorationScene extends Phaser.Scene {
         );
       } else {
         this.explorationUI.addLogMessage(`You arrive at ${result.room.name}.`);
+        // Rest shrines are safe rooms, so this is the only branch they reach.
+        if (result.rest) this.applyRestHeal(result.rest);
         this.emitStateUpdate();
         this.timers.push(
           this.time.delayedCall(this.EXITS_DELAY_MS, () => {
@@ -303,6 +314,29 @@ export class ExplorationScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Reflect a rest shrine's server-applied heal in local HP/MP and log it.
+   * The server returns the amounts actually restored (already capped), so they
+   * can be added to the local run totals without re-deriving the cap.
+   */
+  private applyRestHeal(rest: RestHeal): void {
+    const dungeon = this.dungeon;
+    if (!dungeon) return;
+
+    const lines: string[] = [];
+    for (const [familiarId, amount] of Object.entries(rest.healed)) {
+      dungeon.partyHp[familiarId] = (dungeon.partyHp[familiarId] ?? 0) + amount.hp;
+      dungeon.partyMp[familiarId] = (dungeon.partyMp[familiarId] ?? 0) + amount.mp;
+      if (amount.hp <= 0 && amount.mp <= 0) continue;
+      const name = getFamiliar(familiarId)?.name ?? familiarId;
+      lines.push(`${name} +${amount.hp} HP, +${amount.mp} MP`);
+    }
+
+    this.explorationUI.addLogMessage('The shrine restores your party.');
+    for (const line of lines) this.explorationUI.addLogMessage(line);
+    audioManager.playSfx('heal');
+  }
+
   private startBattle(enemyId: string): void {
     if (!this.area) return;
     this.isProcessing = true;
@@ -311,7 +345,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.pendingEnemyId = null;
     this.explorationUI.destroy();
     audioManager.playSfx('encounter');
-    this.scene.start(SCENE_KEYS.BATTLE, {
+    fadeToScene(this, SCENE_KEYS.BATTLE, {
       enemyId,
       returnScene: SCENE_KEYS.EXPLORATION,
       areaId: this.areaId,
@@ -394,7 +428,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.explorationUI.destroy();
     audioManager.playSfx('ui_cancel');
     gameEventBus.emit(GameEvent.OVERLAY_MODE_CHANGED, { mode: 'exploration', enabled: false });
-    this.scene.start(SCENE_KEYS.WORLD_MAP);
+    fadeToScene(this, SCENE_KEYS.WORLD_MAP);
   }
 
   private cleanupTimers(): void {
@@ -413,7 +447,7 @@ export class ExplorationScene extends Phaser.Scene {
       .map((id) => {
         const fd = getFamiliar(id);
         if (!fd) return null;
-        const state = toFamiliarStateFromData(fd);
+        const state = toFamiliarStateFromData(fd, this.fullGameState?.familiarLevels?.[id] ?? 1);
         const hp = dungeon.partyHp[id];
         const mp = dungeon.partyMp[id];
         if (typeof hp === 'number') state.hp = hp;
@@ -464,6 +498,7 @@ export class ExplorationScene extends Phaser.Scene {
       roomType: currentRoom ? RoomType[currentRoom.type] : undefined,
       roomDescription: currentRoom?.description,
       roomLog: [...this.explorationUI.getLog()],
+      pendingEncounter: this.buildPendingEncounter(currentRoom),
       dungeon: {
         areaId: dungeon.areaId,
         currentRoomId: dungeon.currentRoomId,
@@ -479,6 +514,16 @@ export class ExplorationScene extends Phaser.Scene {
       runLootItemCount: getRunLoot(this.dungeon).items.reduce((sum, item) => sum + item.quantity, 0),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
+  }
+
+  private buildPendingEncounter(room?: Room): EncounterSnapshot | undefined {
+    if (!this.pendingEnemyId) return undefined;
+    const base = getFamiliar(this.pendingEnemyId);
+    const isBoss = this.bossActive || base?.isBoss === true;
+    const level = isBoss
+      ? (this.area?.levelRange[1] ?? room?.pendingEncounter?.level ?? 1)
+      : (room?.pendingEncounter?.level ?? this.area?.levelRange[0] ?? 1);
+    return { enemyId: this.pendingEnemyId, level, isBoss };
   }
 
   private handleSave = async (): Promise<void> => {

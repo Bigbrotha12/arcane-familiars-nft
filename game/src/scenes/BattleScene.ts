@@ -2,7 +2,6 @@ import Phaser from 'phaser';
 import {
   BattleAction,
   BattleState,
-  ActionResult,
   Outcome,
   BattleResult,
   ActionType,
@@ -14,16 +13,20 @@ import {
   getFamiliar,
   getRunLoot,
   describeItem,
+  AREAS,
   Affinity,
   type FamiliarData,
   type AbilityData,
   type ItemData,
   type BattleFamiliar,
+  type TurnStep,
 } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
-import { BattleUI } from '../ui/BattleUI';
+import { BattleUI, type BattleSide } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
 import { Layout } from '../ui/layout';
+import { MOTION } from '../ui/motion';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
@@ -54,8 +57,9 @@ interface BattleSceneData {
 }
 
 export class BattleScene extends Phaser.Scene {
-  private readonly STEP_DELAY_MS = 700;
-  private readonly OUTCOME_DELAY_MS = 800;
+  /** Two played steps stay under ~1.4s of choreography. */
+  private readonly STEP_DELAY_MS = MOTION.stepDelay;
+  private readonly OUTCOME_DELAY_MS = MOTION.outcomeDelay;
   private readonly FLEE_DELAY_MS = 600;
   private layout!: Layout;
   private static readonly ACTION_TYPE_LABELS: Record<ActionType, string> = {
@@ -64,6 +68,7 @@ export class BattleScene extends Phaser.Scene {
     [ActionType.Defend]: 'defend',
     [ActionType.Item]: 'use an item',
     [ActionType.Run]: 'try to run',
+    [ActionType.Charge]: 'gather power',
   };
   private static readonly OUTCOME_TO_STATUS: Record<Outcome, BattleResult> = {
     [Outcome.Win]: BattleResult.Won,
@@ -134,11 +139,13 @@ export class BattleScene extends Phaser.Scene {
       ],
     });
     preloadFamiliarAssets(this);
-    // Load battle background images
-    this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdund.png');
+    // Load battle background images. Boss chambers: only the two whose art we
+    // could match to the boss are wired up — the third candidate file was a
+    // forest demon that fits no boss, so Meadow Guardian falls back to the
+    // area wash (see assets/battle_bg/battle_bg_unused_forest_demon.png).
+    this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdant.png');
     this.load.image('battle_bg_crystal', '/assets/battle_bg/battle_bg_crystal.png');
     this.load.image('battle_bg_shadow', '/assets/battle_bg/battle_bg_shadow.png');
-    this.load.image('battle_bg_meadow_guardian', '/assets/battle_bg/battle_bg_meadow_guardian.png');
     this.load.image('battle_bg_cave_warden', '/assets/battle_bg/battle_bg_cave_warden.png');
     this.load.image('battle_bg_shadow_lord', '/assets/battle_bg/battle_bg_shadow_lord.png');
   }
@@ -150,43 +157,17 @@ export class BattleScene extends Phaser.Scene {
 
     // Shared design-space background (fallback backdrop + optional art + tint).
     this.sceneBackground = new SceneBackground(this, this.layout);
-
-    // Boss battles are identified by the enemy familiar id passed in scene data
-    // (battleState is not yet resolved at create() time).
-    const areaBgMap: Record<string, string> = {
-      verdantMeadow: 'battle_bg_verdant',
-      crystalCaves: 'battle_bg_crystal',
-      shadowForest: 'battle_bg_shadow',
-      emberHollow: 'battle_bg_crystal',
-      frostpeakSummit: 'battle_bg_shadow',
-      sunkenArchive: 'battle_bg_crystal',
-    };
-    const bossBgMap: Record<string, string> = {
-      meadowGuardian: 'battle_bg_meadow_guardian',
-      caveWarden: 'battle_bg_cave_warden',
-      shadowLord: 'battle_bg_shadow_lord',
-      emberTitan: 'battle_bg_cave_warden',
-      frostQueen: 'battle_bg_shadow_lord',
-      archiveKeeper: 'battle_bg_shadow_lord',
-    };
-
-    let bgKey: string | undefined;
-    if (this.enemyId in bossBgMap) {
-      bgKey = bossBgMap[this.enemyId];
-    } else if (this.areaId && this.areaId in areaBgMap) {
-      bgKey = areaBgMap[this.areaId];
-    }
-
-    if (bgKey) {
-      this.sceneBackground.setImage(bgKey);
-      this.sceneBackground.setOverlay(0x000000, 0.4);
-    }
+    this.applyBattleBackground();
 
     createFamiliarAnimations(this);
 
     this.battleUI = new BattleUI(this);
     this.battleUI.init();
+    fadeIn(this);
 
+    // Scenes are restarted constantly; drop any listener from a previous run
+    // or every shutdown would fire onShutdown once per past restart.
+    this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
 
     // Wire EventBus for save/exit
@@ -201,6 +182,14 @@ export class BattleScene extends Phaser.Scene {
     try {
       const { state, battle } = await gameApiClient.bootstrap();
       this.gameState = state;
+
+      // Defensive: a resume path that forgot to pass areaId still gets the
+      // right area art once the dungeon's area is known.
+      if (!this.areaId && state.dungeon?.areaId) {
+        this.areaId = state.dungeon.areaId;
+        this.applyBattleBackground();
+      }
+
       if (battle) {
         this.adoptBattle(battle);
       } else {
@@ -212,6 +201,44 @@ export class BattleScene extends Phaser.Scene {
     }
   }
 
+  /**
+   * Pick the battle backdrop.
+   *
+   * Boss battles have their own chambers; the three original areas have their
+   * own art. Areas added later have no generated art yet, so they get a
+   * deliberate area-coloured wash over the neutral backdrop instead of
+   * borrowing another area's image (which read as the wrong biome).
+   */
+  private applyBattleBackground(): void {
+    if (!this.sceneBackground) return;
+
+    const areaBgMap: Record<string, string> = {
+      verdantMeadow: 'battle_bg_verdant',
+      crystalCaves: 'battle_bg_crystal',
+      shadowForest: 'battle_bg_shadow',
+    };
+    const bossBgMap: Record<string, string> = {
+      caveWarden: 'battle_bg_cave_warden',
+      shadowLord: 'battle_bg_shadow_lord',
+    };
+
+    let bgKey: string | undefined;
+    if (this.enemyId in bossBgMap) {
+      bgKey = bossBgMap[this.enemyId];
+    } else if (this.areaId && this.areaId in areaBgMap) {
+      bgKey = areaBgMap[this.areaId];
+    }
+
+    if (bgKey) {
+      this.sceneBackground.setImage(bgKey);
+      this.sceneBackground.setOverlay(0x000000, 0.4);
+      return;
+    }
+
+    const area = this.areaId ? AREAS[this.areaId] : undefined;
+    if (area) this.sceneBackground.setOverlay(area.bgColor, 0.55);
+  }
+
   private handleBattleSetupError(message: string): void {
     audioManager.playSfx('ui_error');
     this.battleUI.hideConnecting();
@@ -220,7 +247,7 @@ export class BattleScene extends Phaser.Scene {
     this.timers.push(
       this.time.delayedCall(1800, () => {
         this.battleUI.destroy();
-        this.scene.start(SCENE_KEYS.WORLD_MAP);
+        fadeToScene(this, SCENE_KEYS.WORLD_MAP);
       })
     );
   }
@@ -261,6 +288,14 @@ export class BattleScene extends Phaser.Scene {
     this.battleUI.hideConnecting();
     this.battleUI.updatePlayerDisplay(battle.playerFamiliar);
     this.battleUI.updateEnemyDisplay(battle.enemyFamiliar);
+    this.battleUI.playEntrance('player');
+    this.battleUI.playEntrance('enemy', { boss: battle.isBoss });
+    // A boss can be resumed mid-charge (bootstrap after a refresh); restore the
+    // telegraph immediately so the player sees it before choosing an action.
+    this.battleUI.setCharged(battle.enemyFamiliar.charged === true);
+    if (battle.enemyFamiliar.charged) {
+      this.battleUI.addLogMessage(`${battle.enemyFamiliar.familiarData.name} is gathering power — Guard!`);
+    }
     this.battleUI.addLogMessage(openingMessage);
     this.battleUI.addLogMessage('Choose your action.');
 
@@ -269,8 +304,8 @@ export class BattleScene extends Phaser.Scene {
       .map((id) => getFamiliar(id))
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
-        const state = toFamiliarStateFromData(fd);
-        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
+        const level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
+        const state = toFamiliarStateFromData(fd, level);
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -334,6 +369,9 @@ export class BattleScene extends Phaser.Scene {
       for (let i = 0; i < turnResult.steps.length; i++) {
         const step = turnResult.steps[i];
         const isPlayerStep = step.actorUid === playerUid;
+        // Snapshot before this step: charge/unleash and faints are transitions,
+        // so the choreography needs the previous combatant state.
+        const before = this.battleState;
 
         if (isPlayerStep && !intentAnnounced) {
           intentAnnounced = true;
@@ -346,10 +384,10 @@ export class BattleScene extends Phaser.Scene {
         }
 
         this.battleUI.addLogMessage(step.result.description);
-        this.showActionResultVisual(step.result);
+        this.playStepFeedback(step, before, isPlayerStep, action);
         if (isPlayerStep && action.type === ActionType.Ability && !abilityVfxPlayed) {
           abilityVfxPlayed = true;
-          const sprites = getFamiliarSprites(this.battleState.playerFamiliar.familiarData.id);
+          const sprites = getFamiliarSprites(this.battleState!.playerFamiliar.familiarData.id);
           if (sprites?.abilityEffect) {
             this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
           }
@@ -362,6 +400,7 @@ export class BattleScene extends Phaser.Scene {
         };
         this.battleUI.updatePlayerDisplay(this.battleState.playerFamiliar);
         this.battleUI.updateEnemyDisplay(this.battleState.enemyFamiliar);
+        this.battleUI.setCharged(this.battleState.enemyFamiliar.charged === true);
         this.emitStateUpdate();
 
         if (i < turnResult.steps.length - 1) {
@@ -547,6 +586,8 @@ export class BattleScene extends Phaser.Scene {
       this.activeFamiliarIndex = index;
     }
     this.battleUI.updatePlayerDisplay(familiar);
+    // Incoming relay / swap-in slides in the same way the opening familiar does.
+    this.battleUI.playEntrance('player');
   }
 
   private recoverFromStaleBattle = async (err: Error & { status?: number }): Promise<boolean> => {
@@ -590,9 +631,9 @@ export class BattleScene extends Phaser.Scene {
     this.sceneBackground?.destroy();
     this.sceneBackground = undefined;
     if (toWorldMap) {
-      this.scene.start('WorldMapScene');
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     } else {
-      this.scene.start(this.returnScene, {
+      fadeToScene(this, this.returnScene, {
         areaId: this.areaId,
         pendingTreasureItemId: this.pendingTreasureItemId,
         activeIndex: this.activeFamiliarIndex,
@@ -642,47 +683,104 @@ export class BattleScene extends Phaser.Scene {
     }
   };
 
-  private showActionResultVisual(result: ActionResult): void {
-    const isDamage =
-      result.effectType === EffectType.Damage ||
-      result.effectType === EffectType.Debuff ||
-      result.effectType === EffectType.Dot;
-    const isHeal =
-      result.effectType === EffectType.Heal ||
-      result.effectType === EffectType.Hot ||
-      result.effectType === EffectType.MpHeal;
-    if (!isDamage && !isHeal) return;
-    if (result.value <= 0) return;
-    if (!this.battleState) return;
+  /** Which side of the arena a combatant uid belongs to. */
+  private sideOfUid(uid: string | undefined, state: BattleState): BattleSide | null {
+    if (!uid) return null;
+    if (uid === state.enemyFamiliar.uid) return 'enemy';
+    if (uid === state.playerFamiliar.uid) return 'player';
+    return null;
+  }
 
-    if (isDamage) {
-      audioManager.playSfx(result.isCritical ? 'crit' : 'hit', { volume: 0.75 });
-    } else if (result.effectType === EffectType.MpHeal) {
-      audioManager.playSfx('buff', { volume: 0.6 });
-    } else {
-      audioManager.playSfx('heal', { volume: 0.7 });
+  /**
+   * Per-step battle choreography + feedback.
+   *
+   * Drives motion (lunge, impact, recoil, camera shake), banners, guard rings,
+   * sparkles, chevrons, the boss charge telegraph and faints, alongside the
+   * floating numbers and sounds. All animation is fire-and-forget; the caller's
+   * step delay paces the beat, so a two-step turn stays snappy.
+   */
+  private playStepFeedback(step: TurnStep, before: BattleState, isPlayerStep: boolean, action: BattleAction): void {
+    const result = step.result;
+    const actorSide: BattleSide = isPlayerStep ? 'player' : 'enemy';
+    const opponentSide: BattleSide = isPlayerStep ? 'enemy' : 'player';
+    const affected = this.sideOfUid(result.targetId, before) ?? opponentSide;
+
+    const enemyBefore = before.enemyFamiliar;
+    const gainedCharge = enemyBefore.charged !== true && step.enemyAfter.charged === true;
+    const unleashed = enemyBefore.charged === true && step.enemyAfter.charged === false;
+
+    const isDirectDamage =
+      (result.effectType === EffectType.Damage ||
+        result.effectType === EffectType.Dot ||
+        result.effectType === EffectType.Debuff) &&
+      result.value > 0;
+    const isHeal = result.effectType === EffectType.Heal || result.effectType === EffectType.Hot;
+    const isMpHeal = result.effectType === EffectType.MpHeal;
+    const isGuardStance = isMpHeal && (isPlayerStep ? action.type === ActionType.Defend : affected === actorSide);
+
+    if (isDirectDamage) {
+      const heavy = result.isCritical || unleashed;
+      audioManager.playSfx(heavy ? 'crit' : 'hit', { volume: 0.75 });
+      this.battleUI.playAttack(actorSide);
+      this.battleUI.playImpact(affected, { critical: heavy });
+      if (unleashed && !result.isCritical) this.battleUI.playCameraShake();
+
+      const { x, y } = this.battleUI.getDamagePosition(affected);
+      this.battleUI.showDamageNumber(x, y, Math.abs(result.value), heavy ? '#FBBF24' : '#EF4444', {
+        critical: heavy,
+      });
+
+      if (result.isCritical) this.battleUI.addLogMessage('Critical hit!');
+      if (unleashed) this.battleUI.addLogMessage('The charged blow lands!');
+      if (result.effectiveness) this.battleUI.showEffectiveness(affected, result.effectiveness);
+      if (result.guarded) this.battleUI.playGuardRing(affected, { label: 'Guarded' });
+    } else if (isHeal || isMpHeal) {
+      if (result.value > 0) {
+        const { x, y } = this.battleUI.getDamagePosition(affected);
+        this.battleUI.showHealNumber(x, y, result.value, isMpHeal ? '#7C5CFC' : '#10B981');
+        if (isMpHeal) audioManager.playSfx('buff', { volume: 0.6 });
+        else {
+          audioManager.playSfx('heal', { volume: 0.7 });
+          this.battleUI.playHealSparkles(affected);
+        }
+      }
+      if (isGuardStance) {
+        // The player's own Defend already played the block sound when the
+        // action was submitted; only the enemy stance needs one here.
+        if (!isPlayerStep) audioManager.playSfx('block', { volume: 0.7 });
+        this.battleUI.playGuardRing(actorSide);
+      }
+    } else if (result.effectType === EffectType.Buff) {
+      if (gainedCharge) {
+        this.battleUI.setCharged(true);
+        this.battleUI.showCallout(`${step.enemyAfter.familiarData.name} is gathering power — Guard!`);
+        audioManager.playSfx('buff', { volume: 0.8 });
+      } else {
+        this.battleUI.playChevronBurst(affected, 'up', 0xfbbf24);
+        audioManager.playSfx('buff', { volume: 0.6 });
+      }
+    } else if (result.effectType === EffectType.Debuff || result.effectType === EffectType.Dot) {
+      this.battleUI.playChevronBurst(affected, 'down', 0xef4444);
+      audioManager.playSfx('hit', { volume: 0.45 });
     }
 
-    const enemyUid = this.battleState.enemyFamiliar.uid;
-    if (!result.targetId || !enemyUid) return;
-    const targetIsEnemy = result.targetId === enemyUid;
-    const pos = targetIsEnemy ? this.battleUI.getEnemyDamagePosition() : this.battleUI.getPlayerDamagePosition();
-    const { x, y } = pos;
+    if (unleashed) this.battleUI.setCharged(false);
 
-    if (isDamage) {
-      this.battleUI.showDamageNumber(x, y, Math.abs(result.value), '#EF4444');
-      if (result.isCritical) {
-        this.battleUI.addLogMessage('Critical hit!');
-      }
-    } else {
-      // DESIGN.md Info/Special purple for MP restores, so ether-style items
-      // give visible feedback too.
-      const color = result.effectType === EffectType.MpHeal ? '#7C5CFC' : undefined;
-      this.battleUI.showHealNumber(x, y, result.value, color);
+    // Faints: HP falling to zero this step triggers the drop-and-fade before
+    // the relay message or the outcome screen appears.
+    if (before.playerFamiliar.currentHp > 0 && step.playerAfter.currentHp <= 0) {
+      this.battleUI.playFaint('player');
+      audioManager.playSfx('faint', { volume: 0.7 });
+    }
+    if (before.enemyFamiliar.currentHp > 0 && step.enemyAfter.currentHp <= 0) {
+      this.battleUI.playFaint('enemy');
+      audioManager.playSfx('faint', { volume: 0.7 });
     }
   }
 
   private handleVictory(rewards?: BattleRewards): void {
+    this.battleUI.setCharged(false);
+    this.battleUI.playFaint('enemy');
     audioManager.playSfx('victory');
     if (rewards?.currency) {
       this.time.delayedCall(260, () => audioManager.playSfx('coin'));
@@ -702,6 +800,11 @@ export class BattleScene extends Phaser.Scene {
             items: rewards.items,
             xp: rewards.xp,
             levelUp: rewards.levelUp,
+            activeFamiliarName: this.battleState?.playerFamiliar.familiarData.name,
+            benchXp: rewards.benchXp,
+            benchFamiliarId: rewards.benchFamiliarId,
+            benchFamiliarName: rewards.benchFamiliarId ? getFamiliar(rewards.benchFamiliarId)?.name : undefined,
+            benchLevelUp: rewards.benchLevelUp,
             recruitedFamiliar: rewards.recruitedFamiliar,
             recruitedName: rewards.recruitedName,
           }
@@ -736,7 +839,7 @@ export class BattleScene extends Phaser.Scene {
     this.sceneBackground = undefined;
 
     if (this.battleOutcome?.outcome === 'defeat') {
-      this.scene.start(SCENE_KEYS.DUNGEON_FAIL, {
+      fadeToScene(this, SCENE_KEYS.DUNGEON_FAIL, {
         roomsExplored: this.roomsExplored,
         enemiesDefeated: this.enemiesDefeated,
       });
@@ -746,11 +849,11 @@ export class BattleScene extends Phaser.Scene {
     // Boss victory clears the dungeon server-side; return to the world map
     // instead of re-entering exploration (which would start a fresh dungeon).
     if (this.battleOutcome?.outcome === 'victory' && this.battleState?.isBoss) {
-      this.scene.start('WorldMapScene');
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
       return;
     }
 
-    this.scene.start(this.returnScene, {
+    fadeToScene(this, this.returnScene, {
       areaId: this.areaId,
       lastBattleOutcome: this.battleOutcome?.outcome,
       pendingTreasureItemId: this.pendingTreasureItemId,
@@ -776,7 +879,15 @@ export class BattleScene extends Phaser.Scene {
     });
   }
 
-  private toFamiliarState(f: BattleFamiliar): FamiliarState {
+  /**
+   * `level` is explicit because a combatant's level is not always the save's
+   * entry for that species: enemies are scaled per encounter (`enemyLevel`), and
+   * keying the lookup by species id showed the player's own level for the enemy.
+   */
+  private toFamiliarState(
+    f: BattleFamiliar,
+    level = this.gameState?.familiarLevels?.[f.familiarData.id] ?? 1
+  ): FamiliarState {
     return {
       id: f.familiarData.id,
       name: f.familiarData.name,
@@ -789,7 +900,8 @@ export class BattleScene extends Phaser.Scene {
       speed: f.familiarData.stats.speed,
       arcane: f.familiarData.stats.arcane,
       affinity: Affinity[f.familiarData.affinity] ?? String(f.familiarData.affinity),
-      level: this.gameState?.familiarLevels?.[f.familiarData.id] ?? 1,
+      level,
+      charged: f.charged === true,
       statusEffects: this.toStatusViews(f),
     };
   }
@@ -811,8 +923,8 @@ export class BattleScene extends Phaser.Scene {
       .map((id) => getFamiliar(id))
       .filter((fd): fd is FamiliarData => Boolean(fd))
       .map((fd) => {
-        const state = toFamiliarStateFromData(fd);
-        state.level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
+        const level = this.gameState?.familiarLevels?.[fd.id] ?? 1;
+        const state = toFamiliarStateFromData(fd, level);
         const hp = this.gameState?.dungeon?.partyHp?.[fd.id];
         const mp = this.gameState?.dungeon?.partyMp?.[fd.id];
         if (typeof hp === 'number') state.hp = hp;
@@ -854,7 +966,7 @@ export class BattleScene extends Phaser.Scene {
         description: describeItem(itemData),
         quantity,
         usable: quantity > 0,
-        iconUrl: itemData.icon ? `/assets/sprites/items/${itemData.icon}` : undefined,
+        iconUrl: itemData.icon ? `/assets/sprites/items/${itemData.icon}.png` : undefined,
       }));
     const runLoot = getRunLoot(this.gameState?.dungeon);
     const snapshot: GameStateSnapshot = {
@@ -863,7 +975,7 @@ export class BattleScene extends Phaser.Scene {
       battleCount: this.gameState?.battleCount ?? 0,
       wins: this.gameState?.winCount ?? 0,
       currentScene: 'battle',
-      enemy: this.toFamiliarState(this.battleState.enemyFamiliar),
+      enemy: this.toFamiliarState(this.battleState.enemyFamiliar, this.battleState.enemyLevel ?? 1),
       phase: this.phase,
       battleLog: [...this.battleUI.getLog()],
       abilities,
@@ -904,7 +1016,7 @@ export class BattleScene extends Phaser.Scene {
       const status = (err as Error & { status?: number }).status;
       if (status === 404) {
         this.battleUI.addLogMessage('The battle has already ended.');
-        this.scene.start(SCENE_KEYS.WORLD_MAP);
+        fadeToScene(this, SCENE_KEYS.WORLD_MAP);
         return;
       }
       this.battleUI.addLogMessage('Could not leave the battle; please try again.');
@@ -918,7 +1030,7 @@ export class BattleScene extends Phaser.Scene {
     this.sceneBackground = undefined;
 
     if (result?.forfeited) {
-      this.scene.start(SCENE_KEYS.DUNGEON_FAIL, {
+      fadeToScene(this, SCENE_KEYS.DUNGEON_FAIL, {
         roomsExplored: this.roomsExplored,
         enemiesDefeated: this.enemiesDefeated,
         lostLoot: result.lostLoot,
@@ -926,7 +1038,7 @@ export class BattleScene extends Phaser.Scene {
       });
       return;
     }
-    this.scene.start(this.returnScene, {
+    fadeToScene(this, this.returnScene, {
       areaId: this.areaId,
       pendingTreasureItemId: this.pendingTreasureItemId,
       activeIndex: this.activeFamiliarIndex,

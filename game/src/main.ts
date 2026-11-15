@@ -1,10 +1,18 @@
 import Phaser from 'phaser';
 import { gameConfig } from './config';
 import { audioManager } from './audio/manager';
+import { computeCanvasSize } from './ui/viewport';
 
 export function createGame(parentId: string): Phaser.Game {
+  const parent = typeof document === 'undefined' ? null : document.getElementById(parentId);
+  const { width, height } = computeCanvasSize(parent);
   const game = new Phaser.Game({
     ...gameConfig,
+    // Render the 800x600 design space at the container's real pixel density so
+    // canvas text and line work are not upscaled by CSS. Layout handles the
+    // design-space mapping; Scale.FIT still sizes the canvas element.
+    width,
+    height,
     parent: parentId,
   });
   audioManager.attach(game);

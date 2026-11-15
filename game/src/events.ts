@@ -39,6 +39,8 @@ export interface FamiliarState {
   arcane: number;
   affinity: string;
   level?: number;
+  /** Boss charge telegraph: true while the combatant is gathering power. */
+  charged?: boolean;
   statusEffects?: StatusEffectView[];
 }
 
@@ -63,11 +65,20 @@ export interface GameStateSnapshot {
   roomDescription?: string;
   roomLog?: string[];
   dungeon?: DungeonSnapshot;
+  /** Enemy identity/level for the exploration encounter overlay, when one is pending. */
+  pendingEncounter?: EncounterSnapshot;
   encounterActive?: boolean;
   treasureActive?: boolean;
   bossRoom?: boolean;
   runLootCurrency?: number;
   runLootItemCount?: number;
+}
+
+/** What the explore response knows about a pending encounter, for the HUD. */
+export interface EncounterSnapshot {
+  enemyId: string;
+  level: number;
+  isBoss: boolean;
 }
 
 export interface SaveResult {
@@ -122,6 +133,14 @@ export interface BattleEndedPayload {
     items: string[];
     xp?: number;
     levelUp?: number;
+    /** Display name of the familiar that landed the winning blow. */
+    activeFamiliarName?: string;
+    /** XP share for the party member that did not land the winning blow. */
+    benchXp?: number;
+    benchFamiliarId?: string;
+    /** Display name of that bench party member. */
+    benchFamiliarName?: string;
+    benchLevelUp?: number;
     recruitedFamiliar?: string;
     recruitedName?: string;
   };

@@ -16,6 +16,7 @@ export type {
   ItemOption,
   DungeonSnapshot,
   DungeonRoomSnapshot,
+  EncounterSnapshot,
   BattleActionName,
   ExploreDirection,
   OverlayMode,

@@ -4,9 +4,9 @@ import type {
   BattleAction,
   BattleTurnResult,
   DungeonState,
-  Room,
   Area,
   Inventory,
+  ExploreResponse,
 } from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
@@ -126,9 +126,7 @@ class GameApiClient {
     return this.request('POST', '/api/game/dungeon/enter', { anonymousId: this.anonymousId, areaId });
   }
 
-  async exploreRoom(
-    roomId: string
-  ): Promise<{ room: Room; encounter: boolean; enemy: string | null; treasure: boolean; treasureItem: string | null }> {
+  async exploreRoom(roomId: string): Promise<ExploreResponse> {
     return this.request('POST', '/api/game/dungeon/explore', { anonymousId: this.anonymousId, roomId });
   }
 

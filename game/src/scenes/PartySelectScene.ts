@@ -17,6 +17,7 @@ import { Layout } from '../ui/layout';
 import { preloadFamiliarPortraits } from '../sprites/loader';
 import { safeFamiliarTextureKey } from '../sprites/registry';
 import { audioManager } from '../audio/manager';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface PartySelectData {
   areaId: string;
@@ -28,7 +29,22 @@ interface FamiliarCard {
   border: Phaser.GameObjects.Rectangle;
   bg: Phaser.GameObjects.Rectangle;
   container: Phaser.GameObjects.Container;
+  /** Primary selection ring, shown only while the card is selected. */
+  ring: Phaser.GameObjects.Rectangle;
+  /** Lead / Backup pill; blank until the card is selected. */
+  orderBadge: Phaser.GameObjects.Text;
+  orderBadgeBg: Phaser.GameObjects.Rectangle;
 }
+
+/** DESIGN.md palette colours per affinity, mirroring the React HUD chips. */
+const AFFINITY_COLORS: Record<string, number> = {
+  Fire: 0xf59e0b,
+  Water: 0x2dd4bf,
+  Earth: 0x10b981,
+  Wind: 0xa5a3c4,
+  Light: 0xfbbf24,
+  Dark: 0x7c5cfc,
+};
 
 const LAYOUT = {
   TITLE_Y: 30,
@@ -42,7 +58,7 @@ const LAYOUT = {
   CONFIRM_BUTTON_Y_OFFSET: 30,
   BACK_MARGIN: 30,
   NAME_OFFSET_Y: 12,
-  AFFINITY_OFFSET_Y: 24,
+  AFFINITY_OFFSET_Y: 30,
   STATS_OFFSET_Y: 48,
   ABILITIES_LABEL_OFFSET_Y: 165,
   ABILITIES_TEXT_OFFSET_Y: 180,
@@ -132,6 +148,7 @@ export class PartySelectScene extends Phaser.Scene {
     audioManager.playMusic('main');
     audioManager.stopAmbience();
     this.layout = new Layout(this);
+    fadeIn(this);
 
     // Wire EventBus for save, exit, and scene change notification
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
@@ -194,7 +211,7 @@ export class PartySelectScene extends Phaser.Scene {
 
     this.backText.on('pointerdown', () => {
       audioManager.playSfx('ui_cancel');
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     });
     this.backText.on('pointerover', () => this.backText.setColor(COLORS.TEXT_HOVER));
     this.backText.on('pointerout', () => this.backText.setColor(COLORS.SUBTITLE));
@@ -256,7 +273,7 @@ export class PartySelectScene extends Phaser.Scene {
 
       goBackText.on('pointerdown', () => {
         audioManager.playSfx('ui_cancel');
-        this.scene.start(SCENE_KEYS.WORLD_MAP);
+        fadeToScene(this, SCENE_KEYS.WORLD_MAP);
       });
       goBackText.on('pointerover', () => goBackText.setColor(COLORS.TEXT_HOVER));
       goBackText.on('pointerout', () => goBackText.setColor(COLORS.SUBTITLE));
@@ -345,6 +362,12 @@ export class PartySelectScene extends Phaser.Scene {
       );
       border.setFillStyle(COLORS.CARD_BG);
 
+      // Primary selection ring: a thicker overlay stroke so the picked cards are
+      // unmistakable at a glance (the base border stays as the resting state).
+      const ring = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT));
+      ring.setStrokeStyle(this.layout.s(4), COLORS.SELECTED_BORDER);
+      ring.setVisible(selected);
+
       const container = this.add.container(x, this.layout.y(LAYOUT.CARD_Y), [border, bg]);
 
       const portrait = this.add.image(
@@ -361,7 +384,7 @@ export class PartySelectScene extends Phaser.Scene {
       const stats = scaleFamiliarStats(familiar.stats, level);
 
       const nameText = this.add
-        .text(0, offsetY, `${familiar.name}  Lv ${level}`, {
+        .text(0, offsetY, familiar.name, {
           fontSize: this.layout.font(15),
           fontFamily: 'Fredoka',
           fontStyle: '600',
@@ -369,18 +392,61 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
-      const affinityText = this.add
-        .text(
-          0,
-          offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y),
-          Affinity[familiar.affinity] ?? String(familiar.affinity),
-          {
-            fontSize: this.layout.font(11),
-            fontFamily: 'DM Sans',
-            color: COLORS.SUBTITLE,
-          }
+      // Level badge pinned to the portrait corner: prominent, monospaced data.
+      const cardRight = this.layout.s(LAYOUT.CARD_WIDTH / 2);
+      const cardTop = -this.layout.s(LAYOUT.CARD_HEIGHT / 2);
+      const levelBadgeText = this.add
+        .text(cardRight - this.layout.s(14), cardTop + this.layout.s(13), `Lv ${level}`, {
+          fontSize: this.layout.font(12),
+          fontFamily: 'JetBrains Mono',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(1, 0);
+      const levelBadgeBg = this.add
+        .rectangle(
+          cardRight - this.layout.s(8),
+          cardTop + this.layout.s(9),
+          levelBadgeText.width + this.layout.s(12),
+          this.layout.s(20),
+          COLORS.SELECTED_BORDER
         )
-        .setOrigin(0.5, 0);
+        .setOrigin(1, 0);
+
+      // Affinity chip: code-drawn pill + glyph dot in the affinity's palette colour.
+      const affinityName = Affinity[familiar.affinity] ?? String(familiar.affinity);
+      const affinityColor = AFFINITY_COLORS[affinityName] ?? 0xa5a3c4;
+      const chipY = offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y);
+      const affinityLabel = this.add
+        .text(0, chipY, affinityName, {
+          fontSize: this.layout.font(11),
+          fontFamily: 'DM Sans',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(0, 0.5);
+      const chipWidth = affinityLabel.width + this.layout.s(26);
+      const chipBg = this.add
+        .rectangle(0, chipY, chipWidth, this.layout.s(18), affinityColor, 0.22)
+        .setStrokeStyle(this.layout.s(1), affinityColor, 0.9);
+      const chipGlyph = this.add.circle(-chipWidth / 2 + this.layout.s(9), chipY, this.layout.s(3), affinityColor);
+      affinityLabel.setPosition(chipGlyph.x + this.layout.s(7), chipY);
+
+      // Lead / Backup order badge: only visible once the card is selected.
+      const badgeTop = cardTop + this.layout.s(10);
+      const orderBadgeBg = this.add
+        .rectangle(0, badgeTop, this.layout.s(58), this.layout.s(20), COLORS.SELECTED_BORDER)
+        .setOrigin(0.5, 0)
+        .setVisible(selected);
+      const orderBadge = this.add
+        .text(0, badgeTop + this.layout.s(10), '', {
+          fontSize: this.layout.font(10),
+          fontFamily: 'DM Sans',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(0.5, 0.5)
+        .setVisible(selected);
 
       const statsStr =
         `HP: ${stats.hp}\n` +
@@ -424,11 +490,35 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
-      container.add([portrait, nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
+      container.add([
+        portrait,
+        levelBadgeBg,
+        levelBadgeText,
+        nameText,
+        chipBg,
+        chipGlyph,
+        affinityLabel,
+        statsText,
+        abilitiesLabel,
+        abilitiesText,
+        ring,
+        orderBadgeBg,
+        orderBadge,
+      ]);
 
-      const card: FamiliarCard = { familiarId: id, selected, border, bg, container };
+      const card: FamiliarCard = {
+        familiarId: id,
+        selected,
+        border,
+        bg,
+        container,
+        ring,
+        orderBadge,
+        orderBadgeBg,
+      };
       this.cards.push(card);
       this.cardMap.set(id, card);
+      this.updateSelectionVisual(card);
 
       border.setInteractive({ useHandCursor: true });
       border.on('pointerdown', () => {
@@ -458,21 +548,41 @@ export class PartySelectScene extends Phaser.Scene {
   }
 
   private toggleCard(card: FamiliarCard): void {
-    audioManager.playSfx(card.selected ? 'ui_cancel' : 'ui_confirm', { volume: 0.7 });
     if (card.selected) {
-      card.selected = false;
-      card.border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
-      card.border.setFillStyle(COLORS.CARD_BG);
+      audioManager.playSfx('ui_cancel', { volume: 0.7 });
       this.selectedIds = this.selectedIds.filter((id) => id !== card.familiarId);
     } else {
-      if (this.selectedIds.length >= MAX_PARTY_SIZE) return;
-      card.selected = true;
-      card.border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.SELECTED_BORDER);
-      card.border.setFillStyle(COLORS.CARD_BG);
+      if (this.selectedIds.length >= MAX_PARTY_SIZE) {
+        audioManager.playSfx('ui_error', { volume: 0.5 });
+        return;
+      }
+      audioManager.playSfx('ui_confirm', { volume: 0.7 });
       this.selectedIds.push(card.familiarId);
     }
 
+    // Re-derive every visible card: removing the lead promotes the backup, so
+    // the Lead / Backup badges must shift with the selection order.
+    for (const visible of this.cards) this.updateSelectionVisual(visible);
     this.updateConfirmButton();
+  }
+
+  /** Ring + order badge reflect this card's position in the selection order. */
+  private updateSelectionVisual(card: FamiliarCard): void {
+    const order = this.selectedIds.indexOf(card.familiarId);
+    const selected = order !== -1;
+    card.selected = selected;
+
+    card.ring.setVisible(selected);
+    card.orderBadgeBg.setVisible(selected);
+    card.orderBadge.setVisible(selected);
+    if (selected) {
+      card.orderBadge.setText(order === 0 ? 'LEAD' : order === 1 ? 'BACKUP' : '');
+    }
+    card.border.setStrokeStyle(
+      this.layout.s(selected ? 2 : LAYOUT.CARD_BORDER_WIDTH),
+      selected ? COLORS.SELECTED_BORDER : COLORS.CARD_BORDER
+    );
+    card.border.setFillStyle(COLORS.CARD_BG);
   }
 
   private updateConfirmButton(): void {
@@ -508,7 +618,7 @@ export class PartySelectScene extends Phaser.Scene {
       await gameApiClient.setParty(this.selectedIds);
       if (this._sceneGeneration !== gen) return;
 
-      this.scene.start(SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
+      fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
 
@@ -552,7 +662,7 @@ export class PartySelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
 
     goBackText.on('pointerdown', () => {
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     });
     goBackText.on('pointerover', () => goBackText.setColor(COLORS.TEXT_HOVER));
     goBackText.on('pointerout', () => goBackText.setColor(COLORS.SUBTITLE));
@@ -576,7 +686,7 @@ export class PartySelectScene extends Phaser.Scene {
 
   private handleExit = (): void => {
     this.cleanupTimers();
-    this.scene.start(SCENE_KEYS.WORLD_MAP);
+    fadeToScene(this, SCENE_KEYS.WORLD_MAP);
   };
 
   private onShutdown(): void {
