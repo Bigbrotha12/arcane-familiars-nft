@@ -94,13 +94,16 @@ jobs:
       - name: Verify staging Worker health
         run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.staging-worker-url.outputs.worker-url }}/api/health" > /dev/null
 
-      - name: Build frontend (staging backend URL)
+      # No VITE_BACKEND_URL: the SPA calls /api same-origin, and the Pages
+      # Function (frontend/functions/api) forwards it to the Worker over a
+      # service binding, so session cookies are first-party (docs P0.28).
+      - name: Build frontend (staging, same-origin API)
         working-directory: frontend
         env:
           CLOUDFLARE_API_TOKEN: ''
           CLOUDFLARE_API_EMAIL: ''
           CLOUDFLARE_ACCOUNT_ID: ''
-        run: VITE_BACKEND_URL="${{ steps.staging-worker-url.outputs.worker-url }}" npm run build
+        run: npm run build
 
       - name: Ensure staging Pages project
         uses: ./.github/actions/ensure-pages-project
@@ -110,7 +113,21 @@ jobs:
 
       - name: Deploy staging Pages
         working-directory: frontend
-        run: npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=staging
+        run: |
+          # Per-environment Pages config: binds API -> arcane-familiars-backend-staging.
+          cp pages-config/staging.wrangler.json wrangler.json
+          npx wrangler pages deploy dist --project-name=arcane-familiars-staging --branch=staging
+
+      - name: Verify staging API through the Pages proxy
+        run: |
+          # Poll: a just-deployed site can briefly serve the SPA fallback (200 HTML),
+          # so require the Worker's JSON body rather than just a 2xx.
+          for i in $(seq 1 12); do
+            if curl -fsS "https://arcane-familiars-staging.pages.dev/api/health" | grep -q '"latencyMs"'; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::https://arcane-familiars-staging.pages.dev/api/health is not served by the Worker through the Pages proxy"
+          exit 1
 
   deploy-prod:
     name: Deploy production (Worker + D1 + Pages)
@@ -188,13 +205,16 @@ jobs:
       - name: Verify production Worker health
         run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.prod-worker-url.outputs.worker-url }}/api/health" > /dev/null
 
-      - name: Build frontend (production backend URL)
+      # No VITE_BACKEND_URL: the SPA calls /api same-origin, and the Pages
+      # Function (frontend/functions/api) forwards it to the Worker over a
+      # service binding, so session cookies are first-party (docs P0.28).
+      - name: Build frontend (production, same-origin API)
         working-directory: frontend
         env:
           CLOUDFLARE_API_TOKEN: ''
           CLOUDFLARE_API_EMAIL: ''
           CLOUDFLARE_ACCOUNT_ID: ''
-        run: VITE_BACKEND_URL="${{ steps.prod-worker-url.outputs.worker-url }}" npm run build
+        run: npm run build
 
       - name: Ensure production Pages project
         uses: ./.github/actions/ensure-pages-project
@@ -203,4 +223,18 @@ jobs:
 
       - name: Deploy production Pages
         working-directory: frontend
-        run: npx wrangler pages deploy dist --project-name=arcane-familiars --branch=production
+        run: |
+          # Per-environment Pages config: binds API -> arcane-familiars-backend-production.
+          cp pages-config/production.wrangler.json wrangler.json
+          npx wrangler pages deploy dist --project-name=arcane-familiars --branch=production
+
+      - name: Verify production API through the Pages proxy
+        run: |
+          # Poll: a just-deployed site can briefly serve the SPA fallback (200 HTML),
+          # so require the Worker's JSON body rather than just a 2xx.
+          for i in $(seq 1 12); do
+            if curl -fsS "https://arcane-familiars.pages.dev/api/health" | grep -q '"latencyMs"'; then exit 0; fi
+            sleep 5
+          done
+          echo "::error::https://arcane-familiars.pages.dev/api/health is not served by the Worker through the Pages proxy"
+          exit 1

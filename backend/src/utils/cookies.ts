@@ -16,9 +16,11 @@ function cookieOptions(env: Bindings, httpOnly: boolean) {
   return {
     httpOnly,
     secure,
-    // The API and SPA are separate origins in production. Lax is enough for
-    // localhost (ports do not change the site); None is required across sites.
-    sameSite: secure ? ('None' as const) : ('Lax' as const),
+    // The SPA reaches the API same-origin: in production through the Pages
+    // Function proxy (frontend/functions/api), locally on localhost (ports do
+    // not change the site). So the cookies never need to travel cross-site, and
+    // Lax keeps browsers from attaching them to cross-site POSTs at all.
+    sameSite: 'Lax' as const,
     path: '/',
     maxAge: SESSION_MAX_AGE_SECONDS,
   };
@@ -53,6 +55,12 @@ export function setSessionCookies(c: AppContext, token: string, csrfToken: strin
 }
 
 export function clearSessionCookies(c: AppContext): void {
-  deleteCookie(c, SESSION_COOKIE, { path: '/' });
-  deleteCookie(c, CSRF_COOKIE, { path: '/' });
+  // Deletion must carry the SAME attributes as the original Set-Cookie, or the
+  // browser matches it to a different cookie jar entry and keeps the stale one.
+  // This matters in production, where the API and SPA are cross-site: a
+  // deletion without Secure/SameSite=None is itself cross-site and Chrome
+  // drops it, leaving the old session cookie in place.
+  const { httpOnly, secure, sameSite, path } = cookieOptions(c.env, true);
+  deleteCookie(c, SESSION_COOKIE, { httpOnly, secure, sameSite, path });
+  deleteCookie(c, CSRF_COOKIE, { httpOnly, secure, sameSite, path });
 }

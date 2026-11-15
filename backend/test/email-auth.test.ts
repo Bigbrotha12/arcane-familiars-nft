@@ -27,7 +27,15 @@ function cookiesFrom(res: Response): string {
     .join('; ');
 }
 
-function post(path: string, body: unknown, auth?: Partial<AuthCookies>, ip = '10.20.0.1'): Request {
+// Each request gets its own client IP by default so the per-IP auth limiter
+// (10/min on login/register) does not trip across unrelated tests.
+let ipCounter = 0;
+function nextIp(): string {
+  ipCounter += 1;
+  return `10.20.${Math.floor(ipCounter / 250)}.${(ipCounter % 250) + 1}`;
+}
+
+function post(path: string, body: unknown, auth?: Partial<AuthCookies>, ip = nextIp()): Request {
   const headers: Record<string, string> = {
     'content-type': 'application/json',
     'CF-Connecting-IP': ip,
@@ -41,7 +49,7 @@ function post(path: string, body: unknown, auth?: Partial<AuthCookies>, ip = '10
   });
 }
 
-function get(path: string, auth?: Partial<AuthCookies>, ip = '10.20.0.1'): Request {
+function get(path: string, auth?: Partial<AuthCookies>, ip = nextIp()): Request {
   const headers: Record<string, string> = { 'CF-Connecting-IP': ip };
   if (auth?.cookie) headers.cookie = auth.cookie;
   return new Request(`https://example.com${path}`, { headers });
@@ -130,7 +138,7 @@ describe('email/password auth', () => {
   });
 
   it('adopts a guest save after registration', async () => {
-    const guestId = 'email-auth-guest-adopt';
+    const guestId = '36d359bd-797f-4a02-8e7d-1a161b019ea4';
     await seedGuestState(guestId);
     const auth = await register('adopt@example.com');
 
@@ -154,5 +162,90 @@ describe('email/password auth', () => {
     expect(load.status).toBe(200);
     const body = (await load.json()) as { state: { anonymousId: string } };
     expect(body.state.anonymousId).toBe(auth.userId);
+  });
+});
+
+describe('guest adopt is atomic', () => {
+  it('does not move guest battles into an account that already has a save', async () => {
+    const guestId = crypto.randomUUID();
+    await seedGuestState(guestId);
+    await env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind('battle-adopt-existing', guestId, JSON.stringify({ id: 'battle-adopt-existing' }))
+      .run();
+
+    const auth = await register('adopt-existing@example.com');
+    // The account already has a save (e.g. created by another tab/request).
+    await env.DB.prepare(
+      `INSERT INTO game_states (anonymous_id, state_json, version, updated_at, is_anonymous)
+         VALUES (?, ?, 1, datetime('now'), 0)`
+    )
+      .bind(auth.userId, JSON.stringify({ anonymousId: auth.userId }))
+      .run();
+
+    const adopt = await fetchApp(post('/api/auth/adopt', { anonymousId: guestId }, auth));
+    expect(adopt.status).toBe(200);
+    expect(await adopt.json()).toEqual({ adopted: false, reason: 'existing-account' });
+
+    // Neither the guest save nor its battle may be moved.
+    expect(
+      await env.DB.prepare('SELECT 1 FROM game_states WHERE anonymous_id = ?').bind(guestId).first()
+    ).not.toBeNull();
+    const battle = await env.DB.prepare('SELECT anonymous_id FROM active_battles WHERE battle_id = ?')
+      .bind('battle-adopt-existing')
+      .first<{ anonymous_id: string }>();
+    expect(battle!.anonymous_id).toBe(guestId);
+  });
+
+  it('adopts a guest save and its battle in one batch when the account has no save', async () => {
+    const guestId = crypto.randomUUID();
+    await seedGuestState(guestId);
+    await env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind('battle-adopt-move', guestId, JSON.stringify({ id: 'battle-adopt-move' }))
+      .run();
+
+    const auth = await register('adopt-move@example.com');
+    const adopt = await fetchApp(post('/api/auth/adopt', { anonymousId: guestId }, auth));
+    expect(await adopt.json()).toEqual({ adopted: true, userId: auth.userId });
+
+    const battle = await env.DB.prepare('SELECT anonymous_id FROM active_battles WHERE battle_id = ?')
+      .bind('battle-adopt-move')
+      .first<{ anonymous_id: string }>();
+    expect(battle!.anonymous_id).toBe(auth.userId);
+  });
+
+  it('lets only one of two concurrent adoptions win the guest save', async () => {
+    const guestId = crypto.randomUUID();
+    await seedGuestState(guestId);
+    await env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at, updated_at)
+         VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind('battle-adopt-race', guestId, JSON.stringify({ id: 'battle-adopt-race' }))
+      .run();
+
+    const a = await register('adopt-race-a@example.com');
+    const b = await register('adopt-race-b@example.com');
+
+    const [resA, resB] = await Promise.all([
+      fetchApp(post('/api/auth/adopt', { anonymousId: guestId }, a)),
+      fetchApp(post('/api/auth/adopt', { anonymousId: guestId }, b)),
+    ]);
+    const results = [await resA.json(), await resB.json()] as { adopted: boolean; reason?: string }[];
+
+    expect(results.filter((r) => r.adopted)).toHaveLength(1);
+    expect(results.filter((r) => !r.adopted)).toHaveLength(1);
+    expect(results.find((r) => !r.adopted)?.reason).toBe('no-guest');
+
+    const winnerId = results[0].adopted ? a.userId : b.userId;
+    const battle = await env.DB.prepare('SELECT anonymous_id FROM active_battles WHERE battle_id = ?')
+      .bind('battle-adopt-race')
+      .first<{ anonymous_id: string }>();
+    expect(battle!.anonymous_id).toBe(winnerId);
   });
 });

@@ -21,6 +21,7 @@ import {
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
+import { sanitizeDungeonForClient } from '../utils/sanitize';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -95,7 +96,7 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ dungeon, area });
+    return c.json({ dungeon: sanitizeDungeonForClient(dungeon), area });
   } catch (error: unknown) {
     return internalError(c, error, 'Enter dungeon');
   }

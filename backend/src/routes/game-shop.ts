@@ -3,6 +3,7 @@ import { getShopEntry, getItem } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
+import { sanitizeStateForClient } from '../utils/sanitize';
 
 const shopRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -48,7 +49,7 @@ shopRouter.post('/game/shop/buy', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state });
+    return c.json({ success: true, state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Shop purchase');
   }

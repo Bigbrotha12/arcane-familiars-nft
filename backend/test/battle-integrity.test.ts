@@ -146,7 +146,7 @@ async function battleCount(anonId: string): Promise<number> {
 
 describe('battle integrity', () => {
   it('rejects a second start while a battle is active', async () => {
-    const anonId = 'anon-restart';
+    const anonId = 'e74b3160-a02c-4802-849f-70b361684268';
     const battle = makeBattle('battle-restart');
     await seed(anonId, makeState(anonId), battle);
 
@@ -156,7 +156,7 @@ describe('battle integrity', () => {
   });
 
   it('resolves the room the battle belongs to, not the current room', async () => {
-    const anonId = 'anon-room-bind';
+    const anonId = '6469e163-7e57-41a7-82f5-63b5c2013cc9';
     const state = makeState(anonId);
     state.dungeon!.rooms['room-2'] = {
       ...state.dungeon!.rooms['room-1'],
@@ -183,7 +183,7 @@ describe('battle integrity', () => {
   });
 
   it('persists HP/MP on abandon and clears the battle row', async () => {
-    const anonId = 'anon-abandon';
+    const anonId = '38876846-9ce0-4209-831f-158cf7a7a097';
     const battle = makeBattle('battle-abandon');
     battle.playerFamiliar.currentHp = 42;
     battle.playerFamiliar.currentMp = 17;
@@ -204,7 +204,7 @@ describe('battle integrity', () => {
   });
 
   it('allows exit after abandoning the battle', async () => {
-    const anonId = 'anon-exit';
+    const anonId = '69a1dc94-43a5-418d-815d-17808f5cbaf0';
     const battle = makeBattle('battle-exit');
     await seed(anonId, makeState(anonId), battle);
 
@@ -228,7 +228,7 @@ describe('battle integrity', () => {
   });
 
   it('blocks exploration during a battle', async () => {
-    const anonId = 'anon-block-explore';
+    const anonId = '2c7d7b60-e8dc-4dc2-8e2b-27e16d7dd52a';
     await seed(anonId, makeState(anonId), makeBattle('battle-block-explore'));
 
     const res = await fetchApp(post('/api/game/dungeon/explore', { anonymousId: anonId, roomId: 'room-1' }));
@@ -236,7 +236,7 @@ describe('battle integrity', () => {
   });
 
   it('rejects a 0-HP lead at start', async () => {
-    const anonId = 'anon-zero-hp';
+    const anonId = '7c2dc200-ff7b-48a2-89e3-6dad1683d009';
     const state = makeState(anonId);
     state.dungeon!.partyHp.whiteDog = 0;
     await seed(anonId, state);
@@ -247,7 +247,7 @@ describe('battle integrity', () => {
   });
 
   it('rejects a full-HP potion without consuming it', async () => {
-    const anonId = 'anon-full-hp-potion';
+    const anonId = '73721d05-bbdc-49ec-8e06-3ba11352fbf6';
     await seed(anonId, makeState(anonId), makeBattle('battle-full-hp-potion'));
 
     const res = await fetchApp(
@@ -264,7 +264,7 @@ describe('battle integrity', () => {
   });
 
   it('rejects an attack targeted at the player', async () => {
-    const anonId = 'anon-bad-target';
+    const anonId = '925accd1-6e64-475a-87bb-f2ef295d14e5';
     await seed(anonId, makeState(anonId), makeBattle('battle-bad-target'));
 
     const res = await fetchApp(
@@ -280,7 +280,7 @@ describe('battle integrity', () => {
   });
 
   it('rejects a guest trying to bootstrap an account-keyed save', async () => {
-    const anonId = 'anon-account-key';
+    const anonId = 'aab8f4e4-80cb-4833-844a-c065eab747e8';
     const db = (env as unknown as Bindings).DB;
     await db
       .prepare(
@@ -295,7 +295,7 @@ describe('battle integrity', () => {
   });
 
   it('cleans an orphaned battle on bootstrap', async () => {
-    const anonId = 'anon-orphan-bootstrap';
+    const anonId = 'f46dc575-cb4d-4e63-87d5-a477c2c3b6a4';
     const state = makeState(anonId);
     state.dungeon = null;
     await seed(anonId, state, makeBattle('battle-orphan'));

@@ -115,7 +115,7 @@ function makeInDungeonState(anonId: string): GameState {
 
 describe('party reordering: /game/state/party/active', () => {
   it('promotes a non-lead familiar to the lead and persists a version bump', async () => {
-    const anonId = 'anon-reorder-lead';
+    const anonId = '1cb65854-a964-4ad4-8a9d-f76599fb6961';
     await seedState(anonId, makeOutOfDungeonState(anonId));
 
     const res = await fetchApp(
@@ -130,7 +130,7 @@ describe('party reordering: /game/state/party/active', () => {
   });
 
   it('is a no-op when the familiar already leads and does not bump the version', async () => {
-    const anonId = 'anon-reorder-noop';
+    const anonId = 'cb935a7f-e577-4504-8587-d69a62e1eaf9';
     await seedState(anonId, makeOutOfDungeonState(anonId));
 
     // First call makes yellowFighter the lead.
@@ -150,7 +150,7 @@ describe('party reordering: /game/state/party/active', () => {
   });
 
   it('rejects a familiar that is not in the active party', async () => {
-    const anonId = 'anon-reorder-not-in-party';
+    const anonId = '26b0a35f-dfec-442e-81e6-89a3efe71f5a';
     await seedState(anonId, makeOutOfDungeonState(anonId));
 
     const res = await fetchApp(post('/api/game/state/party/active', { anonymousId: anonId, familiarId: 'aquaSprite' }));
@@ -161,7 +161,7 @@ describe('party reordering: /game/state/party/active', () => {
   });
 
   it('reorders dungeon.party identically mid-run without touching party HP', async () => {
-    const anonId = 'anon-reorder-mid-dungeon';
+    const anonId = '5321bc37-40cb-4aab-8bda-0c690dd3bfd4';
     await seedState(anonId, makeInDungeonState(anonId));
 
     const res = await fetchApp(
@@ -178,7 +178,7 @@ describe('party reordering: /game/state/party/active', () => {
   });
 
   it('rejects promoting a fainted familiar to the lead mid-run', async () => {
-    const anonId = 'anon-reorder-fainted';
+    const anonId = 'de114736-902d-4ccb-81ee-2bd41eaa6ae8';
     const state = makeInDungeonState(anonId);
     state.dungeon!.partyHp['yellowFighter'] = 0;
     await seedState(anonId, state);
@@ -192,7 +192,7 @@ describe('party reordering: /game/state/party/active', () => {
   });
 
   it('rejects reordering during an active battle', async () => {
-    const anonId = 'anon-reorder-in-battle';
+    const anonId = '3cb16b7d-2ef9-44ef-851b-5ef23a15d646';
     await seedState(anonId, makeOutOfDungeonState(anonId));
 
     const battleId = 'battle-blocking-reorder';
@@ -235,7 +235,7 @@ describe('party reordering: /game/state/party/active', () => {
 
 describe('party membership changes: /game/state/party', () => {
   it('is rejected mid-dungeon (409)', async () => {
-    const anonId = 'anon-party-change-in-dungeon';
+    const anonId = '72e08d99-f396-48a8-806e-7741c4bd00af';
     await seedState(anonId, makeInDungeonState(anonId));
 
     const res = await fetchApp(

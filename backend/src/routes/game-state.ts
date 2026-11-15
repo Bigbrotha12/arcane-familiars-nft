@@ -3,6 +3,7 @@ import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-log
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
+import { sanitizeBattleForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -26,7 +27,7 @@ gameStateRouter.post('/game/state/load', async (c) => {
 
     const isGuest = c.get('isGuest') ?? false;
     const { state } = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
-    return c.json({ state });
+    return c.json({ state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Load state');
   }
@@ -46,20 +47,15 @@ gameStateRouter.post('/game/bootstrap', async (c) => {
 
     const anonymousId = body.anonymousId;
     const isGuest = c.get('isGuest') ?? false;
+    // getOrCreateGameState rejects a guest presenting an account key (403), so
+    // bootstrap inherits the same provenance check as every other game route.
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
-
-    // A guest must never be able to read or write an account-keyed save by
-    // presenting a user id. readBody binds authenticated body ids to
-    // accountKey, but this explicit provenance check covers the guest path.
-    if (isGuest && !loaded.isAnonymous) {
-      return c.json({ error: 'Guest session cannot access an account save' }, 403);
-    }
 
     const state = loaded.state;
     const active = await getActiveBattleRow(c.env.DB, anonymousId);
 
     if (!active) {
-      return c.json({ state, battle: null });
+      return c.json({ state: sanitizeStateForClient(state), battle: null });
     }
 
     const battle = JSON.parse(active.battle_json);
@@ -68,10 +64,10 @@ gameStateRouter.post('/game/bootstrap', async (c) => {
       await c.env.DB.prepare('DELETE FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
         .bind(active.battle_id, anonymousId)
         .run();
-      return c.json({ state, battle: null });
+      return c.json({ state: sanitizeStateForClient(state), battle: null });
     }
 
-    return c.json({ state, battle });
+    return c.json({ state: sanitizeStateForClient(state), battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Bootstrap');
   }
@@ -120,7 +116,7 @@ gameStateRouter.post('/game/state/party', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state });
+    return c.json({ success: true, state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Set party');
   }
@@ -185,7 +181,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     const activePartyInOrder = state.activeParty[0] === familiarId;
     const dungeonPartyInOrder = !state.dungeon || state.dungeon.party[0] === familiarId;
     if (activePartyInOrder && dungeonPartyInOrder) {
-      return c.json({ success: true, state });
+      return c.json({ success: true, state: sanitizeStateForClient(state) });
     }
 
     const reorderToLead = (party: string[]): string[] => {
@@ -211,7 +207,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state });
+    return c.json({ success: true, state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Set active familiar');
   }

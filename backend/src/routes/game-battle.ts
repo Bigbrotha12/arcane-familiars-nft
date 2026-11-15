@@ -35,9 +35,10 @@ import {
   Outcome,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { conditionalStateUpdate, getOrCreateGameState } from '../utils/saveManager';
+import { commitBattleAndState, getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
 import { internalError, readBody } from '../utils/http';
+import { sanitizeBattleForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -276,7 +277,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       .bind(battle.id, anonymousId, JSON.stringify(battle))
       .run();
 
-    return c.json({ battle });
+    return c.json({ battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Start battle');
   }
@@ -426,7 +427,11 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           for (const id of faintedPartyIds) {
             const data = getFamiliar(id);
             if (data) {
-              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
+              // Scale by the familiar's own level: reviving a levelled party
+              // member to level-1 base HP would weaken it (and make the item
+              // worse the more you invested in that familiar).
+              const maxHp = scaleFamiliarStats(data.stats, state.familiarLevels?.[id] ?? 1).maxHp;
+              state.dungeon.partyHp[id] = Math.max(1, Math.floor((maxHp * effect.percentage) / 100));
             }
           }
           stateEffectNote = `revives ${faintedPartyIds.length} party member${faintedPartyIds.length === 1 ? '' : 's'}`;
@@ -600,32 +605,51 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    // Atomic: state + battle writes must succeed or fail together. Both
-    // statements are conditional on the rows read above, so a stale writer
-    // matches 0 rows and neither commit (D1 batch does not roll back a
-    // 0-row match on its own).
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, turnBefore);
-
-    const battleStmt =
+    // Atomic: state + battle writes must succeed or fail together. The battle
+    // statement runs first, guarded by the state version read above; the state
+    // statement is guarded by the same version plus the post-write battle shape.
+    // A 0-row match on either therefore forces a 0-row match on the other (D1
+    // batch does not roll back 0-row matches on its own).
+    const newBattleJson = JSON.stringify(battle);
+    const battleWrite =
       outcome !== Outcome.Continue
-        ? c.env.DB.prepare(
-            `DELETE FROM active_battles
-               WHERE battle_id = ? AND anonymous_id = ?
-                 AND json_extract(battle_json, '$.turnCount') = ?`
-          ).bind(battleId, anonymousId, turnBefore)
-        : c.env.DB.prepare(
-            `UPDATE active_battles
-               SET battle_json = ?, updated_at = datetime('now')
-               WHERE battle_id = ? AND anonymous_id = ?
-                 AND json_extract(battle_json, '$.turnCount') = ?`
-          ).bind(JSON.stringify(battle), battleId, anonymousId, turnBefore);
+        ? {
+            sql: `DELETE FROM active_battles
+                    WHERE battle_id = ? AND anonymous_id = ?
+                      AND json_extract(battle_json, '$.turnCount') = ?`,
+            params: [battleId, anonymousId, turnBefore],
+          }
+        : {
+            sql: `UPDATE active_battles
+                    SET battle_json = ?, updated_at = datetime('now')
+                    WHERE battle_id = ? AND anonymous_id = ?
+                      AND json_extract(battle_json, '$.turnCount') = ?`,
+            params: [newBattleJson, battleId, anonymousId, turnBefore],
+          };
+    const postBattle =
+      outcome !== Outcome.Continue
+        ? {
+            sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+            params: [battleId, anonymousId],
+          }
+        : {
+            sql: `EXISTS (SELECT 1 FROM active_battles
+                           WHERE battle_id = ? AND anonymous_id = ? AND battle_json = ?)`,
+            params: [battleId, anonymousId, newBattleJson],
+          };
 
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: battleWrite,
+      postBattle,
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ turnResult, state, turnCount: battle.turnCount });
+    return c.json({ turnResult, state: sanitizeStateForClient(state), turnCount: battle.turnCount });
   } catch (error: unknown) {
     return internalError(c, error, 'Battle action');
   }
@@ -692,29 +716,47 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Cannot swap to a fainted familiar' }, 400);
     }
 
+    // Snapshot the fields the swap changes so the battle write can be
+    // conditional on the exact row this swap was computed from. turnCount does
+    // not change on a swap, so it cannot be the concurrency token here.
+    const previousFamiliarId = battle.playerFamiliar.familiarData.id;
+    const previousSwaps = battle.swapsThisTurn ?? 0;
+
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
     battle.playerFamiliar = buildIncomingCombatant(
       state.dungeon,
       newFamiliarId,
       state.familiarLevels?.[newFamiliarId] ?? 1
     );
-    battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
+    battle.swapsThisTurn = previousSwaps + 1;
 
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
-
-    const battleStmt = c.env.DB.prepare(
-      `UPDATE active_battles
-         SET battle_json = ?, updated_at = datetime('now')
-         WHERE battle_id = ? AND anonymous_id = ?
-           AND json_extract(battle_json, '$.turnCount') = ?`
-    ).bind(JSON.stringify(battle), battleId, anonymousId, battle.turnCount);
-
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    // See the action route: battle first (guarded by the state version), then
+    // the state write (guarded by the version AND the post-write battle row), so
+    // the two statements are all-or-nothing.
+    const newBattleJson = JSON.stringify(battle);
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `UPDATE active_battles
+                SET battle_json = ?, updated_at = datetime('now')
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND COALESCE(json_extract(battle_json, '$.swapsThisTurn'), 0) = ?
+                  AND json_extract(battle_json, '$.playerFamiliar.familiarData.id') = ?`,
+        params: [newBattleJson, battleId, anonymousId, previousSwaps, previousFamiliarId],
+      },
+      postBattle: {
+        sql: `EXISTS (SELECT 1 FROM active_battles
+                       WHERE battle_id = ? AND anonymous_id = ? AND battle_json = ?)`,
+        params: [battleId, anonymousId, newBattleJson],
+      },
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ battle });
+    return c.json({ battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Swap familiar');
   }
@@ -763,20 +805,26 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
-
-    const battleStmt = c.env.DB.prepare(
-      `DELETE FROM active_battles
-         WHERE battle_id = ? AND anonymous_id = ?
-           AND json_extract(battle_json, '$.turnCount') = ?`
-    ).bind(battleId, anonymousId, battle.turnCount);
-
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `DELETE FROM active_battles
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND json_extract(battle_json, '$.turnCount') = ?`,
+        params: [battleId, anonymousId, battle.turnCount],
+      },
+      postBattle: {
+        sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+        params: [battleId, anonymousId],
+      },
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, message: 'Successfully fled from battle', battle });
+    return c.json({ success: true, message: 'Successfully fled from battle', battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Flee battle');
   }
@@ -826,19 +874,26 @@ gameBattleRouter.post('/game/battle/abandon', async (c) => {
       state.dungeon = null;
     }
 
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
-    const battleStmt = c.env.DB.prepare(
-      `DELETE FROM active_battles
-         WHERE battle_id = ? AND anonymous_id = ?
-           AND json_extract(battle_json, '$.turnCount') = ?`
-    ).bind(battleId, anonymousId, battle.turnCount);
-
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `DELETE FROM active_battles
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND json_extract(battle_json, '$.turnCount') = ?`,
+        params: [battleId, anonymousId, battle.turnCount],
+      },
+      postBattle: {
+        sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+        params: [battleId, anonymousId],
+      },
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state, forfeited, lostLoot });
+    return c.json({ success: true, state: sanitizeStateForClient(state), forfeited, lostLoot });
   } catch (error: unknown) {
     return internalError(c, error, 'Abandon battle');
   }

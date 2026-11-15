@@ -122,7 +122,7 @@ async function readState(anonId: string): Promise<GameState> {
 
 describe('run loot', () => {
   it('discards run loot on defeat and leaves the bank intact', async () => {
-    const anonId = 'anon-run-loot-loss';
+    const anonId = 'f0e68f71-548c-497f-84e3-7b5a9f167551';
     await seed(anonId, makeState(anonId));
     await seedBattle(anonId, 'battle-run-loot-loss');
 
@@ -151,7 +151,7 @@ describe('run loot', () => {
   });
 
   it('discards and reports run loot when a boss run is abandoned', async () => {
-    const anonId = 'anon-run-loot-boss-abandon';
+    const anonId = '5eb4843c-ec34-4a63-8799-eb78deb3c09d';
     await seed(anonId, makeState(anonId));
     await seedBattle(anonId, 'battle-run-loot-boss-abandon', true);
 
@@ -176,7 +176,7 @@ describe('run loot', () => {
   });
 
   it('banks run loot on exit', async () => {
-    const anonId = 'anon-run-loot-exit';
+    const anonId = 'd9838897-615d-437a-8132-0876570e0190';
     await seed(anonId, makeState(anonId));
 
     const res = await fetchApp(post('/api/game/dungeon/exit', { anonymousId: anonId }, '10.8.0.2'));
@@ -191,7 +191,7 @@ describe('run loot', () => {
   });
 
   it('rejects collecting treasure from a room the player is not in', async () => {
-    const anonId = 'anon-run-loot-remote-room';
+    const anonId = '7476d1a1-d3db-472b-8977-1401c4c9b5b6';
     const state = makeState(anonId);
     state.dungeon!.rooms['room-2'] = {
       ...state.dungeon!.rooms['room-1'],
@@ -212,7 +212,7 @@ describe('run loot', () => {
   });
 
   it('collects treasure into run loot, not the bank', async () => {
-    const anonId = 'anon-run-loot-treasure';
+    const anonId = 'd3cff033-0728-4756-8d1d-bda55948550d';
     const state = makeState(anonId);
     state.dungeon!.rooms['room-1'].pendingEncounter = { enemyId: 'yellowFighter', resolved: true };
     state.dungeon!.rooms['room-1'].pendingTreasure = { itemId: 'fire_bomb', looted: false };

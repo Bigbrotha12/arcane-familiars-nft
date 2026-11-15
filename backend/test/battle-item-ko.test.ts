@@ -155,7 +155,7 @@ function makeKoBattle(battleId: string): BattleState {
 
 describe('battle action: item KO-cancellation', () => {
   it("does not consume the item when the user is KO'd before acting", async () => {
-    const anonId = 'anon-item-ko-potion';
+    const anonId = 'e4fc25ab-84b3-425e-8bf9-96eb5ae1d69c';
     await seedState(
       anonId,
       makeState(anonId, {
@@ -215,7 +215,7 @@ describe('battle action: item KO-cancellation', () => {
   });
 
   it('does not grant state-level currency when a lucky_coin use is KO-cancelled', async () => {
-    const anonId = 'anon-item-ko-coin';
+    const anonId = '0f5ab92b-92eb-4ad4-8bfc-ae055c5aef5e';
     await seedState(
       anonId,
       makeState(anonId, {
@@ -245,7 +245,7 @@ describe('battle action: item KO-cancellation', () => {
   });
 
   it('consumes the item when the user survives the turn', async () => {
-    const anonId = 'anon-item-survives';
+    const anonId = 'ca8a0984-2c9e-49ab-8754-34a5937d3ef4';
     await seedState(
       anonId,
       makeState(anonId, {
@@ -286,5 +286,46 @@ describe('battle action: item KO-cancellation', () => {
     expect(body.turnResult.forcedSwap).toBeUndefined();
     expect(body.turnCount).toBe(1);
     expect(body.state.inventory.items).toEqual([{ itemId: 'potion_small', quantity: 0 }]);
+  });
+
+  it('revives a fainted party member to its level-scaled max HP (Phoenix Feather)', async () => {
+    const anonId = crypto.randomUUID();
+    const state = makeState(anonId, {
+      inventory: { currency: 100, items: [{ itemId: 'phoenix_feather', quantity: 1 }] },
+      activeParty: ['yellowFighter', 'whiteDog'],
+      partyHp: { yellowFighter: 100, whiteDog: 0 },
+      partyMp: { yellowFighter: 60, whiteDog: 80 },
+    });
+    // Level 10 whiteDog: multiplier 1 + 0.06 * 9 = 1.54 → maxHp round(120 * 1.54) = 185.
+    // 50% revive ⇒ floor(185 / 2) = 92. The old code used the level-1 base
+    // maxHp (120) and revived to 60.
+    state.familiarLevels = { whiteDog: 10 };
+    await seedState(anonId, state);
+
+    const battleId = crypto.randomUUID();
+    const battle: BattleState = {
+      id: battleId,
+      playerFamiliar: makeCombatant('yellowFighter', 100, 60, true),
+      enemyFamiliar: makeCombatant('tideTurtle', 130, 70, false),
+      isBoss: false,
+      turnCount: 0,
+      status: BattleResult.Active,
+      swapsThisTurn: 0,
+      seed: 7,
+    };
+    await seedBattle(battleId, anonId, battle);
+
+    const res = await fetchApp(
+      post('/api/game/battle/action', {
+        anonymousId: anonId,
+        battleId,
+        action: { type: ActionType.Item, itemId: 'phoenix_feather' },
+        expectedTurnCount: 0,
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { state: GameState };
+    expect(body.state.dungeon?.partyHp['whiteDog']).toBe(92);
   });
 });

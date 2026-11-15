@@ -16,6 +16,8 @@ const TOO_MANY_REQUESTS = { error: 'Too many requests' };
 export interface RateLimitOptions {
   windowMs?: number;
   maxRequests?: number;
+  /** Separate bucket namespace, so a stricter limiter on a few routes does not share the global counter. */
+  keyPrefix?: string;
 }
 
 /**
@@ -42,6 +44,7 @@ export function createRateLimitMiddleware(
 ): (c: GameContext, next: Next) => Promise<Response | void> {
   const windowMs = opts.windowMs ?? WINDOW_MS;
   const maxRequests = opts.maxRequests ?? MAX_REQUESTS;
+  const keyPrefix = opts.keyPrefix ?? '';
 
   return async function rateLimitMiddleware(c: GameContext, next: Next): Promise<Response | void> {
     // Only /api/* traffic is rate-limited. CORS preflights, HEAD probes, and
@@ -53,7 +56,7 @@ export function createRateLimitMiddleware(
 
     try {
       const now = Date.now();
-      const key = clientIp(c);
+      const key = keyPrefix + clientIp(c);
 
       // One atomic count-before-allow upsert. A reset window is detected inside
       // the same statement, so concurrent requests cannot all observe an empty
@@ -93,6 +96,14 @@ export function createRateLimitMiddleware(
 }
 
 export const rateLimitMiddleware = createRateLimitMiddleware();
+
+// Login/register: 10 attempts per minute per IP, on top of the global budget.
+// Pairs with the per-email throttle in utils/loginThrottle.ts.
+export const AUTH_MAX_REQUESTS = 10;
+export const authRateLimitMiddleware = createRateLimitMiddleware({
+  maxRequests: AUTH_MAX_REQUESTS,
+  keyPrefix: 'auth:',
+});
 
 /**
  * Purge rate-limit rows whose window started before `now - windowMs`. The

@@ -117,6 +117,15 @@ still diverge if one conditional statement matches and the other does not. Movin
 battle into `GameState.activeBattle` was prototyped but reverted to preserve the upstream
 auth/rate-limit architecture during the merge. P0.27/P0.28 remain for the auth phase.
 
+**Status 2026-11-15:** P0.28 is addressed. The SPA calls `/api` same-origin and a
+Pages Function (`frontend/functions/api/[[path]].ts`) forwards it to the Worker over a
+service binding configured per environment in `frontend/pages-config/`. Session and CSRF
+cookies are first-party `SameSite=Lax`. P0.19 is addressed: battle routes commit the
+battle row and the save through `commitBattleAndState`, which makes the pair
+all-or-nothing (`backend/test/battle-atomicity.test.ts`). Login is throttled per email
+(10 failures / 15 min) and per IP (10 auth requests / min); PBKDF2 is 10k iterations to
+fit the free Workers CPU budget, and older hashes are rehashed on the next login.
+
 ### P1 — needed for a credible v1
 
 - No XP, familiar levels, keeper levels, or ability unlocks. All stats are static.

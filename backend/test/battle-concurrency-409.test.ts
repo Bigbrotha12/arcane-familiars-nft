@@ -127,7 +127,7 @@ function makeActiveBattle(battleId: string): BattleState {
 describe('saveGameStateIfVersion optimistic concurrency', () => {
   it('writes on the current version and rejects a stale version without mutating the row', async () => {
     const db = (env as unknown as Bindings).DB;
-    const anonId = 'anon-save-manager-unit';
+    const anonId = '4ed46d01-29a5-4e79-8372-4244361e9072';
 
     const loaded = await getOrCreateGameState(db, anonId, true);
     expect(loaded.version).toBe(1);
@@ -149,7 +149,7 @@ describe('saveGameStateIfVersion optimistic concurrency', () => {
 
 describe('battle action: stale expectedTurnCount', () => {
   it('rejects an action submitted against a stale turn count (409)', async () => {
-    const anonId = 'anon-stale-turn';
+    const anonId = 'b58f19c3-155d-494a-82e9-708f1ad0f29b';
     await seedState(anonId, makeState(anonId));
     const battleId = 'battle-stale-turn';
     await seedBattle(battleId, anonId, makeActiveBattle(battleId));
@@ -180,7 +180,7 @@ describe('battle action: stale expectedTurnCount', () => {
   });
 
   it('rejects exactly one of two simultaneous identical actions (409)', async () => {
-    const anonId = 'anon-simultaneous';
+    const anonId = 'abacc7b5-322f-4ae4-8d45-f8a7f5cdb9ca';
     await seedState(anonId, makeState(anonId));
     const battleId = 'battle-simultaneous';
     await seedBattle(battleId, anonId, makeActiveBattle(battleId));

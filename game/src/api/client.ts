@@ -39,7 +39,8 @@ class GameApiClient {
   private anonymousId: string;
 
   constructor(baseUrl?: string) {
-    this.baseUrl = baseUrl || import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+    // Production builds call the API same-origin via the Pages Function proxy.
+    this.baseUrl = baseUrl ?? import.meta.env.VITE_BACKEND_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8787');
     const stored = localStorage.getItem('af_anonymous_id');
     if (stored) {
       this.anonymousId = stored;

@@ -3,7 +3,8 @@ import { cors } from 'hono/cors';
 import type { Bindings, Variables } from './types';
 import { authMiddleware } from './middleware/auth';
 import { csrfMiddleware } from './middleware/csrf';
-import { cleanupRateLimits, rateLimitMiddleware } from './middleware/rateLimit';
+import { authRateLimitMiddleware, cleanupRateLimits, rateLimitMiddleware } from './middleware/rateLimit';
+import { cleanupLoginFailures } from './utils/loginThrottle';
 import { cleanupExpiredSessions } from './utils/auth';
 import { generateId } from './utils/uuid';
 import authRouter from './routes/auth';
@@ -49,6 +50,8 @@ app.use(
 // endpoint (e.g. UUID spam creating junk D1 rows) is capped. It runs first, so
 // `accountKey` is not yet set here — the counter key is the client IP only.
 app.use('/api/*', rateLimitMiddleware);
+app.use('/api/auth/login', authRateLimitMiddleware);
+app.use('/api/auth/register', authRateLimitMiddleware);
 
 // CSRF guard for cookie-authenticated unsafe requests.
 app.use('/api/*', csrfMiddleware);
@@ -180,6 +183,13 @@ export async function scheduled(event: ScheduledEvent, env: Bindings): Promise<v
     summary.rateLimitRows = await cleanupRateLimits(env.DB);
   } catch (err) {
     console.error('scheduled: rate_limits cleanup failed', err);
+  }
+
+  // 5. Expired per-email login-failure counters.
+  try {
+    summary.loginFailures = await cleanupLoginFailures(env.DB);
+  } catch (err) {
+    console.error('scheduled: login_failures cleanup failed', err);
   }
 
   // Legacy: dungeon_runs is no longer written by the app, but keep purging old

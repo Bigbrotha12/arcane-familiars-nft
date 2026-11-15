@@ -207,7 +207,7 @@ function fleeBody(anonId: string, battleId: string): Record<string, unknown> {
 
 describe('daily battle cap', () => {
   it('rejects start with 403 + Retry-After once the cap is reached, before any validation', async () => {
-    const anonId = 'anon-daily-cap-reached';
+    const anonId = 'd1250085-f10e-480f-8eb0-6b960a16f04f';
     const ip = '1.0.0.10';
     const today = new Date().toISOString().slice(0, 10);
     // Full dungeon with an unresolved encounter (would otherwise pass the start
@@ -227,7 +227,7 @@ describe('daily battle cap', () => {
   });
 
   it('checks the cap before dungeon validation (403, not the 409 no-dungeon error)', async () => {
-    const anonId = 'anon-cap-before-validation';
+    const anonId = '08a0e747-1ee2-4253-8ecc-95a51a58b17a';
     const ip = '1.0.0.11';
     const today = new Date().toISOString().slice(0, 10);
     // Minimal state with NO dungeon and a full counter: the cap check runs
@@ -243,7 +243,7 @@ describe('daily battle cap', () => {
   });
 
   it('allows start when the counter is below the cap', async () => {
-    const anonId = 'anon-under-cap';
+    const anonId = 'b8d68015-0de0-49bf-84ac-0dfa1e9dc3f0';
     const ip = '1.0.0.12';
     const today = new Date().toISOString().slice(0, 10);
     await seedState(anonId, makeState(anonId, { battlesToday: 19, battlesDayUtc: today }));
@@ -256,7 +256,7 @@ describe('daily battle cap', () => {
   });
 
   it('counts a win and rolls the UTC day (stale counter resets to 0 then +1)', async () => {
-    const anonId = 'anon-win-rollover';
+    const anonId = 'bac57e46-4f39-465e-82dd-ac02b1eaa2d8';
     const ip = '1.0.0.13';
     const today = new Date().toISOString().slice(0, 10);
     // battlesDayUtc is a stale day, so the start cap check sees usedToday = 0
@@ -288,7 +288,7 @@ describe('daily battle cap', () => {
   });
 
   it('counts a loss toward the cap and then blocks further starts', async () => {
-    const anonId = 'anon-loss-counts';
+    const anonId = '7399e2bb-be47-40d8-8df3-8c9871f337b6';
     const ip = '1.0.0.14';
     const today = new Date().toISOString().slice(0, 10);
     await seedState(
@@ -326,7 +326,7 @@ describe('daily battle cap', () => {
   });
 
   it('does not count a flee toward the cap', async () => {
-    const anonId = 'anon-flee-not-counted';
+    const anonId = 'ed4b5eb0-b678-48c3-8c40-2c8e52d3f71b';
     const ip = '1.0.0.15';
     const today = new Date().toISOString().slice(0, 10);
     await seedState(anonId, makeState(anonId, { battlesToday: 19, battlesDayUtc: today }));
@@ -348,7 +348,7 @@ describe('daily battle cap', () => {
   });
 
   it('counts a boss win toward the cap', async () => {
-    const anonId = 'anon-boss-win-counts';
+    const anonId = 'aee96fc2-f2dd-4335-8e70-095043dabf88';
     const ip = '1.0.0.16';
     const today = new Date().toISOString().slice(0, 10);
     // No dungeon: the boss battle is seeded directly so this isolates the boss

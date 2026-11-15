@@ -1,7 +1,10 @@
 import type { Context } from 'hono';
 import type { D1Database } from '@cloudflare/workers-types';
 
-const PASSWORD_ITERATIONS = 120_000;
+// Sized for Cloudflare's free Workers plan (10 ms CPU per request): 10k
+// PBKDF2-SHA256 rounds cost ~5 ms. Existing hashes keep their stored count and
+// are upgraded/downgraded to this value on the next successful login.
+export const PASSWORD_ITERATIONS = 10_000;
 const PASSWORD_HASH_BYTES = 32;
 const PASSWORD_SALT_BYTES = 16;
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000;

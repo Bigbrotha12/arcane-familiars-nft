@@ -1,7 +1,9 @@
 /**
  * Backend base URL — mirrors the game client (`game/src/api/client.ts`).
  */
-const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8787';
+// Production builds call the API same-origin ('' -> /api/...), served by the
+// Pages Function proxy in frontend/functions/api. Dev talks to the local Worker.
+const BACKEND_URL = import.meta.env.VITE_BACKEND_URL ?? (import.meta.env.PROD ? '' : 'http://localhost:8787');
 
 /** A row from `GET /api/collection` — the D1 `familiars` catalog. */
 export interface CatalogFamiliar {

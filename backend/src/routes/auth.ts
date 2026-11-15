@@ -8,9 +8,11 @@ import {
   hashPassword,
   isValidEmail,
   normalizeEmail,
+  PASSWORD_ITERATIONS,
   validatePassword,
   verifyPassword,
 } from '../utils/auth';
+import { clearLoginFailures, loginRetryAfterSeconds, recordLoginFailure } from '../utils/loginThrottle';
 import {
   clearSessionCookies,
   readCsrfCookie,
@@ -137,6 +139,14 @@ authRouter.post('/auth/login', async (c) => {
   if (!credentials) return c.json({ error: 'Missing required fields: email, password' }, 400);
 
   try {
+    // Throttle check first, so a throttled email costs no hashing CPU.
+    const retryAfter = await loginRetryAfterSeconds(c.env.DB, credentials.email);
+    if (retryAfter > 0) {
+      return c.json({ error: 'Too many failed sign-in attempts. Please try again later.' }, 429, {
+        'Retry-After': String(retryAfter),
+      });
+    }
+
     const user = await c.env.DB.prepare(
       `SELECT user_id, email, password_hash, password_salt, password_iterations
          FROM users WHERE email = ?`
@@ -144,15 +154,32 @@ authRouter.post('/auth/login', async (c) => {
       .bind(credentials.email)
       .first<UserRow>();
 
-    if (!user) return c.json({ error: 'Invalid email or password' }, 401);
+    const valid =
+      user !== null &&
+      (await verifyPassword(credentials.password, user.password_hash, user.password_salt, user.password_iterations));
+    if (!user || !valid) {
+      await recordLoginFailure(c.env.DB, credentials.email);
+      return c.json({ error: 'Invalid email or password' }, 401);
+    }
 
-    const valid = await verifyPassword(
-      credentials.password,
-      user.password_hash,
-      user.password_salt,
-      user.password_iterations
-    );
-    if (!valid) return c.json({ error: 'Invalid email or password' }, 401);
+    await clearLoginFailures(c.env.DB, credentials.email);
+
+    // Move the stored hash to the current iteration count (e.g. after the
+    // 120k -> 10k change). Best-effort: a failed rehash must not fail login.
+    if (user.password_iterations !== PASSWORD_ITERATIONS) {
+      try {
+        const rehashed = await hashPassword(credentials.password);
+        await c.env.DB.prepare(
+          `UPDATE users SET password_hash = ?, password_salt = ?, password_iterations = ?,
+                            updated_at = datetime('now')
+            WHERE user_id = ?`
+        )
+          .bind(rehashed.hash, rehashed.salt, rehashed.iterations, user.user_id)
+          .run();
+      } catch (err) {
+        console.error(`[${c.get('requestId')}] Login rehash failed`, err);
+      }
+    }
 
     const session = await createSession(c.env.DB, user.user_id);
     const csrfToken = createCsrfToken();
@@ -227,26 +254,50 @@ authRouter.post('/auth/adopt', async (c) => {
       .first();
     if (account) return c.json({ adopted: false, reason: 'existing-account' });
 
-    const move = await c.env.DB.prepare(
-      'UPDATE game_states SET anonymous_id = ?, is_anonymous = 0 WHERE anonymous_id = ?'
-    )
-      .bind(user.userId, anonymousId)
-      .run();
+    try {
+      // One batch: the game_states move, the battle move, and the dungeon move
+      // commit together. The game_states UPDATE is conditional on the account
+      // row still not existing, and the follow-up moves only run when the guest
+      // row is gone AND the account row is present — i.e. exactly when this
+      // batch's move succeeded. If another writer created the account row in
+      // between, all three statements match 0 rows instead of moving the guest's
+      // battles into an unrelated account.
+      const [move] = await c.env.DB.batch([
+        c.env.DB.prepare(
+          `UPDATE game_states
+              SET anonymous_id = ?, is_anonymous = 0
+            WHERE anonymous_id = ? AND is_anonymous = 1
+              AND NOT EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ?)`
+        ).bind(user.userId, anonymousId, user.userId),
+        c.env.DB.prepare(
+          `UPDATE active_battles
+              SET anonymous_id = ?
+            WHERE anonymous_id = ?
+              AND NOT EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ?)
+              AND EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ? AND is_anonymous = 0)`
+        ).bind(user.userId, anonymousId, anonymousId, user.userId),
+        c.env.DB.prepare(
+          `UPDATE dungeon_runs
+              SET anonymous_id = ?
+            WHERE anonymous_id = ?
+              AND NOT EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ?)
+              AND EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ? AND is_anonymous = 0)`
+        ).bind(user.userId, anonymousId, anonymousId, user.userId),
+      ]);
 
-    if (move.meta.changes !== 1) {
-      return c.json({ adopted: false, reason: 'no-guest' });
+      if (move.meta.changes !== 1) {
+        const nowAccount = await c.env.DB.prepare('SELECT 1 FROM game_states WHERE anonymous_id = ?')
+          .bind(user.userId)
+          .first();
+        return c.json({ adopted: false, reason: nowAccount ? 'existing-account' : 'no-guest' });
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes('UNIQUE constraint failed')) {
+        return c.json({ adopted: false, reason: 'existing-account' });
+      }
+      throw error;
     }
-
-    await c.env.DB.batch([
-      c.env.DB.prepare('UPDATE active_battles SET anonymous_id = ? WHERE anonymous_id = ?').bind(
-        user.userId,
-        anonymousId
-      ),
-      c.env.DB.prepare('UPDATE dungeon_runs SET anonymous_id = ? WHERE anonymous_id = ?').bind(
-        user.userId,
-        anonymousId
-      ),
-    ]);
 
     return c.json({ adopted: true, userId: user.userId });
   } catch (error: unknown) {

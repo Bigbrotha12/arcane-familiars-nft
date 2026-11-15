@@ -32,7 +32,7 @@ function anonymousPost(path: string, body?: Record<string, unknown>): Request {
   return new Request(`https://example.com${path}`, {
     method: 'POST',
     headers: { 'content-type': 'application/json' },
-    body: JSON.stringify(body ?? { anonymousId: 'anon-test' }),
+    body: JSON.stringify(body ?? { anonymousId: '935ef344-6fd7-4d3d-83da-e4576f9eef1d' }),
   });
 }
 
@@ -52,7 +52,7 @@ async function gameStateRow(
 
 describe('anonymous demo mode in production', () => {
   it('allows anonymous /api/game/state/load in production and persists a guest row', async () => {
-    const anonId = 'anon-guest-marked';
+    const anonId = '9aaf9132-ade8-4d4f-8da4-78ab408eba4b';
     const res = await fetchApp(anonymousPost('/api/game/state/load', { anonymousId: anonId }), 'production');
 
     expect(res.status).toBe(200);
@@ -69,7 +69,7 @@ describe('anonymous demo mode in production', () => {
   });
 
   it('returns the same persisted state on subsequent loads (guest continuity)', async () => {
-    const anonId = 'anon-guest-continuity';
+    const anonId = '3a537ce0-d4c8-48d1-8409-ab22bcc3b189';
 
     // First call creates and persists the guest row.
     const res1 = await fetchApp(anonymousPost('/api/game/state/load', { anonymousId: anonId }), 'production');
@@ -100,7 +100,7 @@ describe('anonymous demo mode in production', () => {
 
 describe('invalid Bearer token is not silently treated as a guest', () => {
   it('rejects a supplied but invalid token on /api/game/* with 401', async () => {
-    const anonId = 'anon-invalid-token';
+    const anonId = 'f72f5f50-6d74-4efa-8c06-9482656113c2';
     const res = await fetchApp(
       new Request('https://example.com/api/game/state/load', {
         method: 'POST',
@@ -126,7 +126,7 @@ describe('guest game routes in production', () => {
   it('allows anonymous /api/game/dungeon/enter in production', async () => {
     const res = await fetchApp(
       anonymousPost('/api/game/dungeon/enter', {
-        anonymousId: 'anon-dungeon-test',
+        anonymousId: '60a4f5d0-7030-4754-8339-c0a4b59122d9',
         areaId: 'verdantMeadow',
       }),
       'production'
@@ -139,7 +139,7 @@ describe('guest game routes in production', () => {
   it('allows anonymous /api/game/battle/start in production', async () => {
     const res = await fetchApp(
       anonymousPost('/api/game/battle/start', {
-        anonymousId: 'anon-battle-test',
+        anonymousId: '3eef6380-81d3-46df-8a32-7e8552a6ff7a',
         playerFamiliarId: 'whiteDog',
       }),
       'production'
@@ -191,7 +191,7 @@ describe('guest battle routes recreate guest-marked state after a purge', () => 
 
   it('battle/action, swap and flee all recreate the purged guest row as is_anonymous = 1', async () => {
     for (const ep of ENDPOINTS) {
-      const anonId = `anon-purged-${ep.path.split('/').pop()}`;
+      const anonId = crypto.randomUUID();
       await seedOrphanedBattle(ep.body.battleId as string, anonId);
 
       const res = await fetchApp(anonymousPost(ep.path, { anonymousId: anonId, ...ep.body }), 'production');

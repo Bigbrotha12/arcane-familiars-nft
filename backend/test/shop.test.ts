@@ -68,7 +68,7 @@ async function readCurrency(anonId: string): Promise<number> {
 
 describe('shop', () => {
   it('buys a potion and deducts the price', async () => {
-    const anonId = 'anon-shop-buy';
+    const anonId = '29a10b6a-4eeb-41f8-8c58-cd6431b5c4ec';
     await seed(anonId, 100);
 
     const res = await fetchApp(post('/api/game/shop/buy', { anonymousId: anonId, itemId: 'potion_small' }, '10.9.0.1'));
@@ -79,7 +79,7 @@ describe('shop', () => {
   });
 
   it('rejects a purchase while a battle is active', async () => {
-    const anonId = 'anon-shop-in-battle';
+    const anonId = 'ec558f6a-c4d7-4c92-8b1d-27e5d74c4542';
     await seed(anonId, 100);
     await seedActiveBattle(anonId, 'battle-shop-active');
 
@@ -89,7 +89,7 @@ describe('shop', () => {
   });
 
   it('rejects an unaffordable purchase', async () => {
-    const anonId = 'anon-shop-poor';
+    const anonId = '8a01dfdd-d98c-4fe3-8abe-2d425c81f3dc';
     await seed(anonId, 10);
 
     const res = await fetchApp(post('/api/game/shop/buy', { anonymousId: anonId, itemId: 'potion_small' }, '10.9.0.2'));
@@ -97,7 +97,7 @@ describe('shop', () => {
   });
 
   it('rejects an item that is not for sale', async () => {
-    const anonId = 'anon-shop-unknown';
+    const anonId = '7fe7d73b-e26a-4d8d-8aec-69e64782bfb7';
     await seed(anonId, 1000);
 
     const res = await fetchApp(post('/api/game/shop/buy', { anonymousId: anonId, itemId: 'shadowLord' }, '10.9.0.3'));
