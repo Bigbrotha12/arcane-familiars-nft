@@ -23,6 +23,9 @@ import {
   resolveBattleRoomId,
   applyFamiliarXp,
   scaleFamiliarStats,
+  battleXp,
+  BALANCE,
+  MAX_FAMILIAR_LEVEL,
   Rarity,
   getRunLoot,
   addInventoryItem,
@@ -64,6 +67,19 @@ function countCompletedBattle(state: GameState): void {
     state.battlesToday = 0;
   }
   state.battlesToday = (state.battlesToday ?? 0) + 1;
+}
+
+/**
+ * Level a newly joined familiar starts at: just below the enemy it came from,
+ * so recruits are usable in the area where they were found. Never lowers an
+ * existing level.
+ */
+function setJoinLevel(state: GameState, familiarId: string, sourceLevel: number): void {
+  const joinLevel = Math.max(1, Math.min(MAX_FAMILIAR_LEVEL, Math.floor(sourceLevel) - BALANCE.recruitLevelOffset));
+  state.familiarLevels ??= {};
+  if ((state.familiarLevels[familiarId] ?? 1) < joinLevel) {
+    state.familiarLevels[familiarId] = joinLevel;
+  }
 }
 
 function cryptoSeed(): number {
@@ -236,24 +252,20 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const battleSeed = cryptoSeed();
 
-    let enemyFamiliar: BattleFamiliar;
-    if (baseEnemy.isBoss) {
-      enemyFamiliar = createBattleFamiliar(enemyId);
-    } else {
-      // The level was fixed when the encounter was rolled (explore), so fleeing
-      // and re-starting cannot reroll enemy strength.
-      const level = pending.level ?? area.levelRange[0];
-      const scaled = scaleEnemy(baseEnemy, level);
-      enemyFamiliar = {
-        uid: generateId(),
-        familiarData: scaled,
-        currentHp: scaled.stats.hp,
-        currentMp: scaled.stats.mp,
-        statusEffects: [],
-        cooldowns: {},
-        isAlly: false,
-      };
-    }
+    // Non-boss levels were fixed when the encounter was rolled (explore), so
+    // fleeing and re-starting cannot reroll enemy strength. Bosses sit at the
+    // top of their area's level band and are scaled like any other enemy.
+    const enemyLevel = baseEnemy.isBoss ? area.levelRange[1] : (pending.level ?? area.levelRange[0]);
+    const scaled = scaleEnemy(baseEnemy, enemyLevel);
+    const enemyFamiliar: BattleFamiliar = {
+      uid: generateId(),
+      familiarData: scaled,
+      currentHp: scaled.stats.hp,
+      currentMp: scaled.stats.mp,
+      statusEffects: [],
+      cooldowns: {},
+      isAlly: false,
+    };
 
     const battle: BattleState = {
       id: generateId(),
@@ -261,6 +273,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       playerFamiliar,
       enemyFamiliar,
       isBoss: baseEnemy.isBoss ?? false,
+      enemyLevel,
       turnCount: 0,
       status: BattleResult.Active,
       swapsThisTurn: 0,
@@ -489,6 +502,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let rewards: BattleRewards | undefined;
     let xpGained = 0;
     let levelUps = 0;
+    let benchReward: Pick<BattleRewards, 'benchXp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
     let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
@@ -496,13 +510,36 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       state.winCount = (state.winCount ?? 0) + 1;
 
       const activeId = battle.playerFamiliar.familiarData.id;
-      xpGained = 40 + (battle.isBoss ? 60 : 0);
+      // XP is derived from the level the enemy was actually scaled to. Legacy
+      // battles persisted before enemyLevel existed fall back to level 1.
+      xpGained = battleXp(battle.enemyLevel ?? 1, battle.isBoss);
       state.familiarLevels ??= {};
       state.familiarXp ??= {};
       const progress = applyFamiliarXp(state.familiarLevels[activeId] ?? 1, state.familiarXp[activeId] ?? 0, xpGained);
       state.familiarLevels[activeId] = progress.level;
       state.familiarXp[activeId] = progress.xp;
       levelUps = progress.levelsGained;
+
+      // The party member who did not land the winning blow still gains a
+      // reduced share, so swapping/relaying does not starve the bench.
+      const benchId = (state.activeParty ?? []).find((id) => id !== activeId);
+      if (benchId) {
+        const benchXp = Math.round(xpGained * BALANCE.benchXpShare);
+        if (benchXp > 0) {
+          const benchProgress = applyFamiliarXp(
+            state.familiarLevels[benchId] ?? 1,
+            state.familiarXp[benchId] ?? 0,
+            benchXp
+          );
+          state.familiarLevels[benchId] = benchProgress.level;
+          state.familiarXp[benchId] = benchProgress.xp;
+          benchReward = {
+            benchXp,
+            benchFamiliarId: benchId,
+            benchLevelUp: benchProgress.levelsGained,
+          };
+        }
+      }
 
       // Resolve the room the battle was started in. A player cannot move during
       // a battle, but legacy battles persisted before roomId existed fall back
@@ -530,6 +567,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           }
           if (!state.playerFamiliars.includes(area.baseFamiliar)) {
             state.playerFamiliars.push(area.baseFamiliar);
+            // The boss's gift joins at a level that is useful where it was earned.
+            setJoinLevel(state, area.baseFamiliar, area.levelRange[1]);
           }
           if (area.unlocks && !state.unlockedAreas.includes(area.unlocks)) {
             state.unlockedAreas.push(area.unlocks);
@@ -554,6 +593,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           const chance = species.rarity >= Rarity.Rare ? 0.12 : 0.22;
           if (rng() < chance) {
             state.playerFamiliars.push(species.id);
+            setJoinLevel(state, species.id, battle.enemyLevel ?? 1);
             battleRewards.recruitedFamiliar = species.id;
             battleRewards.recruitedName = species.name;
           }
@@ -576,9 +616,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     if (xpGained > 0) {
-      rewards = rewards
-        ? { ...rewards, xp: xpGained, levelUp: levelUps }
-        : { currency: 0, items: [], xp: xpGained, levelUp: levelUps };
+      const xpReward = { xp: xpGained, levelUp: levelUps, ...benchReward };
+      rewards = rewards ? { ...rewards, ...xpReward } : { currency: 0, items: [], ...xpReward };
     }
 
     const turnResult: BattleTurnResult = {

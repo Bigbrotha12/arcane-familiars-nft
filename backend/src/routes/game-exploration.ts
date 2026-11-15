@@ -8,6 +8,7 @@ import {
   selectTreasure,
   selectEnemy,
   getFamiliar,
+  healPartyAtRest,
   seededRandom,
   randomInRange,
   RoomType,
@@ -148,6 +149,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
     let enemy: string | null = null;
     let treasure = false;
     let treasureItem: string | null = null;
+    let rest: { healed: Record<string, { hp: number; mp: number }> } | undefined;
 
     if (room.cleared) {
       // Re-entering a cleared room: replay the persisted outcome, never re-roll.
@@ -193,12 +195,20 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       }
     }
 
+    // First visit to a rest shrine restores part of every living party member's
+    // level-scaled HP/MP. `rested` makes it one-time per run; later visits are
+    // silent no-ops. Fainted members (hp <= 0) are not revived.
+    if (room.type === RoomType.Rest && !room.rested) {
+      rest = { healed: healPartyAtRest(state.dungeon, state.familiarLevels) };
+      room.rested = true;
+    }
+
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ room, encounter, enemy, treasure, treasureItem });
+    return c.json({ room, encounter, enemy, treasure, treasureItem, ...(rest ? { rest } : {}) });
   } catch (error: unknown) {
     return internalError(c, error, 'Explore room');
   }
