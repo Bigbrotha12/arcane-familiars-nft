@@ -1,5 +1,14 @@
 import { useEffect, ReactNode } from 'react';
 
+// How many modals are mounted right now. Overlays that own global shortcuts
+// (encounter Fight/Flee, boss Enter/Retreat) consult this so an open modal —
+// the exit dialog, for example — does not also trigger them.
+let openModalCount = 0;
+
+export function isModalOpen(): boolean {
+  return openModalCount > 0;
+}
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -21,10 +30,15 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handler);
+    openModalCount += 1;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', handler);
-      document.body.style.overflow = '';
+      openModalCount = Math.max(0, openModalCount - 1);
+      // Only release the scroll lock when the last modal closes, so closing a
+      // nested dialog cannot un-lock a still-open parent.
+      if (openModalCount === 0) document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
 

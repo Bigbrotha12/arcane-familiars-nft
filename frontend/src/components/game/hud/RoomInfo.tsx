@@ -12,6 +12,7 @@ const ROOM_TYPE_STYLES: Record<string, { label: string; className: string }> = {
   Normal: { label: 'ROOM', className: 'bg-[#A5A3C4]/20 text-[#A5A3C4]' },
   Deadend: { label: 'DEAD END', className: 'bg-[#6366A1]/20 text-[#6366A1]' },
   Boss: { label: 'BOSS', className: 'bg-error/20 text-error' },
+  Rest: { label: 'REST', className: 'bg-teal/20 text-teal' },
 };
 
 function RoomInfo({ snapshot }: RoomInfoProps) {
@@ -43,7 +44,9 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
       {(snapshot.runLootCurrency ?? 0) > 0 || (snapshot.runLootItemCount ?? 0) > 0 ? (
         <p className="font-mono text-[9px] tabular-nums text-yellow">
           Run loot: {snapshot.runLootCurrency ?? 0}g
-          {snapshot.runLootItemCount ? ` · ${snapshot.runLootItemCount} items` : ''}
+          {snapshot.runLootItemCount
+            ? ` · ${snapshot.runLootItemCount} item${snapshot.runLootItemCount === 1 ? '' : 's'}`
+            : ''}
         </p>
       ) : null}
 

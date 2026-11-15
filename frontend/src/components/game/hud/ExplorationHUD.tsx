@@ -83,11 +83,23 @@ function ExplorationHUD({
       )}
 
       {snapshot.encounterActive ? (
-        <EncounterOverlay onFight={onStartBattle} onFlee={onFleeEncounter} />
+        <EncounterOverlay
+          onFight={onStartBattle}
+          onFlee={onFleeEncounter}
+          encounter={snapshot.pendingEncounter}
+          party={snapshot.familiars}
+          activeId={snapshot.activeId}
+        />
       ) : snapshot.treasureActive ? (
         <TreasureOverlay onTake={onCollectTreasure} onLeave={onFleeEncounter} />
       ) : snapshot.bossRoom ? (
-        <BossOverlay onEnter={onStartBattle} onRetreat={onFleeEncounter} />
+        <BossOverlay
+          onEnter={onStartBattle}
+          onRetreat={onFleeEncounter}
+          encounter={snapshot.pendingEncounter}
+          party={snapshot.familiars}
+          activeId={snapshot.activeId}
+        />
       ) : null}
     </div>
   );

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useOutletContext } from 'react-router-dom';
 import type {
   GameStateSnapshot,
   PhaserGame,
@@ -18,6 +18,11 @@ import Button from '@/components/ui/Button';
 import BattleHUD from '@/components/game/hud/BattleHUD';
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD';
 
+interface PlayLayoutContext {
+  signedIn: boolean;
+  onAuthChange: (signedIn: boolean) => void;
+}
+
 type GameModule = {
   createGame: (parentId: string) => PhaserGame;
   gameEventBus: typeof gameEventBus;
@@ -26,6 +31,9 @@ type GameModule = {
 
 export default function GamePage() {
   const navigate = useNavigate();
+  // Guest state lives in the play layout so the toolbar can surface it outside
+  // the canvas (it used to float over the bottom HUD and cover controls).
+  const { signedIn, onAuthChange } = useOutletContext<PlayLayoutContext>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<PhaserGame | null>(null);
   const gameModuleRef = useRef<GameModule | null>(null);
@@ -387,6 +395,8 @@ export default function GamePage() {
         onToggleMute={handleToggleMute}
         muted={muted}
         saving={saving}
+        signedIn={signedIn}
+        onAuthChange={onAuthChange}
       />
 
       <div ref={containerRef} id="game-container" className="flex-1 relative min-h-0 overflow-hidden">

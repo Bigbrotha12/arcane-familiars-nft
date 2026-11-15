@@ -98,7 +98,8 @@ export default function AuthForm({ onAuthChange, compact = false }: AuthFormProp
   return (
     <>
       <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        Sign in / Create account
+        <span className="hidden sm:inline">Sign in / Create account</span>
+        <span className="sm:hidden">Sign in</span>
       </Button>
 
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Sign in' : 'Create account'} hud>

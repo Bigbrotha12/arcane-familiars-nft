@@ -175,7 +175,7 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
   return (
     <div className="pointer-events-none flex flex-col items-center gap-1">
       {/* Active familiar - larger, name on top, offset left */}
-      <div className="relative -ml-9">{renderArc(active, true, 64, true, activeChip)}</div>
+      <div className="relative -ml-9">{renderArc(active, true, 58, true, activeChip)}</div>
 
       {/* Inactive familiar(s) - smaller, grayscale, offset right, almost touching.
           In interactive mode each card is a button promoting it to party lead.
@@ -197,7 +197,7 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
         if (!interactive || isFainted) {
           return (
             <div key={familiar.id} className="relative -mr-9 -mt-0.5 opacity-60">
-              {renderArc(familiar, false, 50, false, swapBadge)}
+              {renderArc(familiar, false, 46, false, swapBadge)}
             </div>
           );
         }
@@ -211,7 +211,7 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
             aria-label={`Make ${familiar.name} the active familiar`}
             className="group pointer-events-auto relative -mr-9 -mt-0.5 flex cursor-pointer flex-col items-center rounded-md transition duration-150 ease-out hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {renderArc(familiar, false, 50, false, swapBadge)}
+            {renderArc(familiar, false, 46, false, swapBadge)}
           </button>
         );
       })}
