@@ -13,6 +13,7 @@ export * from '@/data/shop';
 export * from '@/data/balance';
 export * from '@/data/passives';
 export * from '@/data/curios';
+export * from '@/data/charms';
 
 // Utils
 export * from '@/utils/battleEngine';
@@ -27,3 +28,4 @@ export * from '@/utils/passives';
 export * from '@/utils/runLoot';
 export * from '@/utils/recruit';
 export * from '@/utils/curios';
+export * from '@/utils/charms';

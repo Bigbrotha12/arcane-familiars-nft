@@ -28,4 +28,8 @@ export type {
   UiSfxName,
   BattleSpeed,
   BattleSpeedPayload,
+  CharmFamiliar,
+  CharmsPayload,
+  CharmEquipPayload,
+  CharmSalvagePayload,
 } from './events';

@@ -8,6 +8,8 @@ import type {
   Inventory,
   ExploreResponse,
   CurioResponse,
+  CharmInstance,
+  CharmRoll,
 } from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
@@ -134,7 +136,7 @@ class GameApiClient {
   async collectTreasure(
     roomId: string,
     itemId: string
-  ): Promise<{ success: boolean; inventory: Inventory; runLoot: Inventory }> {
+  ): Promise<{ success: boolean; inventory: Inventory; runLoot: Inventory; charm?: CharmRoll }> {
     return this.request('POST', '/api/game/dungeon/collect-treasure', {
       anonymousId: this.anonymousId,
       roomId,
@@ -204,6 +206,26 @@ class GameApiClient {
       battleId,
       newFamiliarId,
       expectedTurnCount,
+    });
+  }
+
+  async equipCharm(
+    charmUid: string,
+    familiarId: string | null
+  ): Promise<{ success: boolean; charms: CharmInstance[] }> {
+    return this.request('POST', '/api/game/charms/equip', {
+      anonymousId: this.anonymousId,
+      charmUid,
+      familiarId,
+    });
+  }
+
+  async salvageCharm(
+    charmUid: string
+  ): Promise<{ success: boolean; charms: CharmInstance[]; currency: number; coins: number }> {
+    return this.request('POST', '/api/game/charms/salvage', {
+      anonymousId: this.anonymousId,
+      charmUid,
     });
   }
 

@@ -15,6 +15,8 @@ import {
   getFamiliar,
   getItem,
   itemRarity,
+  charmModsLabel,
+  charmName,
 } from '@arcane-familiars/game-logic';
 import { RARITY_TEXT_CLASS } from './rarityStyles';
 import type { BattleEndedPayload, FamiliarState } from '@/game';
@@ -191,6 +193,16 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
                       );
                     })}
                   </ul>
+                  {rewards.bossChest.charm && (
+                    <div className="flex flex-col items-center">
+                      <span className={`font-body text-xs ${RARITY_TEXT_CLASS[rewards.bossChest.charm.rarity]}`}>
+                        ◆ {charmName(rewards.bossChest.charm)}
+                      </span>
+                      <span className="font-mono text-[10px] tabular-nums text-[#A5A3C4]">
+                        {charmModsLabel(rewards.bossChest.charm)}
+                      </span>
+                    </div>
+                  )}
                   {rewards.bossChest.currency > 0 && (
                     <p className="font-mono text-xs tabular-nums text-yellow">+{rewards.bossChest.currency} coins</p>
                   )}

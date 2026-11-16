@@ -11,29 +11,41 @@ import { AREAS } from '../../data/areas';
 describe('dungeon loot rate', () => {
   const SEEDS = 500;
 
-  it('averages at least 1.5 chests per full-clear run in every area', () => {
+  it('averages at least 1.5 chests and 0.2 charms per full-clear run in every area', () => {
     const averages: Record<string, number> = {};
+    const charmAverages: Record<string, number> = {};
 
     for (const area of Object.values(AREAS)) {
       let chests = 0;
+      let charms = 0;
 
       for (let seed = 1; seed <= SEEDS; seed++) {
         const dungeon = generateDungeon(area, seed);
         for (const room of Object.values(dungeon.rooms)) {
           // First visit: one room-seeded rng, exactly as the route derives it.
           const rng = seededRandom(roomRollSeed(seed, room.id));
-          if (rollRoomTreasure(room, rng)) chests++;
+          const rolled = rollRoomTreasure(room, rng);
+          if (rolled) {
+            chests++;
+            if (rolled.charm) charms++;
+          }
         }
       }
 
       const average = chests / SEEDS;
+      const charmAverage = charms / SEEDS;
       averages[area.id] = average;
-      console.log(`${area.name}: ${average.toFixed(2)} chests/run`);
+      charmAverages[area.id] = charmAverage;
+      console.log(`${area.name}: ${average.toFixed(2)} chests/run, ${charmAverage.toFixed(2)} charms/run`);
     }
 
     console.log('Chests per full-clear run:', averages);
+    console.log('Charms per full-clear run:', charmAverages);
     for (const [areaId, average] of Object.entries(averages)) {
       expect(average, areaId).toBeGreaterThanOrEqual(1.5);
+    }
+    for (const [areaId, average] of Object.entries(charmAverages)) {
+      expect(average, areaId).toBeGreaterThanOrEqual(0.2);
     }
   });
 });

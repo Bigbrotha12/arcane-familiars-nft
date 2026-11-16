@@ -14,6 +14,9 @@ import {
   passiveCombos,
   validateParty,
   scaleFamiliarStats,
+  applyCharm,
+  equippedCharm,
+  charmName,
 } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
@@ -67,6 +70,7 @@ const LAYOUT = {
   NAME_OFFSET_Y: 12,
   AFFINITY_OFFSET_Y: 30,
   STATS_OFFSET_Y: 48,
+  CHARM_OFFSET_Y: 124,
   ABILITIES_LABEL_OFFSET_Y: 165,
   ABILITIES_TEXT_OFFSET_Y: 180,
   NEXT_ABILITY_OFFSET_Y: 204,
@@ -94,6 +98,13 @@ const COLORS = {
   PASSIVE_UNLOCKED: '#2DD4BF',
   PASSIVE_COMBO: '#F472B6',
 } as const;
+
+/** Rarity colours from DESIGN.md, matching the React charm rows. */
+const CHARM_RARITY_COLORS: Record<string, string> = {
+  common: '#A5A3C4',
+  uncommon: '#2DD4BF',
+  rare: '#F472B6',
+};
 
 const MAX_SAVE_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
@@ -444,7 +455,8 @@ export class PartySelectScene extends Phaser.Scene {
       const offsetY = -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(LAYOUT.NAME_OFFSET_Y) + this.layout.s(120);
 
       const level = this.fullGameState?.familiarLevels?.[id] ?? 1;
-      const stats = scaleFamiliarStats(familiar.stats, level);
+      const charm = equippedCharm(this.fullGameState, id);
+      const stats = applyCharm(scaleFamiliarStats(familiar.stats, level), charm);
 
       const nameText = this.add
         .text(0, offsetY, familiar.name, {
@@ -555,6 +567,19 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
+      const charmText = charm
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.CHARM_OFFSET_Y), `◆ ${charmName(charm)}`, {
+              fontSize: this.layout.font(10),
+              fontFamily: 'DM Sans',
+              fontStyle: '500',
+              color: CHARM_RARITY_COLORS[charm.rarity] ?? COLORS.SUBTITLE,
+              wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
+
       const abilityNames = abilitiesAtLevel(familiar, level)
         .map((aId) => {
           const ability = getAbility(aId);
@@ -624,6 +649,7 @@ export class PartySelectScene extends Phaser.Scene {
         chipGlyph,
         affinityLabel,
         statsText,
+        ...(charmText ? [charmText] : []),
         abilitiesLabel,
         abilitiesText,
         ...(nextAbilityText ? [nextAbilityText] : []),

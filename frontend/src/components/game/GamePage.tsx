@@ -7,10 +7,12 @@ import type {
   BattleActionName,
   PlayerActionPayload,
   UiSfxName,
+  CharmsPayload,
 } from '@/game';
 import type { gameEventBus, GameEvent, BattleSpeed } from '@/game';
 import GameToolbar from '@/components/game/GameToolbar';
 import ExitModal from '@/components/game/ExitModal';
+import CharmsModal from '@/components/game/hud/CharmsModal';
 import ToastContainer, { toast } from '@/components/game/Toast';
 import { useGameGuard } from '@/components/game/useGameGuard';
 import { useCanvasRect } from '@/components/game/useCanvasRect';
@@ -44,6 +46,7 @@ export default function GamePage() {
   const [gameState, setGameState] = useState<GameStateSnapshot | null>(null);
   const gameStateRef = useRef<GameStateSnapshot | null>(null);
   const [battleOutcome, setBattleOutcome] = useState<BattleEndedPayload | null>(null);
+  const [charmsModal, setCharmsModal] = useState<CharmsPayload | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [saving, setSaving] = useState(false);
   const [initError, setInitError] = useState<string | null>(null);
@@ -164,6 +167,25 @@ export default function GamePage() {
     setMuted((value) => !value);
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.TOGGLE_MUTE);
   }, []);
+
+  const handleCharmEquip = useCallback(
+    (charmUid: string, familiarId: string | null) => {
+      playUiSfx('confirm');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.CHARM_EQUIP, {
+        charmUid,
+        familiarId,
+      });
+    },
+    [playUiSfx]
+  );
+
+  const handleCharmSalvage = useCallback(
+    (charmUid: string) => {
+      playUiSfx('confirm');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.CHARM_SALVAGE, { charmUid });
+    },
+    [playUiSfx]
+  );
 
   const handleCycleBattleSpeed = useCallback(() => {
     playUiSfx('click');
@@ -350,10 +372,14 @@ export default function GamePage() {
           }
         };
         const onBattleEnded = (outcome: BattleEndedPayload) => setBattleOutcome(outcome);
+        const onOpenCharms = (payload: CharmsPayload) => setCharmsModal(payload);
         const onSceneChanged = (payload: { scene: string; areaId?: string }) => {
           setGameReady(true);
           if (payload.scene !== 'battle') {
             setBattleOutcome(null);
+          }
+          if (payload.scene !== 'world_map') {
+            setCharmsModal(null);
           }
         };
 
@@ -361,12 +387,14 @@ export default function GamePage() {
         mod.gameEventBus.on(mod.GameEvent.SAVE_COMPLETE, onSaveComplete);
         mod.gameEventBus.on(mod.GameEvent.BATTLE_ENDED, onBattleEnded);
         mod.gameEventBus.on(mod.GameEvent.SCENE_CHANGED, onSceneChanged);
+        mod.gameEventBus.on(mod.GameEvent.OPEN_CHARMS, onOpenCharms);
 
         eventBusCleanupRef.current = () => {
           mod.gameEventBus.off(mod.GameEvent.STATE_UPDATED, onStateUpdate);
           mod.gameEventBus.off(mod.GameEvent.SAVE_COMPLETE, onSaveComplete);
           mod.gameEventBus.off(mod.GameEvent.BATTLE_ENDED, onBattleEnded);
           mod.gameEventBus.off(mod.GameEvent.SCENE_CHANGED, onSceneChanged);
+          mod.gameEventBus.off(mod.GameEvent.OPEN_CHARMS, onOpenCharms);
         };
       } catch (error) {
         if (cancelled) return;
@@ -514,6 +542,15 @@ export default function GamePage() {
         onExitWithoutSave={handleExitWithoutSaveFromModal}
         onCancel={handleCancelExit}
         saving={saving}
+      />
+
+      <CharmsModal
+        open={charmsModal !== null}
+        charms={charmsModal?.charms ?? []}
+        familiars={charmsModal?.familiars ?? []}
+        onEquip={handleCharmEquip}
+        onSalvage={handleCharmSalvage}
+        onClose={() => setCharmsModal(null)}
       />
 
       <ToastContainer />

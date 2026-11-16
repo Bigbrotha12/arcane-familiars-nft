@@ -1,4 +1,5 @@
 import type { StatName, EffectType } from '@/data/abilities';
+import type { CharmRoll } from '@/data/charms';
 import type { FamiliarData } from '@/data/familiars';
 import type { ActivePassive } from '@/data/passives';
 import type { Inventory } from '@/types/gameState';
@@ -123,7 +124,7 @@ export interface BattleRewards {
   currency: number;
   items: string[];
   /** Epic chest from a first boss clear; banked with the run loot. */
-  bossChest?: { items: string[]; currency: number };
+  bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
   /** XP awarded to the active familiar. */
   xp?: number;
   /** Number of levels gained by the active familiar. */

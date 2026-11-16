@@ -14,6 +14,8 @@ import { scaleFamiliarStats } from '@/utils/progression';
 import { abilitiesAtLevel } from '@/utils/learnset';
 import { emptyInventory } from '@/utils/runLoot';
 import { curiosForArea } from '@/data/curios';
+import { rollCharm } from '@/utils/charms';
+import type { CharmRarity, CharmRoll } from '@/data/charms';
 
 /**
  * Dungeon treasure pool, derived from item data: any item with a dropWeight
@@ -261,6 +263,12 @@ const CHEST_CONFIG: Record<ChestTier, { itemCount: number; minCoins: number; max
   epic: { itemCount: 3, minCoins: 80, maxCoins: 150 },
 };
 
+const CHEST_CHARM: Record<ChestTier, { chance: number; rarity: CharmRarity }> = {
+  common: { chance: 0.05, rarity: 'common' },
+  rare: { chance: 0.3, rarity: 'uncommon' },
+  epic: { chance: 1, rarity: 'rare' },
+};
+
 function rollPoolItem(rng: () => number): string {
   return TREASURE_POOL[weightedRandom(rng, TREASURE_POOL)].itemId;
 }
@@ -285,7 +293,10 @@ function meetsChestFloor(tier: ChestTier, itemIds: string[]): boolean {
  * guarantee at least one rare item. The set is rerolled up to 5 times, then
  * the last item is drawn from qualifying items only, so the floor always holds.
  */
-export function rollChest(tier: ChestTier, rng: () => number): { items: string[]; currency: number } {
+export function rollChest(
+  tier: ChestTier,
+  rng: () => number
+): { items: string[]; currency: number; charm?: CharmRoll } {
   const config = CHEST_CONFIG[tier];
   if (TREASURE_POOL.length === 0) return { items: [], currency: 0 };
 
@@ -305,13 +316,23 @@ export function rollChest(tier: ChestTier, rng: () => number): { items: string[]
   }
 
   const currency = config.maxCoins > 0 ? randomInRange(rng, config.minCoins, config.maxCoins) : 0;
-  return { items, currency };
+  const result: { items: string[]; currency: number; charm?: CharmRoll } = { items, currency };
+
+  // Rolled after the items/coins so adding charms never shifts existing item
+  // rolls for a given rng sequence.
+  const charmConfig = CHEST_CHARM[tier];
+  if (rng() < charmConfig.chance) {
+    result.charm = rollCharm(charmConfig.rarity, rng);
+  }
+
+  return result;
 }
 
 export interface RoomTreasure {
   tier: ChestTier;
   items: string[];
   currency: number;
+  charm?: CharmRoll;
 }
 
 /**

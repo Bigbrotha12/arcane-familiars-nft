@@ -1,5 +1,20 @@
 import type { DungeonState } from '@/types/exploration';
 import type { GameState, Inventory, InventoryItem } from '@/types/gameState';
+import type { CharmInstance } from '@/data/charms';
+import { CHARM_SALVAGE, MAX_CHARMS } from '@/utils/charms';
+
+export interface RunLootSummary extends Inventory {
+  /** Charms found in the run. */
+  charms?: CharmInstance[];
+  /** Charms auto-salvaged because the collection was already at MAX_CHARMS. */
+  salvagedCharms?: CharmInstance[];
+  /** Coins credited by that auto-salvage. */
+  salvageCurrency?: number;
+}
+
+function cloneCharms(charms: CharmInstance[] | undefined): CharmInstance[] {
+  return (charms ?? []).map((charm) => ({ ...charm, mods: charm.mods.map((mod) => ({ ...mod })) }));
+}
 
 export function emptyInventory(): Inventory {
   return { currency: 0, items: [] };
@@ -33,25 +48,55 @@ export function mergeInventory(target: Inventory, source: Inventory): void {
 }
 
 /** Move all run loot into the bank and clear the run ledger. */
-export function bankRunLoot(state: GameState): Inventory {
+export function bankRunLoot(state: GameState): RunLootSummary {
   const loot = getRunLoot(state.dungeon);
-  const banked: Inventory = {
+  const charms = cloneCharms(state.dungeon?.runCharms);
+  const banked: RunLootSummary = {
     currency: loot.currency,
     items: loot.items.map((item) => ({ ...item })),
+    ...(charms.length > 0 ? { charms } : {}),
   };
   mergeInventory(state.inventory, loot);
-  if (state.dungeon) state.dungeon.runLoot = emptyInventory();
+
+  // Charms bank into their own shelf. Once it is full, extra charms are
+  // auto-salvaged instead of being silently dropped.
+  state.charms ??= [];
+  const salvaged: CharmInstance[] = [];
+  let salvageCurrency = 0;
+  for (const charm of charms) {
+    if (state.charms.length >= MAX_CHARMS) {
+      salvaged.push(charm);
+      salvageCurrency += CHARM_SALVAGE[charm.rarity];
+    } else {
+      state.charms.push(charm);
+    }
+  }
+  if (salvageCurrency > 0) {
+    state.inventory.currency += salvageCurrency;
+    banked.salvagedCharms = salvaged;
+    banked.salvageCurrency = salvageCurrency;
+  }
+
+  if (state.dungeon) {
+    state.dungeon.runLoot = emptyInventory();
+    state.dungeon.runCharms = [];
+  }
   return banked;
 }
 
 /** Return and clear the run ledger without banking it (defeat). */
-export function discardRunLoot(state: GameState): Inventory {
+export function discardRunLoot(state: GameState): RunLootSummary {
   const loot = getRunLoot(state.dungeon);
-  const lost: Inventory = {
+  const charms = cloneCharms(state.dungeon?.runCharms);
+  const lost: RunLootSummary = {
     currency: loot.currency,
     items: loot.items.map((item) => ({ ...item })),
+    ...(charms.length > 0 ? { charms } : {}),
   };
-  if (state.dungeon) state.dungeon.runLoot = emptyInventory();
+  if (state.dungeon) {
+    state.dungeon.runLoot = emptyInventory();
+    state.dungeon.runCharms = [];
+  }
   return lost;
 }
 

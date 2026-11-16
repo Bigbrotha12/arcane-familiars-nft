@@ -1,4 +1,4 @@
-import type { ChestTier, ItemRarity } from '@arcane-familiars/game-logic';
+import type { ChestTier, ItemRarity, CharmRoll, CharmInstance } from '@arcane-familiars/game-logic';
 
 export enum GameEvent {
   STATE_UPDATED = 'game:stateUpdated',
@@ -21,6 +21,9 @@ export enum GameEvent {
   TOGGLE_MUTE = 'game:toggleMute', // React → Phaser: toggle music/SFX mute
   UI_SFX = 'game:uiSfx', // React → Phaser: play a UI sound
   SET_BATTLE_SPEED = 'game:setBattleSpeed', // React → Phaser: change battle turn playback speed
+  OPEN_CHARMS = 'game:openCharms', // Phaser → React: open the charm management modal
+  CHARM_EQUIP = 'game:charmEquip', // React → Phaser: equip/unequip a charm
+  CHARM_SALVAGE = 'game:charmSalvage', // React → Phaser: salvage an unequipped charm
 }
 
 export type BattleSpeed = 'slow' | 'medium' | 'fast';
@@ -126,6 +129,8 @@ export interface TreasureSnapshot {
   tier: ChestTier;
   items: TreasureItemSnapshot[];
   currency: number;
+  /** Charm rolled into the chest, shown before Take. */
+  charm?: CharmRoll;
 }
 
 /** One choice on a curio; `available=false` explains what it would cost. */
@@ -148,6 +153,8 @@ export interface CurioSnapshot {
 export interface CurioResultSnapshot {
   text: string;
   gains: string[];
+  /** Charms found in a chest outcome, rendered with rarity colour. */
+  charms?: CharmRoll[];
 }
 
 export interface CurioChoicePayload {
@@ -214,7 +221,7 @@ export interface BattleEndedPayload {
     currency: number;
     items: string[];
     /** Epic chest from a first boss clear. */
-    bossChest?: { items: string[]; currency: number };
+    bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
     xp?: number;
     levelUp?: number;
     /** Display name of the familiar that landed the winning blow. */
@@ -298,4 +305,28 @@ export interface DungeonSnapshot {
   roomCount: number;
   visitedRoomIds: string[];
   rooms: DungeonRoomSnapshot[];
+}
+
+/** A familiar the player owns, for the Charms screen's equip picker. */
+export interface CharmFamiliar {
+  id: string;
+  name: string;
+  level: number;
+}
+
+/** Payload for opening the Charms modal. */
+export interface CharmsPayload {
+  charms: CharmInstance[];
+  familiars: CharmFamiliar[];
+}
+
+/** React → Phaser: equip a charm, or unequip with familiarId null. */
+export interface CharmEquipPayload {
+  charmUid: string;
+  familiarId: string | null;
+}
+
+/** React → Phaser: salvage an unequipped charm. */
+export interface CharmSalvagePayload {
+  charmUid: string;
 }

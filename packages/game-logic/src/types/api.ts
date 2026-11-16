@@ -1,7 +1,9 @@
 import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
 import type { Area, ChestTier, DungeonState, RestHeal, Room } from '@/types/exploration';
+import type { CharmRoll } from '@/data/charms';
 import type { CurioOutcome } from '@/data/curios';
 import type { GameState, Inventory } from '@/types/gameState';
+import type { RunLootSummary } from '@/utils/runLoot';
 
 export interface LoadStateRequest {
   anonymousId: string;
@@ -61,6 +63,8 @@ export interface CollectTreasureResponse {
   success: boolean;
   inventory: Inventory;
   runLoot: Inventory;
+  /** Charm collected with the chest, if it held one. */
+  charm?: CharmRoll;
 }
 
 export interface CurioRequest {
@@ -76,6 +80,8 @@ export interface CurioGains {
   hurt?: Record<string, number>;
   items?: string[];
   currency?: number;
+  /** Charm found inside a chest outcome. */
+  charms?: CharmRoll[];
   xp?: number;
   levels?: { familiarId: string; name: string; level: number; levelsGained: number }[];
   learned?: { familiarId: string; familiarName: string; abilityId: string; abilityName: string }[];
@@ -104,6 +110,8 @@ export interface ExitDungeonRequest {
 
 export interface ExitDungeonResponse {
   success: boolean;
+  /** What leaving the run banked, including charms and any auto-salvage. */
+  banked?: RunLootSummary;
 }
 
 export interface StartBattleRequest {

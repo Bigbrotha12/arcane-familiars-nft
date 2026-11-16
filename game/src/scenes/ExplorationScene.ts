@@ -11,6 +11,7 @@ import {
   getRunLoot,
   passiveTierRoman,
   Directions,
+  charmName,
 } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI, roomBackgroundKey } from '../ui/ExplorationUI';
@@ -427,6 +428,9 @@ export class ExplorationScene extends Phaser.Scene {
         this.dungeon.runLoot = result.runLoot;
       }
       this.explorationUI.addLogMessage(`You took ${itemId}.`);
+      if (result.charm) {
+        this.explorationUI.addLogMessage(`◆ ${charmName(result.charm)}`);
+      }
       audioManager.playSfx('loot');
     } catch (err) {
       audioManager.playSfx('ui_error');
@@ -593,7 +597,7 @@ export class ExplorationScene extends Phaser.Scene {
             ? [this.pendingTreasureItemId]
             : [];
 
-    if (itemIds.length === 0) return undefined;
+    if (itemIds.length === 0 && !pending?.charm) return undefined;
 
     return {
       tier: pending?.tier ?? 'common',
@@ -608,6 +612,7 @@ export class ExplorationScene extends Phaser.Scene {
         };
       }),
       currency: pending?.currency ?? 0,
+      ...(pending?.charm ? { charm: pending.charm } : {}),
     };
   }
 
@@ -710,7 +715,11 @@ export class ExplorationScene extends Phaser.Scene {
         return;
       }
 
-      this.curioResult = { text: result.text, gains: this.formatCurioGains(result) };
+      this.curioResult = {
+        text: result.text,
+        gains: this.formatCurioGains(result),
+        ...(result.gains.charms?.length ? { charms: result.gains.charms } : {}),
+      };
       this.isProcessing = false;
       this.emitStateUpdate();
     } catch (err) {

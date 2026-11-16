@@ -14,6 +14,7 @@ import gameStateRouter from './routes/game-state';
 import gameExplorationRouter from './routes/game-exploration';
 import gameBattleRouter from './routes/game-battle';
 import gameShopRouter from './routes/game-shop';
+import gameCharmsRouter from './routes/game-charms';
 
 export const app = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -102,6 +103,7 @@ app.route('/api', gameStateRouter);
 app.route('/api', gameExplorationRouter);
 app.route('/api', gameBattleRouter);
 app.route('/api', gameShopRouter);
+app.route('/api', gameCharmsRouter);
 
 // 404 handler
 app.notFound((c) => {

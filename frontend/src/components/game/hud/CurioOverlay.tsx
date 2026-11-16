@@ -3,6 +3,8 @@
 // TreasureOverlay's frame and palette so both read as the same panel family.
 
 import Button from '@/components/ui/Button';
+import { RARITY_TEXT_CLASS } from './rarityStyles';
+import { charmModsLabel, charmName } from '@arcane-familiars/game-logic';
 import type { GameStateSnapshot } from '@/game';
 
 type CurioView = NonNullable<GameStateSnapshot['curio']>;
@@ -38,6 +40,18 @@ function CurioOverlay({ curio, result, onChoose, onLeave, onContinue }: CurioOve
                 {result.gains.map((gain, index) => (
                   <li key={`${gain}-${index}`} className="font-mono text-sm tabular-nums text-[#2DD4BF]">
                     {gain}
+                  </li>
+                ))}
+              </ul>
+            )}
+            {result.charms && result.charms.length > 0 && (
+              <ul className="mb-md flex flex-col gap-1">
+                {result.charms.map((charm, index) => (
+                  <li key={`charm-${charm.baseId}-${index}`} className="flex flex-col">
+                    <span className={`font-display text-sm font-semibold ${RARITY_TEXT_CLASS[charm.rarity]}`}>
+                      ◆ {charmName(charm)}
+                    </span>
+                    <span className="font-mono text-xs tabular-nums text-[#A5A3C4]">{charmModsLabel(charm)}</span>
                   </li>
                 ))}
               </ul>
