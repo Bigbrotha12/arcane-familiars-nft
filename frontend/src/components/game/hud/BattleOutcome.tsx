@@ -103,6 +103,62 @@ function BondLine({
   );
 }
 
+type ChestReward = NonNullable<NonNullable<BattleEndedPayload['rewards']>['bossChest']>;
+
+/** Chest spoils block shared by the boss chest and elite spoils. */
+function SpoilsChest({
+  title,
+  chest,
+  delayIndex,
+  entered,
+  elite = false,
+}: {
+  title: string;
+  chest: ChestReward;
+  delayIndex: number;
+  entered: boolean;
+  elite?: boolean;
+}) {
+  return (
+    <div
+      className={`mt-1 flex w-full flex-col items-center gap-1 rounded-md border bg-[#2D2A5E]/80 p-md transition-all duration-300 ease-out motion-reduce:transition-none ${
+        elite ? 'border-[#F472B6]/40' : 'border-[#FBBF24]/40'
+      } ${entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'}`}
+      style={{ transitionDelay: `${delayIndex * 70}ms` }}
+    >
+      <h3 className={`font-display text-sm font-semibold ${elite ? 'text-pink' : 'text-yellow'}`}>{title}</h3>
+      <ul className="flex w-full flex-col items-center gap-0.5">
+        {chest.items.map((id, chestIndex) => {
+          const item = getItem(id);
+          return (
+            <li key={`${title}-${id}-${chestIndex}`} className="flex items-center gap-1.5">
+              {item?.icon && (
+                <img
+                  src={`/assets/sprites/items/${item.icon}.png`}
+                  alt=""
+                  className="h-5 w-5 rounded-sm border border-[#E8E4F0] bg-white object-contain"
+                />
+              )}
+              <span className={`font-body text-xs ${RARITY_TEXT_CLASS[item ? itemRarity(item) : 'common']}`}>
+                {item?.name ?? id}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      {chest.charm && (
+        <div className="flex flex-col items-center">
+          <span className={`font-body text-xs ${RARITY_TEXT_CLASS[chest.charm.rarity]}`}>
+            ◆ {charmName(chest.charm)}
+          </span>
+          <span className="font-mono text-[10px] tabular-nums text-[#A5A3C4]">{charmModsLabel(chest.charm)}</span>
+        </div>
+      )}
+      {chest.currency > 0 && <p className="font-mono text-xs tabular-nums text-yellow">+{chest.currency} coins</p>}
+    </div>
+  );
+}
+
 function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: BattleOutcomeProps) {
   const { outcome: result, rewards } = outcome;
   const isVictory = result === 'victory';
@@ -165,48 +221,16 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
                 <p className="font-body text-xs text-[#F0EFFF]">Found: {itemNames(rewards.items)}</p>
               )}
               {rewards.bossChest && (
-                <div
-                  className={`mt-1 flex w-full flex-col items-center gap-1 rounded-md border border-[#FBBF24]/40 bg-[#2D2A5E]/80 p-md transition-all duration-300 ease-out motion-reduce:transition-none ${
-                    entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
-                  }`}
-                  style={{ transitionDelay: `${lineIndex++ * 70}ms` }}
-                >
-                  <h3 className="font-display text-sm font-semibold text-yellow">Boss chest</h3>
-                  <ul className="flex w-full flex-col items-center gap-0.5">
-                    {rewards.bossChest.items.map((id, chestIndex) => {
-                      const item = getItem(id);
-                      return (
-                        <li key={`boss-chest-${id}-${chestIndex}`} className="flex items-center gap-1.5">
-                          {item?.icon && (
-                            <img
-                              src={`/assets/sprites/items/${item.icon}.png`}
-                              alt=""
-                              className="h-5 w-5 rounded-sm border border-[#E8E4F0] bg-white object-contain"
-                            />
-                          )}
-                          <span
-                            className={`font-body text-xs ${RARITY_TEXT_CLASS[item ? itemRarity(item) : 'common']}`}
-                          >
-                            {item?.name ?? id}
-                          </span>
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {rewards.bossChest.charm && (
-                    <div className="flex flex-col items-center">
-                      <span className={`font-body text-xs ${RARITY_TEXT_CLASS[rewards.bossChest.charm.rarity]}`}>
-                        ◆ {charmName(rewards.bossChest.charm)}
-                      </span>
-                      <span className="font-mono text-[10px] tabular-nums text-[#A5A3C4]">
-                        {charmModsLabel(rewards.bossChest.charm)}
-                      </span>
-                    </div>
-                  )}
-                  {rewards.bossChest.currency > 0 && (
-                    <p className="font-mono text-xs tabular-nums text-yellow">+{rewards.bossChest.currency} coins</p>
-                  )}
-                </div>
+                <SpoilsChest title="Boss chest" chest={rewards.bossChest} delayIndex={lineIndex++} entered={entered} />
+              )}
+              {rewards.eliteChest && (
+                <SpoilsChest
+                  title="Elite spoils"
+                  chest={rewards.eliteChest}
+                  delayIndex={lineIndex++}
+                  entered={entered}
+                  elite
+                />
               )}
               {rewards.xp ? (
                 <RewardLine index={lineIndex++} entered={entered} className="text-accent">

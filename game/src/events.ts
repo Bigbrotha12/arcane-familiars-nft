@@ -1,4 +1,4 @@
-import type { ChestTier, ItemRarity, CharmRoll, CharmInstance } from '@arcane-familiars/game-logic';
+import type { ChestTier, ItemRarity, CharmRoll, CharmInstance, EliteId } from '@arcane-familiars/game-logic';
 
 export enum GameEvent {
   STATE_UPDATED = 'game:stateUpdated',
@@ -62,6 +62,10 @@ export interface FamiliarState {
   level?: number;
   /** Boss charge telegraph: true while the combatant is gathering power. */
   charged?: boolean;
+  /** Elite affix on this combatant, if any. */
+  elite?: EliteId;
+  /** Boss entered phase two (set once at or below 50% HP). */
+  phaseTwo?: boolean;
   statusEffects?: StatusEffectView[];
 }
 
@@ -107,11 +111,21 @@ export interface GameStateSnapshot {
   passives?: PassiveView[];
 }
 
+/** The elite affix on a pending encounter, shown before the fight. */
+export interface EliteSnapshot {
+  id: EliteId;
+  /** Prefixed display name ("Armored White Dog"). */
+  name: string;
+  /** What the affix does ("Defense ×1.5"). */
+  description: string;
+}
+
 /** What the explore response knows about a pending encounter, for the HUD. */
 export interface EncounterSnapshot {
   enemyId: string;
   level: number;
   isBoss: boolean;
+  elite?: EliteSnapshot;
 }
 
 /** One item shown in a treasure chest before the player takes it. */
@@ -222,6 +236,8 @@ export interface BattleEndedPayload {
     items: string[];
     /** Epic chest from a first boss clear. */
     bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
+    /** Rare chest from an elite victory. */
+    eliteChest?: { items: string[]; currency: number; charm?: CharmRoll };
     xp?: number;
     levelUp?: number;
     /** Display name of the familiar that landed the winning blow. */
@@ -296,6 +312,8 @@ export interface DungeonRoomSnapshot {
   hasTreasure?: boolean;
   /** The room holds an unused curio the player has discovered. */
   hasCurio?: boolean;
+  /** Unresolved elite encounter in this room, for the minimap marker. */
+  elite?: EliteId;
 }
 
 export interface DungeonSnapshot {

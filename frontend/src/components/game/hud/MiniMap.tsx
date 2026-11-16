@@ -212,6 +212,7 @@ const NODE_COLORS: Record<string, { fill: string; stroke: string }> = {
   rest: { fill: '#2DD4BF', stroke: '#0A0A0F' },
   chest: { fill: '#FBBF24', stroke: '#1E1B4B' },
   curio: { fill: '#F472B6', stroke: '#1E1B4B' },
+  elite: { fill: '#F472B6', stroke: '#1E1B4B' },
   unknown: { fill: '#3B3870', stroke: '#6366A1' },
 };
 
@@ -254,6 +255,7 @@ const LEGEND: { key: string; label: string }[] = [
   { key: 'rest', label: 'Rest' },
   { key: 'chest', label: 'Chest' },
   { key: 'curio', label: 'Curio' },
+  { key: 'elite', label: 'Elite' },
   { key: 'boss', label: 'Boss' },
   { key: 'unknown', label: 'Unseen' },
 ];
@@ -346,6 +348,24 @@ function MiniMap({ dungeon }: MiniMapProps) {
                     ?<title>Curio</title>
                   </text>
                 ) : null;
+                const showElite = dungeon.visitedRoomIds.includes(room.id) && Boolean(room.elite);
+                const eliteMarker = showElite ? (
+                  <text
+                    x={pos.x + r * 1.15}
+                    y={pos.y + r * 1.1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={Math.max(2.2, r * 1.5)}
+                    fontWeight={700}
+                    fill={NODE_COLORS.elite.fill}
+                    stroke="#0A0A0F"
+                    strokeWidth={0.25}
+                    vectorEffect="non-scaling-stroke"
+                    style={{ paintOrder: 'stroke' }}
+                  >
+                    !<title>Elite</title>
+                  </text>
+                ) : null;
                 if (isRest) {
                   return (
                     <g key={room.id}>
@@ -364,6 +384,7 @@ function MiniMap({ dungeon }: MiniMapProps) {
                       </rect>
                       {chestMarker}
                       {curioMarker}
+                      {eliteMarker}
                     </g>
                   );
                 }
@@ -396,6 +417,7 @@ function MiniMap({ dungeon }: MiniMapProps) {
                     </circle>
                     {chestMarker}
                     {curioMarker}
+                    {eliteMarker}
                   </g>
                 );
               })}
