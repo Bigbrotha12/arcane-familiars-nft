@@ -101,4 +101,46 @@
   .zoom-in-95 {
     animation-name: zoom-in-95;
   }
+
+  /* Landing page entrance: a single staggered rise used on page load. */
+  .landing-rise {
+    animation: landing-rise 500ms ease-out both;
+  }
+
+  @keyframes landing-rise {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  /* Familiar portrait pop-in when the hero selection changes. */
+  .landing-pop-in {
+    animation: landing-pop-in 250ms ease-out both;
+  }
+
+  @keyframes landing-pop-in {
+    from {
+      opacity: 0;
+      transform: scale(0.92);
+    }
+
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-rise,
+  .landing-pop-in,
+  .animate-float {
+    animation: none;
+  }
 }
