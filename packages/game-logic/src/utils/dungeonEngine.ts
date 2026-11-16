@@ -4,6 +4,7 @@ import { BALANCE } from '@/data/balance';
 import { ITEMS } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
 import { scaleFamiliarStats } from '@/utils/progression';
+import { abilitiesAtLevel } from '@/utils/learnset';
 import { emptyInventory } from '@/utils/runLoot';
 
 /**
@@ -252,6 +253,8 @@ export function scaleEnemy(baseFamiliar: FamiliarData, level: number): FamiliarD
   const scaleFactor = 1 + 0.06 * (level - 1);
   return {
     ...baseFamiliar,
+    // Enemies learn on the same schedule as the player; bosses keep their kit.
+    abilities: abilitiesAtLevel(baseFamiliar, level),
     stats: {
       hp: Math.round(baseFamiliar.stats.hp * scaleFactor),
       maxHp: Math.round(baseFamiliar.stats.maxHp * scaleFactor),

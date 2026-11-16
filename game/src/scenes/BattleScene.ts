@@ -834,6 +834,7 @@ export class BattleScene extends Phaser.Scene {
             recruitedName: rewards.recruitedName,
             recruitedLevel: rewards.recruitedLevel,
             recruitProgress: rewards.recruitProgress,
+            learned: rewards.learned,
           }
         : undefined,
       inDungeon: Boolean(this.gameState?.dungeon),

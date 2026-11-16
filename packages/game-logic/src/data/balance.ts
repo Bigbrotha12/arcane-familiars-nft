@@ -18,6 +18,13 @@ export const BALANCE = {
   guardDamageTaken: 0.5,
   /** Defend: fraction of max MP restored when the guarding slot executes. */
   guardMpRestore: 0.15,
+  /** Basic Attack: fraction of the attacker's max MP restored when the hit lands. */
+  attackMpRestore: 0.05,
+  /**
+   * Familiar level at which each slot of the learnset unlocks. `rankUp` upgrades
+   * every already-learned ability to its rank-II variant.
+   */
+  learnLevels: { second: 3, third: 6, signature: 9, rankUp: 12 },
   /** Per-turn chance an uncharged boss gathers power instead of acting. */
   bossChargeChance: 0.3,
   /** Damage multiplier of a charged boss's next damaging action. */

@@ -3,6 +3,8 @@ import type { GameState } from '@arcane-familiars/game-logic';
 import {
   FAMILIARS,
   getAbility,
+  abilitiesAtLevel,
+  learnSchedule,
   Affinity,
   AREAS,
   validateParty,
@@ -62,6 +64,7 @@ const LAYOUT = {
   STATS_OFFSET_Y: 48,
   ABILITIES_LABEL_OFFSET_Y: 165,
   ABILITIES_TEXT_OFFSET_Y: 180,
+  NEXT_ABILITY_OFFSET_Y: 204,
   CARD_BORDER_WIDTH: 2,
   CARD_STROKE_WIDTH: 1,
 } as const;
@@ -532,12 +535,17 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
-      const abilityNames = familiar.abilities
+      const abilityNames = abilitiesAtLevel(familiar, level)
         .map((aId) => {
           const ability = getAbility(aId);
           return ability?.name || aId;
         })
         .join(', ');
+
+      const nextUnlock = learnSchedule(familiar).find((entry) => entry.level > level);
+      const nextAbilityName = nextUnlock ? (getAbility(nextUnlock.abilityId)?.name ?? nextUnlock.abilityId) : undefined;
+      const nextUnlockLabel =
+        nextUnlock && nextAbilityName ? `Next: ${nextAbilityName} at Lv ${nextUnlock.level}` : undefined;
 
       const abilitiesLabel = this.add
         .text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_LABEL_OFFSET_Y), 'Abilities:', {
@@ -557,6 +565,18 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
+      const nextAbilityText = nextUnlockLabel
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.NEXT_ABILITY_OFFSET_Y), nextUnlockLabel, {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              color: COLORS.LABEL,
+              wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
+
       container.add([
         portrait,
         levelBadgeBg,
@@ -568,6 +588,7 @@ export class PartySelectScene extends Phaser.Scene {
         statsText,
         abilitiesLabel,
         abilitiesText,
+        ...(nextAbilityText ? [nextAbilityText] : []),
         ring,
         orderBadgeBg,
         orderBadge,

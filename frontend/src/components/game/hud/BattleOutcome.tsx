@@ -7,8 +7,17 @@ import { useEffect, useState, type ReactNode } from 'react';
 import Button from '@/components/ui/Button';
 import AffinityChip from './AffinityChip';
 import { portraitPath } from '@/components/collection/entries';
-import { Affinity, Rarity, getAbility, getFamiliar, getItem } from '@arcane-familiars/game-logic';
+import {
+  Affinity,
+  Rarity,
+  SIGNATURE_BY_AFFINITY,
+  getAbility,
+  getFamiliar,
+  getItem,
+} from '@arcane-familiars/game-logic';
 import type { BattleEndedPayload, FamiliarState } from '@/game';
+
+const SIGNATURE_IDS = new Set(Object.values(SIGNATURE_BY_AFFINITY));
 
 /** Rewards arrive as item ids; show the display name, falling back to the id. */
 function itemNames(ids: string[]): string {
@@ -168,6 +177,23 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
                   {entry.name ?? (entry.bench ? 'Bench familiar' : 'Active familiar')} levelled up! +{entry.levels}
                 </RewardLine>
               ))}
+              {rewards.learned?.map((entry, learnedIndex) => {
+                const isRankUp = entry.abilityId.endsWith('_2');
+                const baseAbilityId = isRankUp ? entry.abilityId.slice(0, -2) : entry.abilityId;
+                const isSignature = SIGNATURE_IDS.has(baseAbilityId);
+                return (
+                  <RewardLine
+                    key={`learned-${entry.familiarId}-${entry.abilityId}-${learnedIndex}`}
+                    index={lineIndex++}
+                    entered={entered}
+                    className={`font-display text-teal ${
+                      isSignature ? 'text-base font-bold' : 'text-sm font-semibold'
+                    }`}
+                  >
+                    {entry.familiarName} learned {entry.abilityName}!{isRankUp ? ' ↑' : ''}
+                  </RewardLine>
+                );
+              })}
               {rewards.recruitProgress ? (
                 <BondLine
                   index={lineIndex++}

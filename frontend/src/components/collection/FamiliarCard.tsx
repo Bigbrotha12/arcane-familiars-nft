@@ -69,6 +69,13 @@ export default function FamiliarCard({ entry }: FamiliarCardProps): JSX.Element 
           <Stat label="ATK" value={entry.stats.attack} />
           <Stat label="DEF" value={entry.stats.defense} />
         </dl>
+
+        {entry.learnset && (
+          <p className="mt-sm text-xs font-body leading-snug text-text-muted">
+            <span className="text-text-secondary">Learnset: </span>
+            {entry.learnset}
+          </p>
+        )}
       </CardBody>
     </Card>
   );

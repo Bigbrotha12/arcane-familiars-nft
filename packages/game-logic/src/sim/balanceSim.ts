@@ -13,6 +13,7 @@ import { resolveTurn, checkBattleOutcome, updateCooldowns } from '@/utils/battle
 import { selectEnemyAction } from '@/utils/enemyAI';
 import { scaleEnemy } from '@/utils/dungeonEngine';
 import { scaleFamiliarStats } from '@/utils/progression';
+import { abilitiesAtLevel } from '@/utils/learnset';
 import { seededRandom, randomInRange } from '@/utils/mathUtils';
 import { BALANCE, affinityMultiplier } from '@/data/balance';
 
@@ -26,7 +27,9 @@ export interface PartyMember {
 function makeCombatant(id: string, level: number, isAlly: boolean, asEnemy = false): BattleFamiliar {
   const base = getFamiliar(id);
   if (!base) throw new Error(`Unknown familiar ${id}`);
-  const data = asEnemy ? scaleEnemy(base, level) : { ...base, stats: scaleFamiliarStats(base.stats, level) };
+  const data = asEnemy
+    ? scaleEnemy(base, level)
+    : { ...base, abilities: abilitiesAtLevel(base, level), stats: scaleFamiliarStats(base.stats, level) };
   return {
     uid: `${isAlly ? 'ally' : 'enemy'}-${id}`,
     familiarData: data,

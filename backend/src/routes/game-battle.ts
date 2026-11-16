@@ -24,6 +24,9 @@ import {
   applyFamiliarXp,
   applyRecruitWin,
   scaleFamiliarStats,
+  abilitiesAtLevel,
+  newlyLearned,
+  getAbility,
   battleXp,
   BALANCE,
   MAX_FAMILIAR_LEVEL,
@@ -93,7 +96,7 @@ function createBattleFamiliar(familiarId: string, level = 1): BattleFamiliar {
 
   return {
     uid: generateId(),
-    familiarData: { ...data, stats },
+    familiarData: { ...data, abilities: abilitiesAtLevel(data, level), stats },
     currentHp: stats.hp,
     currentMp: stats.mp,
     statusEffects: [],
@@ -158,6 +161,24 @@ function generateBattleRewards(rng: () => number): BattleRewards {
   }
 
   return { currency, items };
+}
+
+/** Ability unlocks earned by a familiar that levelled from `fromLevel` to `toLevel`. */
+function learnedAbilities(
+  familiarId: string,
+  fromLevel: number,
+  toLevel: number
+): NonNullable<BattleRewards['learned']> {
+  if (toLevel <= fromLevel) return [];
+  const species = getFamiliar(familiarId);
+  if (!species) return [];
+
+  return newlyLearned(species, fromLevel, toLevel).map((abilityId) => ({
+    familiarId,
+    familiarName: species.name,
+    abilityId,
+    abilityName: getAbility(abilityId)?.name ?? abilityId,
+  }));
 }
 
 gameBattleRouter.post('/game/battle/start', async (c) => {
@@ -503,6 +524,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let xpGained = 0;
     let levelUps = 0;
     let benchReward: Pick<BattleRewards, 'benchXp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
+    let learned: NonNullable<BattleRewards['learned']> = [];
     let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
@@ -515,10 +537,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       xpGained = battleXp(battle.enemyLevel ?? 1, battle.isBoss);
       state.familiarLevels ??= {};
       state.familiarXp ??= {};
-      const progress = applyFamiliarXp(state.familiarLevels[activeId] ?? 1, state.familiarXp[activeId] ?? 0, xpGained);
+      const activeLevelBefore = state.familiarLevels[activeId] ?? 1;
+      const progress = applyFamiliarXp(activeLevelBefore, state.familiarXp[activeId] ?? 0, xpGained);
       state.familiarLevels[activeId] = progress.level;
       state.familiarXp[activeId] = progress.xp;
       levelUps = progress.levelsGained;
+      learned = learned.concat(learnedAbilities(activeId, activeLevelBefore, progress.level));
 
       // The party member who did not land the winning blow still gains a
       // reduced share, so swapping/relaying does not starve the bench.
@@ -526,13 +550,11 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       if (benchId) {
         const benchXp = Math.round(xpGained * BALANCE.benchXpShare);
         if (benchXp > 0) {
-          const benchProgress = applyFamiliarXp(
-            state.familiarLevels[benchId] ?? 1,
-            state.familiarXp[benchId] ?? 0,
-            benchXp
-          );
+          const benchLevelBefore = state.familiarLevels[benchId] ?? 1;
+          const benchProgress = applyFamiliarXp(benchLevelBefore, state.familiarXp[benchId] ?? 0, benchXp);
           state.familiarLevels[benchId] = benchProgress.level;
           state.familiarXp[benchId] = benchProgress.xp;
+          learned = learned.concat(learnedAbilities(benchId, benchLevelBefore, benchProgress.level));
           benchReward = {
             benchXp,
             benchFamiliarId: benchId,
@@ -628,7 +650,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     if (xpGained > 0) {
-      const xpReward = { xp: xpGained, levelUp: levelUps, ...benchReward };
+      const xpReward = {
+        xp: xpGained,
+        levelUp: levelUps,
+        ...benchReward,
+        ...(learned.length > 0 ? { learned } : {}),
+      };
       rewards = rewards ? { ...rewards, ...xpReward } : { currency: 0, items: [], ...xpReward };
     }
 

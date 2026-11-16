@@ -239,6 +239,15 @@ export function resolveTurn(
     let actorPost = applyActionResult(actorPre, result);
     const opponentPost = applyActionResult(opponentPre, result);
 
+    // Basic attacks refund a slice of the actor's max MP. Applied to the actor
+    // (not the result's target) so the per-step snapshot carries the new MP.
+    if (result.actorMpRestore) {
+      actorPost = {
+        ...actorPost,
+        currentMp: Math.min(actorPost.familiarData.stats.maxMp, actorPost.currentMp + result.actorMpRestore),
+      };
+    }
+
     // Charge is carried on the actor, not in the result, so the client can see
     // a charged boss before it unleashes. A damaging action spends it; every
     // other action leaves it intact.
@@ -545,15 +554,22 @@ function executeAction(
       rng,
       { defenderGuarding: isGuarding(actualTarget) }
     );
+    const maxMp = source.familiarData.stats.maxMp;
+    const restoredMp = Math.min(
+      Math.max(0, maxMp - source.currentMp),
+      Math.max(1, Math.round(maxMp * BALANCE.attackMpRestore))
+    );
+    const mpNote = restoredMp > 0 ? ` (+${restoredMp} MP)` : '';
     return {
       result: {
         effectType: EffectType.Damage,
         targetId: actualTarget.uid,
         value: damage,
         isCritical,
-        description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}`,
+        description: `${source.familiarData.name} attacks for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}${mpNote}`,
         effectiveness: effectiveness === 'neutral' ? undefined : effectiveness,
         guarded: guarded || undefined,
+        actorMpRestore: restoredMp > 0 ? restoredMp : undefined,
       },
       consumedCharge: source.charged === true,
       gainedCharge: false,
@@ -680,6 +696,18 @@ function executeAction(
   };
 }
 
+/**
+ * Effective damage multiplier of an ability for a given user. Abilities with a
+ * `lowHpBonus` (Brave) hit harder as the user's HP falls:
+ * `multiplier + lowHpBonus * (1 - currentHp / maxHp)`. Never below the base.
+ */
+export function effectiveAbilityMultiplier(ability: AbilityData, source: BattleFamiliar): number {
+  if (!ability.lowHpBonus) return ability.multiplier;
+  const maxHp = source.familiarData.stats.maxHp;
+  const hpRatio = maxHp > 0 ? Math.max(0, Math.min(1, source.currentHp / maxHp)) : 0;
+  return ability.multiplier + ability.lowHpBonus * (1 - hpRatio);
+}
+
 function executeAbility(
   ability: AbilityData,
   source: BattleFamiliar,
@@ -691,7 +719,7 @@ function executeAbility(
     const { damage, isCritical, effectiveness, guarded } = rollDamage(
       source,
       target,
-      ability.multiplier,
+      effectiveAbilityMultiplier(ability, source),
       ability.scalingStat,
       rng,
       { defenderGuarding: isGuarding(target) }
@@ -709,12 +737,17 @@ function executeAbility(
         ]
       : undefined;
 
+    // Below half HP the low-HP bonus is worth calling out in the log.
+    const hpRatio = source.familiarData.stats.maxHp > 0 ? source.currentHp / source.familiarData.stats.maxHp : 0;
+    const desperate = (ability.lowHpBonus ?? 0) > 0 && hpRatio < 0.5;
+    const actionText = desperate ? `uses ${ability.name} — a desperate blow! —` : `uses ${ability.name}`;
+
     return {
       effectType: ability.effectType,
       targetId: target.uid,
       value: damage,
       isCritical,
-      description: `${source.familiarData.name} uses ${ability.name} for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}`,
+      description: `${source.familiarData.name} ${actionText} for ${damage} damage${isCritical ? ' (Critical!)' : ''}${damageSuffix(effectiveness, guarded)}`,
       appliedEffects: statusEffects,
       effectiveness: effectiveness === 'neutral' ? undefined : effectiveness,
       guarded: guarded || undefined,
