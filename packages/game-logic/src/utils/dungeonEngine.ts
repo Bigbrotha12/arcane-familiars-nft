@@ -266,8 +266,8 @@ function meetsChestFloor(tier: ChestTier, itemIds: string[]): boolean {
 /**
  * Roll a chest of the given tier from the shared treasure pool.
  * Rare chests guarantee at least one uncommon-or-better item; epic chests
- * guarantee at least one rare item. Both reroll the set up to 5 times before
- * accepting an unlucky roll, so the guarantee is strong but not absolute.
+ * guarantee at least one rare item. The set is rerolled up to 5 times, then
+ * the last item is drawn from qualifying items only, so the floor always holds.
  */
 export function rollChest(tier: ChestTier, rng: () => number): { items: string[]; currency: number } {
   const config = CHEST_CONFIG[tier];
@@ -277,6 +277,14 @@ export function rollChest(tier: ChestTier, rng: () => number): { items: string[]
   if (tier !== 'common') {
     for (let reroll = 0; reroll < 5 && !meetsChestFloor(tier, items); reroll++) {
       items = rollPoolItems(config.itemCount, rng);
+    }
+    if (!meetsChestFloor(tier, items)) {
+      // Still unlucky: swap the last item for one drawn only from the items
+      // that satisfy the floor, so the tier's promise always holds.
+      const qualifying = TREASURE_POOL.filter((entry) => meetsChestFloor(tier, [entry.itemId]));
+      if (qualifying.length > 0) {
+        items = [...items.slice(0, -1), qualifying[weightedRandom(rng, qualifying)].itemId];
+      }
     }
   }
 
