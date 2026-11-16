@@ -13,6 +13,7 @@ import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
 import { scaleFamiliarStats } from '@/utils/progression';
 import { abilitiesAtLevel } from '@/utils/learnset';
 import { emptyInventory } from '@/utils/runLoot';
+import { curiosForArea } from '@/data/curios';
 
 /**
  * Dungeon treasure pool, derived from item data: any item with a dropWeight
@@ -197,6 +198,21 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     const dir = randomInRange(rng, 0, 7) as Directions;
     host.exits.push({ direction: dir, roomId: branchId, label: branch.name });
     branch.exits.push({ direction: getOppositeDirection(dir), roomId: host.id, label: host.name });
+  }
+
+  // Place curios only after the main path and branches are built, so their RNG
+  // draws never shift the existing room/exits/branch layout for a given seed.
+  // Only normal main-path rooms qualify; each curio is used at most once per
+  // dungeon and must belong to the area.
+  const curioCount = area.roomCount <= 6 ? 1 : 2;
+  const curioHosts = roomIds.map((id) => rooms[id]).filter((room) => room.type === RoomType.Normal);
+  const areaCurios = curiosForArea(area.id);
+  for (let i = 0; i < curioCount && curioHosts.length > 0 && areaCurios.length > 0; i++) {
+    const hostIdx = randomInRange(rng, 0, curioHosts.length - 1);
+    const [host] = curioHosts.splice(hostIdx, 1);
+    const curioIdx = randomInRange(rng, 0, areaCurios.length - 1);
+    const [curio] = areaCurios.splice(curioIdx, 1);
+    host.curio = { id: curio.id, used: false };
   }
 
   return {

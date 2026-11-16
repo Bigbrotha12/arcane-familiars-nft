@@ -59,6 +59,8 @@ export interface Room {
    * advance via the minimap; `pendingTreasure` is still created on arrival.
    */
   chest?: ChestTier;
+  /** A curio placed at generation. Optional so old saves still load. */
+  curio?: { id: string; used: boolean };
 }
 
 /** HP/MP actually restored to one party member at a rest shrine. */

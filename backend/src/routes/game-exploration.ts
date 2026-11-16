@@ -1,13 +1,18 @@
 import { Hono } from 'hono';
-import type { ChestTier, GameState } from '@arcane-familiars/game-logic';
+import type { ChestTier, CurioGains, GameState } from '@arcane-familiars/game-logic';
 import {
   AREAS,
+  BALANCE,
+  CURIOS,
   generateDungeon,
   rollEncounter,
   rollRoomTreasure,
   roomRollSeed,
   selectEnemy,
   getFamiliar,
+  getItem,
+  getAbility,
+  PASSIVES,
   healPartyAtRest,
   seededRandom,
   randomInRange,
@@ -18,6 +23,13 @@ import {
   getRunLoot,
   addInventoryItem,
   bankRunLoot,
+  findOwnedItem,
+  consumeOwnedItem,
+  applyFamiliarXp,
+  newlyLearned,
+  newPassiveTiers,
+  resolveCurioOption,
+  rollChest,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
@@ -294,6 +306,265 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     return c.json({ success: true, inventory: state.inventory, runLoot });
   } catch (error: unknown) {
     return internalError(c, error, 'Collect treasure');
+  }
+});
+
+explorationRouter.post('/game/dungeon/curio', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string; roomId: string; optionId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { anonymousId, roomId, optionId } = body;
+    if (!anonymousId || !roomId || !optionId) {
+      return c.json({ error: 'Missing required fields: anonymousId, roomId, optionId' }, 400);
+    }
+
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+
+    const state = loaded.state;
+
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
+
+    const dungeon = state.dungeon;
+    if (!dungeon) {
+      return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    if (roomId !== dungeon.currentRoomId) {
+      return c.json({ error: 'You are not in that room' }, 400);
+    }
+
+    const room = dungeon.rooms[roomId];
+    if (!room) {
+      return c.json({ error: 'Room not found' }, 404);
+    }
+
+    // Optional field: rooms generated before curios existed simply have none.
+    const placed = room.curio;
+    if (!placed) {
+      return c.json({ error: 'This room holds no curio' }, 400);
+    }
+    if (placed.used) {
+      return c.json({ error: 'This curio has already been used' }, 400);
+    }
+
+    const curio = CURIOS[placed.id];
+    if (!curio) {
+      return c.json({ error: 'Unknown curio' }, 400);
+    }
+
+    const option = curio.options.find((entry) => entry.id === optionId);
+    if (!option) {
+      return c.json({ error: 'Unknown curio option' }, 400);
+    }
+
+    if (room.pendingEncounter && !room.pendingEncounter.resolved) {
+      return c.json({ error: 'Clear the encounter before using the curio' }, 400);
+    }
+
+    const area = AREAS[dungeon.areaId];
+    if (!area) {
+      return c.json({ error: 'Invalid area' }, 500);
+    }
+
+    // Requirements are checked before any cost is paid or state mutated.
+    if (option.requiresItem && !findOwnedItem(state, option.requiresItem)) {
+      const itemName = getItem(option.requiresItem)?.name ?? option.requiresItem;
+      return c.json({ error: `You need a ${itemName}` }, 400);
+    }
+
+    const runLoot = getRunLoot(dungeon);
+    if (option.costCurrency && runLoot.currency + state.inventory.currency < option.costCurrency) {
+      return c.json({ error: `You need ${option.costCurrency} coins` }, 400);
+    }
+
+    // Pay costs: run loot first, then the bank.
+    if (option.requiresItem) {
+      consumeOwnedItem(state, option.requiresItem);
+    }
+    if (option.costCurrency) {
+      const fromRun = Math.min(runLoot.currency, option.costCurrency);
+      runLoot.currency -= fromRun;
+      state.inventory.currency -= option.costCurrency - fromRun;
+    }
+
+    // Deterministic per dungeon seed + room: reloading cannot reroll the result.
+    const rng = seededRandom(roomRollSeed(dungeon.seed ?? 0, `${roomId}:curio`));
+    const resolution = resolveCurioOption(curio, optionId, rng);
+    if (!resolution) {
+      return c.json({ error: 'Unknown curio option' }, 400);
+    }
+
+    const { outcome, text } = resolution;
+    const gains: CurioGains = {};
+    let ambushEnemy: string | undefined;
+
+    const living = (dungeon.party ?? []).filter((id) => (dungeon.partyHp[id] ?? 0) > 0);
+
+    switch (outcome.kind) {
+      case 'healParty': {
+        const healed: Record<string, { hp: number; mp: number }> = {};
+        for (const familiarId of living) {
+          const base = getFamiliar(familiarId);
+          if (!base) continue;
+          const stats = scaleFamiliarStats(base.stats, state.familiarLevels?.[familiarId] ?? 1);
+          const currentHp = dungeon.partyHp[familiarId] ?? 0;
+          const currentMp = dungeon.partyMp[familiarId] ?? 0;
+          const hp = Math.max(0, Math.min(stats.maxHp - currentHp, Math.round((stats.maxHp * outcome.hpPct) / 100)));
+          const mp = Math.max(0, Math.min(stats.maxMp - currentMp, Math.round((stats.maxMp * outcome.mpPct) / 100)));
+          dungeon.partyHp[familiarId] = currentHp + hp;
+          dungeon.partyMp[familiarId] = currentMp + mp;
+          if (hp > 0 || mp > 0) healed[familiarId] = { hp, mp };
+        }
+        gains.healed = healed;
+        break;
+      }
+      case 'hurtParty': {
+        // Hurt never KOs: every living member floors at 1 HP.
+        const hurt: Record<string, number> = {};
+        for (const familiarId of living) {
+          const base = getFamiliar(familiarId);
+          if (!base) continue;
+          const stats = scaleFamiliarStats(base.stats, state.familiarLevels?.[familiarId] ?? 1);
+          const currentHp = dungeon.partyHp[familiarId] ?? 0;
+          const damage = Math.max(1, Math.round((stats.maxHp * outcome.hpPct) / 100));
+          const nextHp = Math.max(1, currentHp - damage);
+          dungeon.partyHp[familiarId] = nextHp;
+          hurt[familiarId] = currentHp - nextHp;
+        }
+        gains.hurt = hurt;
+        break;
+      }
+      case 'chest': {
+        const chest = rollChest(outcome.tier, rng);
+        for (const itemId of chest.items) {
+          addInventoryItem(runLoot, itemId);
+        }
+        runLoot.currency += chest.currency;
+        gains.items = chest.items;
+        gains.currency = chest.currency;
+        break;
+      }
+      case 'coins': {
+        const amount = randomInRange(rng, outcome.min, outcome.max);
+        runLoot.currency += amount;
+        gains.currency = amount;
+        break;
+      }
+      case 'xp': {
+        state.familiarLevels ??= {};
+        state.familiarXp ??= {};
+        const levels: NonNullable<CurioGains['levels']> = [];
+        const learned: NonNullable<CurioGains['learned']> = [];
+        const passiveUnlocks: NonNullable<CurioGains['passiveUnlocks']> = [];
+
+        for (const familiarId of living) {
+          const base = getFamiliar(familiarId);
+          if (!base) continue;
+          const levelBefore = state.familiarLevels[familiarId] ?? 1;
+          const progress = applyFamiliarXp(levelBefore, state.familiarXp[familiarId] ?? 0, outcome.amount);
+          state.familiarLevels[familiarId] = progress.level;
+          state.familiarXp[familiarId] = progress.xp;
+          levels.push({
+            familiarId,
+            name: base.name,
+            level: progress.level,
+            levelsGained: progress.levelsGained,
+          });
+
+          if (progress.levelsGained > 0) {
+            learned.push(
+              ...newlyLearned(base, levelBefore, progress.level).map((abilityId) => ({
+                familiarId,
+                familiarName: base.name,
+                abilityId,
+                abilityName: getAbility(abilityId)?.name ?? abilityId,
+              }))
+            );
+            passiveUnlocks.push(
+              ...newPassiveTiers(base, levelBefore, progress.level).map(({ id: passiveId, tier }) => ({
+                familiarId,
+                familiarName: base.name,
+                passiveId,
+                passiveName: PASSIVES[passiveId].name,
+                tier,
+              }))
+            );
+          }
+        }
+
+        gains.xp = outcome.amount;
+        gains.levels = levels;
+        if (learned.length > 0) gains.learned = learned;
+        if (passiveUnlocks.length > 0) gains.passiveUnlocks = passiveUnlocks;
+        break;
+      }
+      case 'bond': {
+        const candidates = area.encounterPool.filter((speciesId) => {
+          const species = getFamiliar(speciesId);
+          return species && !species.isBoss && !state.playerFamiliars.includes(speciesId);
+        });
+
+        if (candidates.length === 0) {
+          // Nothing left to bond with here: the curio pays out in coins instead.
+          const amount = randomInRange(rng, 20, 40);
+          runLoot.currency += amount;
+          gains.currency = amount;
+        } else {
+          const speciesId = candidates[randomInRange(rng, 0, candidates.length - 1)];
+          const species = getFamiliar(speciesId);
+          if (species) {
+            state.recruitBond ??= {};
+            const bond = (state.recruitBond[speciesId] ?? 0) + outcome.amount;
+            state.recruitBond[speciesId] = bond;
+            gains.bond = {
+              speciesId,
+              name: species.name,
+              bond,
+              needed: BALANCE.recruitBondNeeded[species.rarity],
+            };
+          }
+        }
+        break;
+      }
+      case 'ambush': {
+        const enemyId = selectEnemy(area, rng);
+        if (enemyId) {
+          const level = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+          room.pendingEncounter = { enemyId, resolved: false, level };
+          ambushEnemy = enemyId;
+        }
+        break;
+      }
+      case 'nothing':
+        break;
+    }
+
+    // A curio is spent no matter what it gave back.
+    placed.used = true;
+
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({
+      success: true,
+      text,
+      outcome,
+      gains,
+      runLoot: getRunLoot(dungeon),
+      inventory: state.inventory,
+      dungeon: sanitizeDungeonForClient(dungeon),
+      ...(ambushEnemy ? { encounter: true, enemy: ambushEnemy } : {}),
+    });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Use curio');
   }
 });
 

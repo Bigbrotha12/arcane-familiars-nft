@@ -8,6 +8,7 @@ import RoomInfo from './RoomInfo';
 import CombinedControlsPanel from './CombinedControlsPanel';
 import EncounterOverlay from './EncounterOverlay';
 import TreasureOverlay from './TreasureOverlay';
+import CurioOverlay from './CurioOverlay';
 import BossOverlay from './BossOverlay';
 import type { ActionBarItem } from './ActionBar';
 import type { GameStateSnapshot } from '@/game';
@@ -34,6 +35,9 @@ interface ExplorationHUDProps {
   onFleeEncounter: () => void;
   onStartBattle: () => void;
   onSwapClick?: (familiarId: string) => void;
+  onCurioChoice: (optionId: string) => void;
+  onCurioLeave: () => void;
+  onCurioContinue: () => void;
 }
 
 function ExplorationHUD({
@@ -43,6 +47,9 @@ function ExplorationHUD({
   onFleeEncounter,
   onStartBattle,
   onSwapClick,
+  onCurioChoice,
+  onCurioLeave,
+  onCurioContinue,
 }: ExplorationHUDProps) {
   if (snapshot.currentScene !== 'exploration' || !snapshot.dungeon) {
     return null;
@@ -50,7 +57,12 @@ function ExplorationHUD({
 
   const dungeon = snapshot.dungeon;
   const currentRoom = dungeon.rooms.find((r) => r.id === dungeon.currentRoomId) ?? null;
-  const overlayActive = snapshot.encounterActive || snapshot.treasureActive || snapshot.bossRoom;
+  const overlayActive =
+    snapshot.encounterActive ||
+    snapshot.treasureActive ||
+    snapshot.bossRoom ||
+    Boolean(snapshot.curio) ||
+    Boolean(snapshot.curioResult);
 
   const exitActions: ActionBarItem[] = (currentRoom?.exits ?? [])
     .filter((exit, index, all) => all.findIndex((e) => e.roomId === exit.roomId) === index)
@@ -96,6 +108,14 @@ function ExplorationHUD({
         />
       ) : snapshot.treasureActive ? (
         <TreasureOverlay treasure={snapshot.treasure} onTake={onCollectTreasure} onLeave={onFleeEncounter} />
+      ) : snapshot.curio || snapshot.curioResult ? (
+        <CurioOverlay
+          curio={snapshot.curio}
+          result={snapshot.curioResult}
+          onChoose={onCurioChoice}
+          onLeave={onCurioLeave}
+          onContinue={onCurioContinue}
+        />
       ) : snapshot.bossRoom ? (
         <BossOverlay
           onEnter={onStartBattle}

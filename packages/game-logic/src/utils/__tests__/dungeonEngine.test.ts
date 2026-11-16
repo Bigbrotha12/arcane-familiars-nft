@@ -14,6 +14,7 @@ import {
 import { seededRandom } from '../mathUtils';
 import { AREAS } from '../../data/areas';
 import { BALANCE } from '../../data/balance';
+import { CURIOS } from '../../data/curios';
 import { ITEMS, itemRarity } from '../../data/items';
 import { RoomType } from '../../types/exploration';
 import type { Room, DungeonState } from '../../types/exploration';
@@ -152,6 +153,58 @@ describe('dead-end branch generation', () => {
       const a = generateDungeon(area, 314);
       const b = generateDungeon(area, 314);
       expect(JSON.stringify(b.rooms)).toBe(JSON.stringify(a.rooms));
+    }
+  });
+});
+
+describe('curio placement', () => {
+  const expectedCount = (roomCount: number): number => (roomCount <= 6 ? 1 : 2);
+
+  it('places 1 curio in short dungeons and 2 in longer ones', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 5);
+      const curios = Object.values(dungeon.rooms).filter((room) => room.curio);
+      expect(curios, `${area.id} (roomCount ${area.roomCount})`).toHaveLength(expectedCount(area.roomCount));
+    }
+  });
+
+  it('uses only normal main-path rooms and never start, rest, boss or branch', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 29);
+      const curios = Object.values(dungeon.rooms).filter((room) => room.curio);
+      for (const room of curios) {
+        expect(room.type, `${area.id}/${room.id}`).toBe(RoomType.Normal);
+        expect(room.id, `${area.id}/${room.id}`).toMatch(/^room_\d+$/);
+        expect(room.id).not.toBe('room_0');
+      }
+    }
+  });
+
+  it('picks distinct curios from the area without repeats', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 11);
+      const placed = Object.values(dungeon.rooms)
+        .map((room) => room.curio?.id)
+        .filter((id): id is string => Boolean(id));
+
+      expect(new Set(placed).size, area.id).toBe(placed.length);
+      for (const curioId of placed) {
+        expect(CURIOS[curioId], curioId).toBeDefined();
+        expect(CURIOS[curioId].areas, `${area.id}/${curioId}`).toContain(area.id);
+      }
+    }
+  });
+
+  it('is deterministic per seed', () => {
+    for (const area of Object.values(AREAS)) {
+      const a = generateDungeon(area, 404);
+      const b = generateDungeon(area, 404);
+      const placements = (dungeon: DungeonState) =>
+        Object.values(dungeon.rooms)
+          .filter((room) => room.curio)
+          .map((room) => `${room.id}:${room.curio!.id}`)
+          .sort();
+      expect(placements(b)).toEqual(placements(a));
     }
   });
 });

@@ -134,6 +134,24 @@ export default function GamePage() {
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.START_BATTLE);
   }, [playUiSfx]);
 
+  const handleCurioChoice = useCallback(
+    (optionId: string) => {
+      playUiSfx('confirm');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.CURIO_CHOICE, { optionId });
+    },
+    [playUiSfx]
+  );
+
+  const handleCurioLeave = useCallback(() => {
+    playUiSfx('cancel');
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.CURIO_LEAVE);
+  }, [playUiSfx]);
+
+  const handleCurioContinue = useCallback(() => {
+    playUiSfx('confirm');
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.CURIO_LEAVE);
+  }, [playUiSfx]);
+
   const handlePartySwap = useCallback(
     (familiarId: string) => {
       playUiSfx('click');
@@ -420,6 +438,9 @@ export default function GamePage() {
         onFleeEncounter={handleFleeEncounter}
         onStartBattle={handleStartBattle}
         onSwapClick={handlePartySwap}
+        onCurioChoice={handleCurioChoice}
+        onCurioLeave={handleCurioLeave}
+        onCurioContinue={handleCurioContinue}
       />
     </>
   ) : null;

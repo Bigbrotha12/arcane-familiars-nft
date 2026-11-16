@@ -12,6 +12,7 @@ export * from '@/data/items';
 export * from '@/data/shop';
 export * from '@/data/balance';
 export * from '@/data/passives';
+export * from '@/data/curios';
 
 // Utils
 export * from '@/utils/battleEngine';
@@ -25,3 +26,4 @@ export * from '@/utils/learnset';
 export * from '@/utils/passives';
 export * from '@/utils/runLoot';
 export * from '@/utils/recruit';
+export * from '@/utils/curios';

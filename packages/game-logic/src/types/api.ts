@@ -1,5 +1,6 @@
 import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
 import type { Area, ChestTier, DungeonState, RestHeal, Room } from '@/types/exploration';
+import type { CurioOutcome } from '@/data/curios';
 import type { GameState, Inventory } from '@/types/gameState';
 
 export interface LoadStateRequest {
@@ -60,6 +61,41 @@ export interface CollectTreasureResponse {
   success: boolean;
   inventory: Inventory;
   runLoot: Inventory;
+}
+
+export interface CurioRequest {
+  anonymousId: string;
+  roomId: string;
+  optionId: string;
+}
+
+/** What a curio choice changed, for the client's result list and HUD. */
+export interface CurioGains {
+  healed?: Record<string, { hp: number; mp: number }>;
+  /** HP lost per familiar id (hurt outcomes never drop a member below 1). */
+  hurt?: Record<string, number>;
+  items?: string[];
+  currency?: number;
+  xp?: number;
+  levels?: { familiarId: string; name: string; level: number; levelsGained: number }[];
+  learned?: { familiarId: string; familiarName: string; abilityId: string; abilityName: string }[];
+  passiveUnlocks?: { familiarId: string; familiarName: string; passiveId: string; passiveName: string; tier: number }[];
+  bond?: { speciesId: string; name: string; bond: number; needed: number };
+}
+
+export interface CurioResponse {
+  success: boolean;
+  text: string;
+  outcome: CurioOutcome;
+  gains: CurioGains;
+  runLoot: Inventory;
+  /** Post-payment bank inventory, so item/coin costs stay in sync client-side. */
+  inventory: Inventory;
+  /** Sanitized dungeon copy (seed removed) so party HP/MP update without a reload. */
+  dungeon: Omit<DungeonState, 'seed'>;
+  /** Present when the outcome spawned an ambush encounter in this room. */
+  encounter?: boolean;
+  enemy?: string;
 }
 
 export interface ExitDungeonRequest {
