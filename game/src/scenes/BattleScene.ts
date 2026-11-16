@@ -50,6 +50,8 @@ interface BattleSceneData {
   enemyId: string;
   returnScene?: string;
   areaId?: string;
+  /** Texture key of the room the fight happens in, so you battle where you stand. */
+  backgroundKey?: string;
   activeIndex?: number;
   pendingTreasureItemId?: string | null;
   roomsExplored?: number;
@@ -91,6 +93,7 @@ export class BattleScene extends Phaser.Scene {
   private enemyId!: string;
   private returnScene!: string;
   private areaId?: string;
+  private backgroundKey?: string;
   private activeFamiliarIndex = 0;
   private battleLog: string[] = [];
   private phase: BattlePhase = 'connecting';
@@ -109,6 +112,7 @@ export class BattleScene extends Phaser.Scene {
     this.enemyId = data.enemyId;
     this.returnScene = data.returnScene ?? SCENE_KEYS.WORLD_MAP;
     this.areaId = data.areaId;
+    this.backgroundKey = data.backgroundKey;
     this.isProcessingAction = false;
     this.battleState = null;
     this.activeFamiliarIndex = data.activeIndex ?? 0;
@@ -204,8 +208,10 @@ export class BattleScene extends Phaser.Scene {
   /**
    * Pick the battle backdrop.
    *
-   * Boss battles have their own chambers; the three original areas have their
-   * own art. Areas added later have no generated art yet, so they get a
+   * Boss battles with chamber art use it. Every other fight uses the room the
+   * player is standing in (passed in by the exploration scene). The area art
+   * below is only a fallback for battles started without a room, e.g. resumed
+   * from the world map. Areas added later have no generated art yet, so they get a
    * deliberate area-coloured wash over the neutral backdrop instead of
    * borrowing another area's image (which read as the wrong biome).
    */
@@ -225,6 +231,10 @@ export class BattleScene extends Phaser.Scene {
     let bgKey: string | undefined;
     if (this.enemyId in bossBgMap) {
       bgKey = bossBgMap[this.enemyId];
+    } else if (this.backgroundKey && this.textures.exists(this.backgroundKey)) {
+      // Fight where you stand: reuse the room art the player was just looking
+      // at, so the battle never jumps to a different-looking place.
+      bgKey = this.backgroundKey;
     } else if (this.areaId && this.areaId in areaBgMap) {
       bgKey = areaBgMap[this.areaId];
     }

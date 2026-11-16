@@ -104,11 +104,20 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
       icon: '🔄',
       disabled: !snapshot.canSwap,
       disabledReason: 'needs 2+ familiars',
-      hint: 'costs the turn',
+      hint: 'free · once a turn',
       onClick: () => handleAction('swap'),
     },
     { key: 'familiars', label: 'Familiars', icon: '🐾', onClick: () => setActivePanel('familiars') },
-    { key: 'run', label: 'Run', icon: '🏃', hint: 'may fail', onClick: () => handleAction('run') },
+    {
+      key: 'run',
+      label: 'Run',
+      icon: '🏃',
+      // Fleeing a normal fight always works; the server refuses it against a boss.
+      disabled: snapshot.isBoss === true,
+      disabledReason: 'not from a boss',
+      hint: 'always escapes',
+      onClick: () => handleAction('run'),
+    },
   ].map((action) => ({ ...action, disabled: disabled || action.disabled }));
 
   return (

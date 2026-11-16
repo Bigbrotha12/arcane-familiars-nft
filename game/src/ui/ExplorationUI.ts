@@ -3,6 +3,11 @@ import type { Room, Area } from '@arcane-familiars/game-logic';
 import { Layout } from './layout';
 import { SceneBackground } from './SceneBackground';
 
+/** Texture key for a room's background art (three images per area, cycled by room index). */
+export function roomBackgroundKey(areaId: string, roomIndex: number): string {
+  return `room_${areaId}_${(roomIndex % 3) + 1}`;
+}
+
 export class ExplorationUI {
   private scene: Phaser.Scene;
   private layout: Layout;
@@ -34,7 +39,7 @@ export class ExplorationUI {
     const color = (Math.min(darkR, 255) << 16) | (Math.min(darkG, 255) << 8) | Math.min(darkB, 255);
     this.sceneBackground.setOverlay(color, 0.45);
 
-    const bgKey = `room_${area.id}_${(roomIndex % 3) + 1}`;
+    const bgKey = roomBackgroundKey(area.id, roomIndex);
     this.sceneBackground.setImage(bgKey);
   }
 

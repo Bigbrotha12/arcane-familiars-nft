@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import type { DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
 import { AREAS, RoomType, getFamiliar, getRunLoot, Directions } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
-import { ExplorationUI } from '../ui/ExplorationUI';
+import { ExplorationUI, roomBackgroundKey } from '../ui/ExplorationUI';
 import { Layout } from '../ui/layout';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
@@ -98,6 +98,11 @@ export class ExplorationScene extends Phaser.Scene {
     }
   }
 
+  /** Texture key of the current room's art; must match ExplorationUI.showRoomInfo. */
+  private roomBackgroundKey(): string {
+    return roomBackgroundKey(this.areaId, this.currentRoomIndex);
+  }
+
   async create(): Promise<void> {
     this.layout = new Layout(this);
 
@@ -183,6 +188,7 @@ export class ExplorationScene extends Phaser.Scene {
             enemyId: battle.enemyFamiliar.familiarData.id,
             returnScene: SCENE_KEYS.EXPLORATION,
             areaId: this.areaId,
+            backgroundKey: this.roomBackgroundKey(),
             pendingTreasureItemId: this.pendingTreasureItemId,
             roomsExplored: this.visitedRoomIds.size,
             enemiesDefeated: this.enemiesDefeated,
@@ -349,6 +355,7 @@ export class ExplorationScene extends Phaser.Scene {
       enemyId,
       returnScene: SCENE_KEYS.EXPLORATION,
       areaId: this.areaId,
+      backgroundKey: this.roomBackgroundKey(),
       pendingTreasureItemId: this.pendingTreasureItemId,
       activeIndex: this.dungeon?.activeIndex ?? 0,
       roomsExplored: this.visitedRoomIds.size,
