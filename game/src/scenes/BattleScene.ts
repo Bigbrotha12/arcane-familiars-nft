@@ -25,7 +25,6 @@ import { gameApiClient } from '../api/client';
 import { BattleUI, type BattleSide } from '../ui/BattleUI';
 import { SceneBackground } from '../ui/SceneBackground';
 import { Layout } from '../ui/layout';
-import { MOTION } from '../ui/motion';
 import { fadeIn, fadeToScene } from '../ui/transitions';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
@@ -34,6 +33,7 @@ import { toFamiliarStateFromData } from '../utils/familiarState';
 import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
 import { defaultEffectForAffinity, effectAnimKey, getFamiliarSprites } from '../sprites/registry';
 import { audioManager } from '../audio/manager';
+import { battleOutcomeDelay, battleStepDelay } from '../settings/battleSpeed';
 import type {
   GameStateSnapshot,
   FamiliarState,
@@ -60,8 +60,13 @@ interface BattleSceneData {
 
 export class BattleScene extends Phaser.Scene {
   /** Two played steps stay under ~1.4s of choreography. */
-  private readonly STEP_DELAY_MS = MOTION.stepDelay;
-  private readonly OUTCOME_DELAY_MS = MOTION.outcomeDelay;
+  /** Turn playback beats follow the player's Battle speed setting. */
+  private get STEP_DELAY_MS(): number {
+    return battleStepDelay();
+  }
+  private get OUTCOME_DELAY_MS(): number {
+    return battleOutcomeDelay();
+  }
   private readonly FLEE_DELAY_MS = 600;
   private layout!: Layout;
   private static readonly ACTION_TYPE_LABELS: Record<ActionType, string> = {

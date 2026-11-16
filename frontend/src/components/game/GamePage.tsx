@@ -8,7 +8,7 @@ import type {
   PlayerActionPayload,
   UiSfxName,
 } from '@/game';
-import type { gameEventBus, GameEvent } from '@/game';
+import type { gameEventBus, GameEvent, BattleSpeed } from '@/game';
 import GameToolbar from '@/components/game/GameToolbar';
 import ExitModal from '@/components/game/ExitModal';
 import ToastContainer, { toast } from '@/components/game/Toast';
@@ -28,6 +28,10 @@ type GameModule = {
   gameEventBus: typeof gameEventBus;
   GameEvent: typeof GameEvent;
 };
+
+/** Shared with game/src/settings/battleSpeed.ts, which reads it on load. */
+const BATTLE_SPEED_STORAGE_KEY = 'af_battle_speed';
+const BATTLE_SPEED_ORDER: BattleSpeed[] = ['slow', 'medium', 'fast'];
 
 export default function GamePage() {
   const navigate = useNavigate();
@@ -49,6 +53,14 @@ export default function GamePage() {
       return localStorage.getItem('af_audio_muted') === '1';
     } catch {
       return false;
+    }
+  });
+  const [battleSpeed, setBattleSpeed] = useState<BattleSpeed>(() => {
+    try {
+      const stored = localStorage.getItem(BATTLE_SPEED_STORAGE_KEY);
+      return stored === 'slow' || stored === 'medium' || stored === 'fast' ? stored : 'medium';
+    } catch {
+      return 'medium';
     }
   });
   const eventBusCleanupRef = useRef<(() => void) | null>(null);
@@ -121,6 +133,18 @@ export default function GamePage() {
     setMuted((value) => !value);
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.TOGGLE_MUTE);
   }, []);
+
+  const handleCycleBattleSpeed = useCallback(() => {
+    playUiSfx('click');
+    const next = BATTLE_SPEED_ORDER[(BATTLE_SPEED_ORDER.indexOf(battleSpeed) + 1) % BATTLE_SPEED_ORDER.length];
+    setBattleSpeed(next);
+    try {
+      localStorage.setItem(BATTLE_SPEED_STORAGE_KEY, next);
+    } catch {
+      // Storage can be unavailable; the game still gets the event below.
+    }
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SET_BATTLE_SPEED, { speed: next });
+  }, [battleSpeed, playUiSfx]);
 
   const handleOpenExit = useCallback(() => {
     playUiSfx('click');
@@ -394,6 +418,8 @@ export default function GamePage() {
         onExit={handleOpenExit}
         onToggleMute={handleToggleMute}
         muted={muted}
+        battleSpeed={battleSpeed}
+        onCycleBattleSpeed={handleCycleBattleSpeed}
         saving={saving}
         signedIn={signedIn}
         onAuthChange={onAuthChange}
