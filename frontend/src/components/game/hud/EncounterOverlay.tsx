@@ -43,20 +43,34 @@ function EncounterOverlay({ onFight, onFlee, encounter, party, activeId, canFlee
         role="dialog"
         aria-modal="true"
         aria-labelledby="encounter-overlay-title"
-        className="hud-frame max-w-sm rounded-lg p-lg"
+        className="hud-frame max-w-sm rounded-lg p-lg max-sm:max-w-[620px] max-sm:p-xl"
       >
-        <h2 id="encounter-overlay-title" className="mb-md font-display text-xl font-bold text-[#F0EFFF]">
+        <h2
+          id="encounter-overlay-title"
+          className="mb-md font-display text-xl font-bold text-[#F0EFFF] max-sm:mb-lg max-sm:text-[32px]"
+        >
           A wild familiar appears!
         </h2>
 
         {encounter && <EncounterDetails encounter={encounter} party={party} activeId={activeId} />}
 
         <div className="mt-lg flex gap-3">
-          <Button variant="primary" size="md" onClick={onFight} autoFocus>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onFight}
+            autoFocus
+            className="max-sm:px-7 max-sm:py-3 max-sm:text-[24px]"
+          >
             Fight
           </Button>
           {canFlee && (
-            <Button variant="secondary" size="md" onClick={onFlee}>
+            <Button
+              variant="secondary"
+              size="md"
+              onClick={onFlee}
+              className="max-sm:px-7 max-sm:py-3 max-sm:text-[24px]"
+            >
               Flee
             </Button>
           )}

@@ -23,26 +23,26 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
   const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal;
 
   return (
-    <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm">
+    <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-lg max-sm:py-md">
       <div className="flex max-w-full items-center gap-1.5">
-        <h2 className="truncate font-display text-sm font-bold text-[#F0EFFF]">
+        <h2 className="truncate font-display text-sm font-bold text-[#F0EFFF] max-sm:text-[24px]">
           {snapshot.roomName ?? 'Unknown Room'}
         </h2>
         <span
-          className={`shrink-0 rounded-sm px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider ${typeStyle.className}`}
+          className={`shrink-0 rounded-sm px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider max-sm:px-2 max-sm:text-[15px] ${typeStyle.className}`}
         >
           {typeStyle.label}
         </span>
       </div>
 
       {snapshot.roomDescription && (
-        <p className="line-clamp-2 text-center font-body text-xs leading-snug text-[#B8B5E0]">
+        <p className="line-clamp-2 text-center font-body text-xs leading-snug text-[#B8B5E0] max-sm:text-[19px]">
           {snapshot.roomDescription}
         </p>
       )}
 
       {(snapshot.runLootCurrency ?? 0) > 0 || (snapshot.runLootItemCount ?? 0) > 0 ? (
-        <p className="font-mono text-[9px] tabular-nums text-yellow">
+        <p className="font-mono text-[9px] tabular-nums text-yellow max-sm:text-[16px]">
           Run loot: {snapshot.runLootCurrency ?? 0}g
           {snapshot.runLootItemCount
             ? ` · ${snapshot.runLootItemCount} item${snapshot.runLootItemCount === 1 ? '' : 's'}`
@@ -50,7 +50,7 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
         </p>
       ) : null}
 
-      <p className="font-mono text-[9px] tracking-wider text-[#A5A3C4]">
+      <p className="font-mono text-[9px] tracking-wider text-[#A5A3C4] max-sm:text-[16px]">
         Room {dungeon.currentRoomIndex + 1}/{dungeon.roomCount}
       </p>
     </div>

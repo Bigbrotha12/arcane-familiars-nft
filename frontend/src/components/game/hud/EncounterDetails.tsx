@@ -59,9 +59,9 @@ function EncounterDetails({ encounter, party = [], activeId }: EncounterDetailsP
     : [];
 
   return (
-    <div className="flex flex-col gap-md">
-      <div className="flex items-center gap-md">
-        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[#3B3870] bg-gradient-to-br from-[#2D2A5E] to-[#1E1B4B]">
+    <div className="flex flex-col gap-md max-sm:gap-lg">
+      <div className="flex items-center gap-md max-sm:gap-lg">
+        <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-md border border-[#3B3870] bg-gradient-to-br from-[#2D2A5E] to-[#1E1B4B] max-sm:h-32 max-sm:w-32">
           {!imageFailed ? (
             <img
               src={portraitPath(encounter.enemyId)}
@@ -78,18 +78,20 @@ function EncounterDetails({ encounter, party = [], activeId }: EncounterDetailsP
 
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-1.5">
-            <h3 className="truncate font-display text-lg font-semibold text-[#F0EFFF]">{name}</h3>
+            <h3 className="truncate font-display text-lg font-semibold text-[#F0EFFF] max-sm:text-[26px]">{name}</h3>
             {encounter.isBoss && (
-              <span className="shrink-0 rounded-full border border-error/60 bg-error/20 px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider text-error">
+              <span className="shrink-0 rounded-full border border-error/60 bg-error/20 px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider text-error max-sm:px-2 max-sm:text-[15px]">
                 Boss
               </span>
             )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <span className="font-mono text-xs tabular-nums text-[#B8B5E0]">Lv {encounter.level}</span>
+            <span className="font-mono text-xs tabular-nums text-[#B8B5E0] max-sm:text-[20px]">
+              Lv {encounter.level}
+            </span>
             {affinity && affinityColor && (
               <span
-                className="rounded-full border px-1.5 py-px font-body text-[10px] font-medium"
+                className="rounded-full border px-1.5 py-px font-body text-[10px] font-medium max-sm:px-2.5 max-sm:text-[17px]"
                 style={{
                   color: affinityColor,
                   borderColor: `${affinityColor}66`,
@@ -106,7 +108,7 @@ function EncounterDetails({ encounter, party = [], activeId }: EncounterDetailsP
       {matchups.length > 0 && (
         <ul className="flex flex-col gap-0.5 border-t border-[#3B3870] pt-sm">
           {matchups.map((line) => (
-            <li key={line} className="font-body text-xs text-[#B8B5E0]">
+            <li key={line} className="font-body text-xs text-[#B8B5E0] max-sm:text-[20px]">
               {line}
             </li>
           ))}

@@ -27,7 +27,9 @@ function CombinedControlsPanel({ actions, logEntries, party, activeId, onSwapCli
 
         {/* Row 2 — log (75%) + party (25%) */}
         <div className="flex min-h-0 flex-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B]/85">
-          <div className="flex w-3/4 min-w-0 flex-col p-sm">
+          {/* The log body and label are sized for the desktop canvas; phone
+              canvases are half scale, so bump them back to readable type. */}
+          <div className="flex w-3/4 min-w-0 flex-col p-sm max-sm:[&_p]:text-[20px] max-sm:[&_span]:text-[15px]">
             <div className="flex flex-1 flex-col overflow-hidden [&>div]:flex-1">
               <BattleLog entries={logEntries} />
             </div>

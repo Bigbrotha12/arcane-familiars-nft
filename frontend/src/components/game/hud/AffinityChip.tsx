@@ -13,12 +13,14 @@ interface AffinityChipProps {
 function AffinityChip({ affinity, size = 'xs', className = '' }: AffinityChipProps) {
   if (!affinity) return null;
   const color = affinityColor(affinity);
-  const text = size === 'sm' ? 'text-[11px]' : 'text-[9px]';
-  const dot = size === 'sm' ? 'h-2 w-2' : 'h-1.5 w-1.5';
+  // `max-sm:` doubles the design-space size so the chip stays legible once the
+  // 800x600 HUD stage is scaled onto a phone canvas.
+  const text = size === 'sm' ? 'text-[11px] max-sm:text-[17px]' : 'text-[9px] max-sm:text-[15px]';
+  const dot = size === 'sm' ? 'h-2 w-2 max-sm:h-3 max-sm:w-3' : 'h-1.5 w-1.5 max-sm:h-2.5 max-sm:w-2.5';
 
   return (
     <span
-      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px font-body font-medium leading-tight ${text} ${className}`}
+      className={`inline-flex shrink-0 items-center gap-1 rounded-full border px-1.5 py-px font-body font-medium leading-tight max-sm:px-2 ${text} ${className}`}
       style={{ color, borderColor: `${color}66`, backgroundColor: `${color}22` }}
     >
       <span

@@ -47,15 +47,20 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
   return (
     <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-md">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      {/* `compact` modals live inside the 800x600 HUD stage, so on a phone they
+          render at roughly half size; the `max-sm:` rules double the design-space
+          type so the in-game panels stay readable at 390px wide. */}
       <div
         className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
           compact ? 'max-w-[300px] p-md' : 'max-w-md p-lg'
-        } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'}`}
+        } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'} ${
+          compact ? 'max-sm:max-w-[600px] max-sm:p-lg max-sm:[&_p]:text-[19px] max-sm:[&_button]:text-[20px]' : ''
+        }`}
       >
         {title && (
           <div className={`flex items-center justify-between ${compact ? 'mb-sm' : 'mb-md'}`}>
             <h2
-              className={`font-display font-semibold ${compact ? 'text-sm' : 'text-xl'} ${
+              className={`font-display font-semibold ${compact ? 'text-sm max-sm:text-[28px]' : 'text-xl'} ${
                 hud ? 'text-[#F0EFFF]' : 'text-text-primary'
               }`}
             >

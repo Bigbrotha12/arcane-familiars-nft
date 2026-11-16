@@ -57,18 +57,22 @@ function FamiliarStatusCompact({
   }, [familiar.hp]);
 
   return (
-    <div className="pointer-events-none flex w-[280px] flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg">
+    <div className="pointer-events-none flex w-[280px] flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-3 max-sm:py-2">
       <div className="flex items-center justify-between gap-1.5">
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate font-body text-sm font-semibold text-[#F0EFFF]">{familiar.name}</span>
+          <span className="truncate font-body text-sm font-semibold text-[#F0EFFF] max-sm:text-[22px]">
+            {familiar.name}
+          </span>
           {familiar.level ? (
-            <span className="shrink-0 font-mono text-[10px] text-text-muted">Lv{familiar.level}</span>
+            <span className="shrink-0 font-mono text-[10px] text-text-muted max-sm:text-[16px]">
+              Lv{familiar.level}
+            </span>
           ) : null}
         </span>
         <span className="flex shrink-0 items-center gap-1">
           <AffinityChip affinity={familiar.affinity} />
           {isBoss && (
-            <span className="rounded-sm bg-error/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-error">
+            <span className="rounded-sm bg-error/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-error max-sm:px-2 max-sm:text-[15px]">
               Boss
             </span>
           )}
@@ -77,7 +81,7 @@ function FamiliarStatusCompact({
 
       {matchupStyle && (
         <span
-          className={`inline-flex w-fit items-center gap-1 rounded-sm border px-1.5 py-px font-body text-[9px] font-medium ${matchupStyle.className}`}
+          className={`inline-flex w-fit items-center gap-1 rounded-sm border px-1.5 py-px font-body text-[9px] font-medium max-sm:px-2 max-sm:text-[15px] ${matchupStyle.className}`}
         >
           <span aria-hidden="true">{matchupStyle.glyph}</span>
           {matchupStyle.label}
@@ -85,7 +89,7 @@ function FamiliarStatusCompact({
       )}
 
       {charged && (
-        <span className="flex items-center gap-1 rounded-sm border border-warning/60 bg-warning/20 px-1.5 py-0.5 font-display text-[10px] font-semibold text-warning">
+        <span className="flex items-center gap-1 rounded-sm border border-warning/60 bg-warning/20 px-1.5 py-0.5 font-display text-[10px] font-semibold text-warning max-sm:px-2 max-sm:text-[16px]">
           <span aria-hidden="true" className="animate-pulse motion-reduce:animate-none">
             ⚡
           </span>
@@ -94,8 +98,8 @@ function FamiliarStatusCompact({
       )}
 
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[10px] font-medium text-teal">HP</span>
-        <div className="relative h-[6px] flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E]">
+        <span className="font-mono text-[10px] font-medium text-teal max-sm:text-[16px]">HP</span>
+        <div className="relative h-[6px] flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E] max-sm:h-[9px]">
           <div
             className={`h-full ${hpColor} transition-all duration-200 ease-out`}
             style={{ width: `${hpRatio * 100}%` }}
@@ -107,20 +111,20 @@ function FamiliarStatusCompact({
             }`}
           />
         </div>
-        <span className="font-mono text-[10px] tabular-nums text-[#B8B5E0]">
+        <span className="font-mono text-[10px] tabular-nums text-[#B8B5E0] max-sm:text-[16px]">
           {Math.max(0, Math.floor(familiar.hp))}/{familiar.maxHp}
         </span>
       </div>
 
       <div className="flex items-center gap-1.5">
-        <span className="font-mono text-[10px] font-medium text-accent">MP</span>
-        <div className="h-[6px] flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E]">
+        <span className="font-mono text-[10px] font-medium text-accent max-sm:text-[16px]">MP</span>
+        <div className="h-[6px] flex-1 overflow-hidden rounded-sm border border-[#2A2A45] bg-[#1A1A2E] max-sm:h-[9px]">
           <div
             className="h-full bg-accent transition-all duration-200 ease-out"
             style={{ width: `${mpRatio * 100}%` }}
           />
         </div>
-        <span className="font-mono text-[10px] tabular-nums text-[#B8B5E0]">
+        <span className="font-mono text-[10px] tabular-nums text-[#B8B5E0] max-sm:text-[16px]">
           {Math.max(0, Math.floor(familiar.mp))}/{familiar.maxMp}
         </span>
       </div>

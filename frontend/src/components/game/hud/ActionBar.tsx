@@ -28,13 +28,19 @@ interface ActionBarProps {
 }
 
 // icon width (1rem for the icon span) + 56px for the label
-const MIN_BUTTON_WIDTH = 'min-w-[72px]';
+const MIN_BUTTON_WIDTH = 'min-w-[72px] max-sm:min-w-[172px]';
+
+// The HUD is an 800x600 design stage scaled to the canvas, so on a phone
+// everything authored at CSS sizes renders at roughly half size. The `max-sm:`
+// sizes below are *design-space* pixels (~2x), which brings 12px labels back to
+// ~11px on a 390px-wide canvas, and drop the hint sublines to keep one row of
+// seven actions from wrapping into three.
 
 function ActionBar({ items }: ActionBarProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="hud-frame pointer-events-auto flex flex-wrap items-stretch justify-center gap-1.5 rounded-md px-2 py-1.5">
+    <div className="hud-frame pointer-events-auto flex flex-wrap items-stretch justify-center gap-1.5 rounded-md px-2 py-1.5 max-sm:gap-2 max-sm:px-2 max-sm:py-2">
       {items.map(({ key, label, icon, primary = false, disabled = false, hint, disabledReason, onClick }) => {
         const subline = disabled && disabledReason ? disabledReason : hint;
         return (
@@ -45,17 +51,19 @@ function ActionBar({ items }: ActionBarProps) {
             disabled={disabled}
             onClick={onClick}
             title={disabled && disabledReason ? disabledReason : hint}
-            className={`flex-1 flex-col gap-0 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs`}
+            className={`flex-1 flex-col gap-0 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs max-sm:px-3 max-sm:py-2 max-sm:text-[22px]`}
           >
             <span className="flex items-center justify-center gap-1">
               {icon && (
-                <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none">{icon}</span>
+                <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none max-sm:w-7 max-sm:text-[26px]">
+                  {icon}
+                </span>
               )}
               <span className="whitespace-nowrap">{label}</span>
             </span>
             {subline && (
               <span
-                className={`whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight ${
+                className={`whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight max-sm:hidden ${
                   disabled && disabledReason ? 'text-warning' : 'opacity-70'
                 }`}
               >

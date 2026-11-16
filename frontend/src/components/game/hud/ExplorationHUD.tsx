@@ -67,7 +67,9 @@ function ExplorationHUD({
         <MiniMap dungeon={dungeon} />
       </div>
 
-      <div className="absolute left-1/2 top-4 -translate-x-1/2">
+      {/* Wide canvases centre the room card; phones put it top-right so the
+          enlarged mini-map and the card do not overlap. */}
+      <div className="absolute left-1/2 top-4 -translate-x-1/2 max-sm:left-auto max-sm:right-4 max-sm:translate-x-0">
         <RoomInfo snapshot={snapshot} />
       </div>
 

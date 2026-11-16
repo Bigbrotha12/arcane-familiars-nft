@@ -263,10 +263,10 @@ function MiniMap({ dungeon }: MiniMapProps) {
   const nodeRadius = Math.max(1.1, Math.min(2.4, Math.min(width, height) / 9));
 
   return (
-    <div className="hud-frame pointer-events-none flex w-[168px] flex-col gap-1 rounded-md p-[6px] sm:w-[200px]">
+    <div className="hud-frame pointer-events-none flex w-[168px] flex-col gap-1 rounded-md p-[6px] sm:w-[200px] max-sm:w-[300px] max-sm:gap-2 max-sm:p-sm">
       {/* Fixed footprint: the whole graph is scaled to fit inside this box, so it
           can never grow over the room card or get cropped by the canvas edge. */}
-      <div className="h-[96px] w-full sm:h-[118px]">
+      <div className="h-[96px] w-full sm:h-[118px] max-sm:h-[200px]">
         {rooms.length > 0 && (
           <svg
             className="h-full w-full"
@@ -369,7 +369,9 @@ function MiniMap({ dungeon }: MiniMapProps) {
                 }`}
                 style={{ backgroundColor: color.fill, borderColor: color.stroke }}
               />
-              <span className="font-mono text-[7px] uppercase tracking-wide text-[#A5A3C4]">{label}</span>
+              <span className="font-mono text-[7px] uppercase tracking-wide text-[#A5A3C4] max-sm:text-[16px]">
+                {label}
+              </span>
             </span>
           );
         })}

@@ -40,19 +40,33 @@ function BossOverlay({ onEnter, onRetreat, encounter, party, activeId }: BossOve
         role="dialog"
         aria-modal="true"
         aria-labelledby="boss-overlay-title"
-        className="hud-frame max-w-sm rounded-lg p-lg"
+        className="hud-frame max-w-sm rounded-lg p-lg max-sm:max-w-[620px] max-sm:p-xl"
       >
-        <h2 id="boss-overlay-title" className="mb-md font-display text-xl font-bold text-error">
+        <h2
+          id="boss-overlay-title"
+          className="mb-md font-display text-xl font-bold text-error max-sm:mb-lg max-sm:text-[32px]"
+        >
           ⚠ BOSS ROOM AHEAD
         </h2>
 
         {encounter && <EncounterDetails encounter={encounter} party={party} activeId={activeId} />}
 
         <div className="mt-lg flex gap-3">
-          <Button variant="primary" size="md" onClick={onEnter} autoFocus>
+          <Button
+            variant="primary"
+            size="md"
+            onClick={onEnter}
+            autoFocus
+            className="max-sm:px-7 max-sm:py-3 max-sm:text-[24px]"
+          >
             Enter
           </Button>
-          <Button variant="secondary" size="md" onClick={onRetreat}>
+          <Button
+            variant="secondary"
+            size="md"
+            onClick={onRetreat}
+            className="max-sm:px-7 max-sm:py-3 max-sm:text-[24px]"
+          >
             Retreat
           </Button>
         </div>
