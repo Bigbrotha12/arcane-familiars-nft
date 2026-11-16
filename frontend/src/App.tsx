@@ -5,6 +5,7 @@ import ComingSoon from '@/components/common/ComingSoon';
 import LandingPage from '@/components/layout/LandingPage';
 import PrivacyPolicy from '@/components/legal/PrivacyPolicy';
 import TermsOfService from '@/components/legal/TermsOfService';
+import Credits from '@/components/legal/Credits';
 const FamiliarStatusPreview = lazy(() => import('@/components/game/hud/FamiliarStatusPreview'));
 
 // Route-level code splitting keeps the game shell and HUD out of the initial
@@ -35,6 +36,11 @@ const router = createBrowserRouter([
     path: '/terms',
     element: <Layout />,
     children: [{ index: true, element: <TermsOfService /> }],
+  },
+  {
+    path: '/credits',
+    element: <Layout />,
+    children: [{ index: true, element: <Credits /> }],
   },
   {
     path: '/app',

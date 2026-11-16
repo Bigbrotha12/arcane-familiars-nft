@@ -31,6 +31,9 @@ export const EFFECT_SPRITES = {
   cast_light: { file: 'effects/effect_cast_light.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
   cast_water: { file: 'effects/effect_cast_water.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
   fire_attack: { file: 'effects/effect_fire_attack.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
+  cast_earth: { file: 'effects/effect_cast_earth.png', frameWidth: 96, frameHeight: 96, frameRate: 16 },
+  cast_wind: { file: 'effects/effect_cast_wind.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
+  cast_dark: { file: 'effects/effect_cast_dark.png', frameWidth: 96, frameHeight: 96, frameRate: 24 },
 } satisfies Record<string, SpriteSheetConfig>;
 
 // Partial keyed by familiar ids: sprite art is optional per familiar, so only familiars with art get entries (no empty configs).
@@ -48,6 +51,20 @@ export const FAMILIAR_SPRITES: Partial<Record<keyof typeof FAMILIARS, FamiliarSp
     abilityEffect: 'fire_attack',
   },
 };
+
+const EFFECT_BY_AFFINITY: Record<Affinity, keyof typeof EFFECT_SPRITES> = {
+  [Affinity.Light]: 'cast_light',
+  [Affinity.Water]: 'cast_water',
+  [Affinity.Fire]: 'fire_attack',
+  [Affinity.Earth]: 'cast_earth',
+  [Affinity.Wind]: 'cast_wind',
+  [Affinity.Dark]: 'cast_dark',
+};
+
+/** Ability effect for familiars without their own: one per affinity. */
+export function defaultEffectForAffinity(affinity: Affinity): keyof typeof EFFECT_SPRITES {
+  return EFFECT_BY_AFFINITY[affinity];
+}
 
 export function getFamiliarSprites(id: string): FamiliarSpriteConfig | undefined {
   return FAMILIAR_SPRITES[id];

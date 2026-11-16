@@ -57,6 +57,24 @@ All font choices, colors, spacing, and aesthetic direction are defined there.
 Do not deviate without explicit user approval.
 In QA mode, flag any code that doesn't match DESIGN.md.
 
-## Asset Generation
+## Game Assets
 
-All game asset generation (sprites, portraits, animations, VFX, backgrounds, UI components) MUST follow the workflow in `docs/assets/ASSET-GENERATION.md`. This document defines the ComfyUI environment, model stack, saved workflows, prompt conventions, spritesheet specs, and the full pipeline from generation through assembly and wiring. Do not improvise asset creation — use the established process.
+Game art (backgrounds, portraits, sprites, effects, icons) may be either
+generated or **sourced from the internet under a permissive licence**.
+
+- **Allowed licences: CC0 1.0 and CC-BY (3.0 or 4.0) only.** No CC-BY-SA, no
+  CC-NC, no "free for personal use", no unclear or missing licence, and no
+  packs that forbid redistribution (images are committed to this repo).
+- **Record every sourced file** in `docs/assets/CREDITS.md`: path in the repo,
+  title, author, source page URL, licence, and any changes made (crop, resize,
+  recolour). Keep a copy of the licence text under
+  `game/public/assets/licenses/`.
+- **CC-BY needs visible credit.** CC-BY items must also appear on the in-app
+  `/credits` page (linked from the footer).
+- **Keep styles consistent.** Familiar portraits should come from one source
+  or a small set of visually matching sources; never mix pixel art with
+  painted art in the same asset family. Match the existing size specs
+  (portrait 256×256 transparent PNG, room 768×576, battle chamber 800×600,
+  effect sheets 96×96 frames in one row).
+- Audio is fetched by a script rather than committed, and has its own source
+  list; see `docs/AUDIO-PIPELINE.md`.

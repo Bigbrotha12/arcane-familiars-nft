@@ -32,7 +32,7 @@ import { GameEvent } from '../events';
 import { SCENE_KEYS } from '../constants/scenes';
 import { toFamiliarStateFromData } from '../utils/familiarState';
 import { createFamiliarAnimations, preloadFamiliarAssets } from '../sprites/loader';
-import { effectAnimKey, getFamiliarSprites } from '../sprites/registry';
+import { defaultEffectForAffinity, effectAnimKey, getFamiliarSprites } from '../sprites/registry';
 import { audioManager } from '../audio/manager';
 import type {
   GameStateSnapshot,
@@ -143,15 +143,17 @@ export class BattleScene extends Phaser.Scene {
       ],
     });
     preloadFamiliarAssets(this);
-    // Load battle background images. Boss chambers: only the two whose art we
-    // could match to the boss are wired up — the third candidate file was a
-    // forest demon that fits no boss, so Meadow Guardian falls back to the
-    // area wash (see assets/battle_bg/battle_bg_unused_forest_demon.png).
+    // Battle backgrounds: per-area fallbacks and one chamber per boss.
+    // Sourced chambers are credited in docs/assets/CREDITS.md.
     this.load.image('battle_bg_verdant', '/assets/battle_bg/battle_bg_verdant.png');
     this.load.image('battle_bg_crystal', '/assets/battle_bg/battle_bg_crystal.png');
     this.load.image('battle_bg_shadow', '/assets/battle_bg/battle_bg_shadow.png');
     this.load.image('battle_bg_cave_warden', '/assets/battle_bg/battle_bg_cave_warden.png');
     this.load.image('battle_bg_shadow_lord', '/assets/battle_bg/battle_bg_shadow_lord.png');
+    this.load.image('battle_bg_meadow_guardian', '/assets/battle_bg/battle_bg_meadow_guardian.png');
+    this.load.image('battle_bg_ember_titan', '/assets/battle_bg/battle_bg_ember_titan.png');
+    this.load.image('battle_bg_frost_queen', '/assets/battle_bg/battle_bg_frost_queen.png');
+    this.load.image('battle_bg_archive_keeper', '/assets/battle_bg/battle_bg_archive_keeper.png');
   }
 
   async create(): Promise<void> {
@@ -224,8 +226,12 @@ export class BattleScene extends Phaser.Scene {
       shadowForest: 'battle_bg_shadow',
     };
     const bossBgMap: Record<string, string> = {
+      meadowGuardian: 'battle_bg_meadow_guardian',
       caveWarden: 'battle_bg_cave_warden',
       shadowLord: 'battle_bg_shadow_lord',
+      emberTitan: 'battle_bg_ember_titan',
+      frostQueen: 'battle_bg_frost_queen',
+      archiveKeeper: 'battle_bg_archive_keeper',
     };
 
     let bgKey: string | undefined;
@@ -237,6 +243,9 @@ export class BattleScene extends Phaser.Scene {
       bgKey = this.backgroundKey;
     } else if (this.areaId && this.areaId in areaBgMap) {
       bgKey = areaBgMap[this.areaId];
+    } else if (this.areaId && this.textures.exists(`room_${this.areaId}_1`)) {
+      // Areas without a dedicated battle backdrop reuse their first room.
+      bgKey = `room_${this.areaId}_1`;
     }
 
     if (bgKey) {
@@ -398,9 +407,9 @@ export class BattleScene extends Phaser.Scene {
         if (isPlayerStep && action.type === ActionType.Ability && !abilityVfxPlayed) {
           abilityVfxPlayed = true;
           const sprites = getFamiliarSprites(this.battleState!.playerFamiliar.familiarData.id);
-          if (sprites?.abilityEffect) {
-            this.battleUI.playAbilityEffect(effectAnimKey(sprites.abilityEffect));
-          }
+          const familiarData = this.battleState!.playerFamiliar.familiarData;
+          const effectId = sprites?.abilityEffect ?? defaultEffectForAffinity(familiarData.affinity);
+          if (effectId) this.battleUI.playAbilityEffect(effectAnimKey(effectId));
         }
 
         this.battleState = {

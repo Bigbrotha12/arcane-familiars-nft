@@ -4,6 +4,7 @@ function Footer() {
   const routeLinks = [
     { label: 'Privacy Policy', to: '/privacy' },
     { label: 'Terms of Service', to: '/terms' },
+    { label: 'Credits', to: '/credits' },
   ];
 
   const placeholderLinks = [

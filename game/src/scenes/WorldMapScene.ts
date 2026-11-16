@@ -20,11 +20,14 @@ interface AreaCard {
   baseY: number;
 }
 
-/** Areas that already have painted room art; the rest get an area-coloured gradient. */
+/** Room-art folder per area; an area missing here gets an area-coloured gradient. */
 const AREA_ART: Record<string, string> = {
   verdantMeadow: 'verdant-meadow',
   crystalCaves: 'crystal-caves',
   shadowForest: 'shadow-forest',
+  emberHollow: 'ember-hollow',
+  frostpeakSummit: 'frostpeak-summit',
+  sunkenArchive: 'sunken-archive',
 };
 
 const CARD = {
