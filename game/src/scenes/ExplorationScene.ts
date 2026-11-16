@@ -1,13 +1,15 @@
 import Phaser from 'phaser';
-import type { DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
+import type { CurioResponse, DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
 import {
   AREAS,
+  CURIOS,
   RoomType,
   getFamiliar,
   getItem,
   describeItem,
   itemRarity,
   getRunLoot,
+  passiveTierRoman,
   Directions,
 } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
@@ -25,6 +27,8 @@ import type {
   RecruitSwap,
   DungeonRoomSnapshot,
   EncounterSnapshot,
+  CurioChoicePayload,
+  CurioResultSnapshot,
 } from '../events';
 import type { GameState } from '@arcane-familiars/game-logic';
 import { audioManager } from '../audio/manager';
@@ -64,6 +68,8 @@ export class ExplorationScene extends Phaser.Scene {
   private enemiesDefeated = 0;
   private lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
   private resumeActiveIndex?: number;
+  private curioResult: CurioResultSnapshot | null = null;
+  private dismissedCurios: Set<string> = new Set();
   private timers: Phaser.Time.TimerEvent[] = [];
 
   constructor() {
@@ -88,6 +94,8 @@ export class ExplorationScene extends Phaser.Scene {
     this.enemiesDefeated =
       data.lastBattleOutcome === 'victory' ? (data.enemiesDefeated ?? 0) + 1 : (data.enemiesDefeated ?? 0);
     this.resumeActiveIndex = data.activeIndex;
+    this.curioResult = null;
+    this.dismissedCurios = new Set();
   }
 
   preload(): void {
@@ -149,6 +157,8 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.on(GameEvent.START_BATTLE, this.handleStartBattle);
     gameEventBus.on(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
+    gameEventBus.on(GameEvent.CURIO_CHOICE, this.handleCurioChoice);
+    gameEventBus.on(GameEvent.CURIO_LEAVE, this.handleCurioLeave);
 
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
@@ -216,6 +226,7 @@ export class ExplorationScene extends Phaser.Scene {
         }
 
         this.explorationUI.addLogMessage(`Resuming exploration in ${this.area.name}...`);
+        this.logCurioNotice(currentRoom);
 
         if (currentRoom.type === RoomType.Boss) {
           this.pendingEnemyId = this.area.bossId;
@@ -270,6 +281,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.bossActive = false;
     this.pendingEnemyId = null;
     this.pendingTreasureItemId = null;
+    this.curioResult = null;
 
     try {
       const result = await this.gameApi.exploreRoom(roomId);
@@ -279,11 +291,13 @@ export class ExplorationScene extends Phaser.Scene {
       this.dungeon.currentRoomId = roomId;
       this.dungeon.rooms[roomId] = { ...this.dungeon.rooms[roomId], ...result.room };
       this.visitedRoomIds.add(roomId);
+      this.dismissedCurios.delete(roomId);
 
       const roomIndex = this.getRoomIndex(roomId);
       this.currentRoomIndex = roomIndex;
 
       this.explorationUI.showRoomInfo(result.room, roomIndex, this.area.roomCount, this.area);
+      this.logCurioNotice(result.room);
       audioManager.playSfx('footstep');
       if (result.encounter) audioManager.playSfx('encounter');
       if (result.treasure) audioManager.playSfx('loot');
@@ -499,6 +513,7 @@ export class ExplorationScene extends Phaser.Scene {
           cleared: room.cleared,
           chest: looted ? undefined : room.chest,
           hasTreasure: Boolean(room.pendingTreasure && !room.pendingTreasure.looted),
+          hasCurio: Boolean(room.curio && !room.curio.used),
           exits: room.exits
             .filter((e) => {
               if (seen.has(e.roomId)) return false;
@@ -531,6 +546,8 @@ export class ExplorationScene extends Phaser.Scene {
       roomLog: [...this.explorationUI.getLog()],
       pendingEncounter: this.buildPendingEncounter(currentRoom),
       treasure: this.buildTreasureView(currentRoom),
+      curio: this.buildCurioView(currentRoom),
+      curioResult: this.curioResult ?? undefined,
       recruitBond: this.fullGameState?.recruitBond,
       ownedFamiliars: this.fullGameState?.playerFamiliars,
       dungeon: {
@@ -594,6 +611,170 @@ export class ExplorationScene extends Phaser.Scene {
     };
   }
 
+  /** The current room's unused curio, unless another overlay owns the screen. */
+  private buildCurioView(room?: Room): GameStateSnapshot['curio'] {
+    const placed = room?.curio;
+    if (!placed || placed.used) return undefined;
+    if (this.encounterActive || this.treasureActive || this.bossActive || this.curioResult) return undefined;
+    if (room?.pendingEncounter && !room.pendingEncounter.resolved) return undefined;
+    if (room && this.dismissedCurios.has(room.id)) return undefined;
+
+    const curio = CURIOS[placed.id];
+    if (!curio) return undefined;
+
+    const runLoot = getRunLoot(this.dungeon);
+    const bankedCoins = this.fullGameState?.inventory?.currency ?? 0;
+
+    return {
+      id: curio.id,
+      name: curio.name,
+      description: curio.description,
+      options: curio.options.map((option) => {
+        let available = true;
+        let reason: string | undefined;
+
+        if (option.requiresItem && !this.ownsItem(option.requiresItem)) {
+          available = false;
+          const itemName = getItem(option.requiresItem)?.name ?? option.requiresItem;
+          reason = `Needs ${withArticle(itemName)}`;
+        } else if (option.costCurrency && runLoot.currency + bankedCoins < option.costCurrency) {
+          available = false;
+          reason = `Needs ${option.costCurrency} coins`;
+        }
+
+        return { id: option.id, label: option.label, available, ...(reason ? { reason } : {}) };
+      }),
+    };
+  }
+
+  private ownsItem(itemId: string): boolean {
+    if (getRunLoot(this.dungeon).items.some((item) => item.itemId === itemId && item.quantity > 0)) return true;
+    return (this.fullGameState?.inventory?.items ?? []).some((item) => item.itemId === itemId && item.quantity > 0);
+  }
+
+  private logCurioNotice(room: Room): void {
+    if (!room.curio || room.curio.used) return;
+    const curio = CURIOS[room.curio.id];
+    if (curio) this.explorationUI.addLogMessage(`You notice a ${curio.name}.`);
+  }
+
+  private async chooseCurio(optionId: string): Promise<void> {
+    const dungeon = this.dungeon;
+    if (!dungeon) return;
+    const roomId = dungeon.currentRoomId;
+    this.isProcessing = true;
+
+    try {
+      const result = await this.gameApi.chooseCurio(roomId, optionId);
+      if (this.explorationUI?.isDestroyed()) return;
+
+      if (this.dungeon) {
+        this.dungeon.currentRoomId = result.dungeon.currentRoomId;
+        this.dungeon.rooms = result.dungeon.rooms;
+        this.dungeon.partyHp = result.dungeon.partyHp;
+        this.dungeon.partyMp = result.dungeon.partyMp;
+        this.dungeon.runLoot = result.runLoot;
+      }
+
+      if (this.fullGameState) {
+        this.fullGameState.inventory = result.inventory;
+        // XP gains can raise levels; keep max HP/MP (and the rings) accurate.
+        for (const level of result.gains.levels ?? []) {
+          this.fullGameState.familiarLevels ??= {};
+          this.fullGameState.familiarLevels[level.familiarId] = level.level;
+        }
+        if (result.gains.bond) {
+          this.fullGameState.recruitBond ??= {};
+          this.fullGameState.recruitBond[result.gains.bond.speciesId] = result.gains.bond.bond;
+        }
+      }
+
+      this.explorationUI.addLogMessage(result.text);
+      audioManager.playSfx(
+        result.outcome.kind === 'healParty' ? 'heal' : result.outcome.kind === 'hurtParty' ? 'ui_error' : 'loot'
+      );
+
+      if (result.encounter && result.enemy) {
+        // An ambush becomes the room's normal pending encounter; hand over to
+        // the same encounter overlay flow that explore uses.
+        this.pendingEnemyId = result.enemy;
+        const enemyName = getFamiliar(result.enemy)?.name ?? 'enemy';
+        this.explorationUI.addLogMessage(`${enemyName} attacks!`);
+        this.timers.push(
+          this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
+            this.encounterActive = true;
+            this.isProcessing = false;
+            this.emitStateUpdate();
+          })
+        );
+        return;
+      }
+
+      this.curioResult = { text: result.text, gains: this.formatCurioGains(result) };
+      this.isProcessing = false;
+      this.emitStateUpdate();
+    } catch (err) {
+      audioManager.playSfx('ui_error');
+      const message = err instanceof Error ? err.message : 'Failed to use the curio';
+      this.explorationUI.addLogMessage(message);
+      this.isProcessing = false;
+      this.emitStateUpdate();
+    }
+  }
+
+  /** Human-readable lines for the result panel, derived from the server gains. */
+  private formatCurioGains(result: CurioResponse): string[] {
+    const lines: string[] = [];
+    const gains = result.gains;
+
+    for (const [familiarId, amount] of Object.entries(gains.healed ?? {})) {
+      const name = getFamiliar(familiarId)?.name ?? familiarId;
+      const parts: string[] = [];
+      if (amount.hp > 0) parts.push(`+${amount.hp} HP`);
+      if (amount.mp > 0) parts.push(`+${amount.mp} MP`);
+      if (parts.length > 0) lines.push(`${name} ${parts.join(', ')}`);
+    }
+
+    for (const [familiarId, lost] of Object.entries(gains.hurt ?? {})) {
+      if (lost <= 0) continue;
+      const name = getFamiliar(familiarId)?.name ?? familiarId;
+      lines.push(`${name} -${lost} HP`);
+    }
+
+    if (gains.items && gains.items.length > 0) {
+      const counts = new Map<string, number>();
+      for (const itemId of gains.items) counts.set(itemId, (counts.get(itemId) ?? 0) + 1);
+      for (const [itemId, count] of counts) {
+        const name = getItem(itemId)?.name ?? itemId;
+        lines.push(`+${count} ${name}`);
+      }
+    }
+
+    if (gains.currency) lines.push(`+${gains.currency} coins`);
+
+    if (gains.xp) {
+      const names = (gains.levels ?? []).map((level) => level.name);
+      lines.push(names.length > 0 ? `+${gains.xp} XP · ${names.join(', ')}` : `+${gains.xp} XP`);
+      for (const level of gains.levels ?? []) {
+        if (level.levelsGained > 0) lines.push(`${level.name} reached Lv ${level.level}`);
+      }
+    }
+
+    for (const learned of gains.learned ?? []) {
+      lines.push(`${learned.familiarName} learned ${learned.abilityName}`);
+    }
+    for (const unlock of gains.passiveUnlocks ?? []) {
+      lines.push(
+        `${unlock.familiarName} unlocked ${unlock.passiveName} ${passiveTierRoman(unlock.tier as 1 | 2 | 3 | 4)}`
+      );
+    }
+    if (gains.bond) {
+      lines.push(`Bond with ${gains.bond.name} ${gains.bond.bond}/${gains.bond.needed}`);
+    }
+
+    return lines;
+  }
+
   private handleSave = async (): Promise<void> => {
     // The server owns game state; exploration state is persisted server-side
     // on every navigation. Nothing to write here.
@@ -612,6 +793,7 @@ export class ExplorationScene extends Phaser.Scene {
       this.encounterActive ||
       this.treasureActive ||
       this.pendingEnemyId !== null ||
+      this.curioResult !== null ||
       !this.dungeon
     )
       return;
@@ -631,6 +813,34 @@ export class ExplorationScene extends Phaser.Scene {
     this.handleTakeTreasure(this.pendingTreasureItemId).catch((err) => {
       console.error('Take treasure error:', err);
     });
+  };
+
+  private handleCurioChoice = (payload: CurioChoicePayload): void => {
+    if (this.isProcessing || !payload?.optionId || !this.dungeon || this.curioResult) return;
+    const room = this.dungeon.rooms[this.dungeon.currentRoomId];
+    if (!room?.curio || room.curio.used) return;
+    this.chooseCurio(payload.optionId).catch((err) => {
+      console.error('Curio error:', err);
+      this.isProcessing = false;
+    });
+  };
+
+  private handleCurioLeave = (): void => {
+    if (this.isProcessing) return;
+
+    // Continue on a result panel only dismisses the panel; otherwise Leave
+    // closes the curio for this visit without spending it.
+    if (this.curioResult) {
+      this.curioResult = null;
+      this.emitStateUpdate();
+      return;
+    }
+
+    const room = this.dungeon?.rooms[this.dungeon.currentRoomId];
+    if (!room?.curio || room.curio.used) return;
+    this.dismissedCurios.add(room.id);
+    audioManager.playSfx('ui_cancel');
+    this.emitStateUpdate();
   };
 
   private handleFleeEncounter = (): void => {
@@ -740,6 +950,8 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.off(GameEvent.START_BATTLE, this.handleStartBattle);
     gameEventBus.off(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
+    gameEventBus.off(GameEvent.CURIO_CHOICE, this.handleCurioChoice);
+    gameEventBus.off(GameEvent.CURIO_LEAVE, this.handleCurioLeave);
   }
 
   private getRoomIndex(roomId: string): number {
@@ -754,4 +966,8 @@ export class ExplorationScene extends Phaser.Scene {
     const host = Object.values(this.dungeon.rooms).find((room) => room.exits.some((exit) => exit.roomId === roomId));
     return host ? Math.max(0, roomIds.indexOf(host.id)) : 0;
   }
+}
+
+function withArticle(name: string): string {
+  return `${/^[aeiou]/i.test(name) ? 'an' : 'a'} ${name}`;
 }

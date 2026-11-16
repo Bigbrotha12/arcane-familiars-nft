@@ -13,6 +13,8 @@ export enum GameEvent {
   COLLECT_TREASURE = 'game:collectTreasure',
   FLEE_ENCOUNTER = 'game:fleeEncounter',
   START_BATTLE = 'game:startBattle',
+  CURIO_CHOICE = 'game:curioChoice', // React → Phaser: pick a curio option
+  CURIO_LEAVE = 'game:curioLeave', // React → Phaser: leave the curio / dismiss its result
   OVERLAY_MODE_CHANGED = 'game:overlayModeChanged',
   BATTLE_CONTINUE = 'game:battleContinue', // React → Phaser: user dismissed outcome, continue
   PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
@@ -85,6 +87,10 @@ export interface GameStateSnapshot {
   pendingEncounter?: EncounterSnapshot;
   /** Unlooted chest contents for the treasure overlay. */
   treasure?: TreasureSnapshot;
+  /** An unused curio in the current room, for the curio overlay. */
+  curio?: CurioSnapshot;
+  /** Outcome of the last curio choice, shown until Continue. */
+  curioResult?: CurioResultSnapshot;
   encounterActive?: boolean;
   treasureActive?: boolean;
   bossRoom?: boolean;
@@ -120,6 +126,32 @@ export interface TreasureSnapshot {
   tier: ChestTier;
   items: TreasureItemSnapshot[];
   currency: number;
+}
+
+/** One choice on a curio; `available=false` explains what it would cost. */
+export interface CurioOptionSnapshot {
+  id: string;
+  label: string;
+  available: boolean;
+  reason?: string;
+}
+
+/** A curio in the current room, before use. */
+export interface CurioSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  options: CurioOptionSnapshot[];
+}
+
+/** What a curio choice produced, for the result panel. */
+export interface CurioResultSnapshot {
+  text: string;
+  gains: string[];
+}
+
+export interface CurioChoicePayload {
+  optionId: string;
 }
 
 export interface SaveResult {
@@ -255,6 +287,8 @@ export interface DungeonRoomSnapshot {
   chest?: ChestTier;
   /** The room holds unlooted treasure the player has discovered. */
   hasTreasure?: boolean;
+  /** The room holds an unused curio the player has discovered. */
+  hasCurio?: boolean;
 }
 
 export interface DungeonSnapshot {

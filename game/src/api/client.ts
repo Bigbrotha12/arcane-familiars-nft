@@ -7,6 +7,7 @@ import type {
   Area,
   Inventory,
   ExploreResponse,
+  CurioResponse,
 } from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
@@ -138,6 +139,14 @@ class GameApiClient {
       anonymousId: this.anonymousId,
       roomId,
       itemId,
+    });
+  }
+
+  async chooseCurio(roomId: string, optionId: string): Promise<CurioResponse> {
+    return this.request('POST', '/api/game/dungeon/curio', {
+      anonymousId: this.anonymousId,
+      roomId,
+      optionId,
     });
   }
 
