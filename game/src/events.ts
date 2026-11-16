@@ -120,6 +120,10 @@ export interface GameStateSnapshot {
   passives?: PassiveView[];
   /** True while exploring today's Daily Expedition. */
   daily?: boolean;
+  /** Set on the single snapshot emitted when a KO relay swaps in a backup. */
+  forcedSwap?: boolean;
+  /** Outcome and rewards while the battle outcome screen is open. */
+  battleOutcome?: BattleEndedPayload;
 }
 
 /** The elite affix on a pending encounter, shown before the fight. */

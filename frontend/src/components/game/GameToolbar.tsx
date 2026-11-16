@@ -13,6 +13,8 @@ interface GameToolbarProps {
   muted: boolean;
   battleSpeed: BattleSpeed;
   onCycleBattleSpeed: () => void;
+  tipsEnabled: boolean;
+  onToggleTips: () => void;
   saving: boolean;
   signedIn: boolean;
   onAuthChange: (signedIn: boolean) => void;
@@ -26,6 +28,8 @@ export default function GameToolbar({
   muted,
   battleSpeed,
   onCycleBattleSpeed,
+  tipsEnabled,
+  onToggleTips,
   saving,
   signedIn,
   onAuthChange,
@@ -78,6 +82,19 @@ export default function GameToolbar({
             <span aria-hidden="true">⏱</span>
             <span className="ml-1 hidden sm:inline">{SPEED_LABEL[battleSpeed]}</span>
             <span className="ml-1 font-mono tabular-nums sm:hidden">{SPEED_SHORT[battleSpeed]}</span>
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onToggleTips}
+            aria-pressed={tipsEnabled}
+            aria-label={tipsEnabled ? 'Tips on. Click to turn off.' : 'Tips off. Click to turn on.'}
+            title={tipsEnabled ? 'Tips are on (click to turn off)' : 'Tips are off (click to turn on)'}
+          >
+            <span aria-hidden="true" className={tipsEnabled ? '' : 'opacity-40 grayscale'}>
+              💡
+            </span>
+            <span className="ml-1 hidden xl:inline">{tipsEnabled ? 'Tips on' : 'Tips off'}</span>
           </Button>
           <Button
             variant="ghost"
