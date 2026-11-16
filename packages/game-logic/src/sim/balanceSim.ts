@@ -14,6 +14,7 @@ import { selectEnemyAction } from '@/utils/enemyAI';
 import { scaleEnemy } from '@/utils/dungeonEngine';
 import { scaleFamiliarStats } from '@/utils/progression';
 import { abilitiesAtLevel } from '@/utils/learnset';
+import { partyPassives } from '@/utils/passives';
 import { seededRandom, randomInRange } from '@/utils/mathUtils';
 import { BALANCE, affinityMultiplier } from '@/data/balance';
 
@@ -91,11 +92,19 @@ export function simulateBattle(
 ): BattleSimResult {
   // Same enemy construction as the backend battle/start route.
   let enemy = makeCombatant(enemyId, enemyLevel, false, true);
+  const playerPassives = partyPassives(party.map((m) => ({ familiarId: m.id, level: m.level })));
+  const relayDiscount = playerPassives.find((p) => p.id === 'relayInstinct')?.value;
 
   const enter = (member: PartyMember): BattleFamiliar => {
     const c = makeCombatant(member.id, member.level, true);
     c.currentHp = Math.min(member.hp, c.familiarData.stats.maxHp);
     c.currentMp = Math.min(member.mp, c.familiarData.stats.maxMp);
+    return c;
+  };
+
+  const relay = (member: PartyMember): BattleFamiliar => {
+    const c = enter(member);
+    if (relayDiscount !== undefined) c.relayDiscount = relayDiscount;
     return c;
   };
 
@@ -117,7 +126,7 @@ export function simulateBattle(
     const rng = seededRandom(seed ^ (turn + 1));
     const action = playerPolicy(player, enemy);
     const enemyAction = selectEnemyAction(enemy, player, rng);
-    const r = resolveTurn(action, player, enemy, enemyAction, rng);
+    const r = resolveTurn(action, player, enemy, enemyAction, rng, playerPassives);
 
     const playerActed = r.steps.some((s) => s.actorUid === player.uid);
     const enemyActed = r.steps.some((s) => s.actorUid === enemy.uid);
@@ -139,7 +148,7 @@ export function simulateBattle(
       const next = party.findIndex((m, i) => i !== activeIdx && m.hp > 0);
       if (next < 0) return { won: false, turns: turn + 1 };
       activeIdx = next;
-      player = enter(party[activeIdx]);
+      player = relay(party[activeIdx]);
     }
   }
   return { won: false, turns: maxTurns };

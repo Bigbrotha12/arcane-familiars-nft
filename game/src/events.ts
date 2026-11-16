@@ -33,6 +33,13 @@ export interface StatusEffectView {
   duration?: number;
 }
 
+export interface PassiveView {
+  id: string;
+  name: string;
+  tier: number;
+  description: string;
+}
+
 export interface FamiliarState {
   id: string;
   name: string;
@@ -83,6 +90,8 @@ export interface GameStateSnapshot {
   recruitBond?: Record<string, number>;
   /** Species ids the player owns, for exploration recruitability hints. */
   ownedFamiliars?: string[];
+  /** Party-wide passives active in this battle. */
+  passives?: PassiveView[];
 }
 
 /** What the explore response knows about a pending encounter, for the HUD. */
@@ -176,6 +185,14 @@ export interface BattleEndedPayload {
       familiarName: string;
       abilityId: string;
       abilityName: string;
+    }[];
+    /** Passive tiers unlocked by level-ups earned in this battle. */
+    passiveUnlocks?: {
+      familiarId: string;
+      familiarName: string;
+      passiveId: string;
+      passiveName: string;
+      tier: number;
     }[];
   };
   /** True when the victory happened inside a dungeon run. */

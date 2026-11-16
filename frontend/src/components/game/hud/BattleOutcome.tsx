@@ -18,6 +18,9 @@ import {
 import type { BattleEndedPayload, FamiliarState } from '@/game';
 
 const SIGNATURE_IDS = new Set(Object.values(SIGNATURE_BY_AFFINITY));
+const ROMAN = ['', 'I', 'II', 'III', 'IV'];
+
+const romanTier = (tier: number): string => ROMAN[tier] ?? String(tier);
 
 /** Rewards arrive as item ids; show the display name, falling back to the id. */
 function itemNames(ids: string[]): string {
@@ -194,6 +197,18 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
                   </RewardLine>
                 );
               })}
+              {rewards.passiveUnlocks?.map((entry, unlockIndex) => (
+                <RewardLine
+                  key={`passive-${entry.familiarId}-${entry.passiveId}-${entry.tier}-${unlockIndex}`}
+                  index={lineIndex++}
+                  entered={entered}
+                  className="font-display text-sm font-semibold text-teal"
+                >
+                  {entry.tier === 1
+                    ? `${entry.familiarName} unlocked ${entry.passiveName}!`
+                    : `${entry.familiarName}'s ${entry.passiveName} grew to ${romanTier(entry.tier)}!`}
+                </RewardLine>
+              ))}
               {rewards.recruitProgress ? (
                 <BondLine
                   index={lineIndex++}

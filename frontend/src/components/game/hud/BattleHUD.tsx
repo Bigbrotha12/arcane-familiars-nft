@@ -26,6 +26,27 @@ interface BattleHUDProps {
 
 type ActivePanel = 'ability' | 'item' | 'familiars' | null;
 
+const ROMAN = ['', 'I', 'II', 'III', 'IV'];
+
+/** Party passive chips near the player status area. */
+function PassiveChips({ passives }: { passives: NonNullable<GameStateSnapshot['passives']> }) {
+  if (passives.length === 0) return null;
+
+  return (
+    <div className="flex max-w-[240px] flex-wrap justify-end gap-1">
+      {passives.map((passive) => (
+        <span
+          key={passive.id}
+          title={passive.description}
+          className="pointer-events-auto rounded-full border border-teal/40 bg-[#1E1B4B]/85 px-2 py-0.5 font-body text-[10px] font-medium text-teal"
+        >
+          {passive.name} {ROMAN[passive.tier] ?? passive.tier}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: BattleHUDProps) {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const sceneKey = snapshot.currentScene;
@@ -139,7 +160,8 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: B
 
         {/* Player status card - right corner, above action bar */}
         {activeFamiliar && (
-          <div className="absolute" style={{ right: '16px', bottom: '250px' }}>
+          <div className="absolute flex flex-col items-end gap-1" style={{ right: '16px', bottom: '250px' }}>
+            <PassiveChips passives={snapshot.passives ?? []} />
             <FamiliarStatusCompact familiar={activeFamiliar} statusEffects={activeFamiliar.statusEffects} />
           </div>
         )}

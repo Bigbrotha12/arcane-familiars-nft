@@ -25,6 +25,8 @@ export const BALANCE = {
    * every already-learned ability to its rank-II variant.
    */
   learnLevels: { second: 3, third: 6, signature: 9, rankUp: 12 },
+  /** Familiar levels at which party passives unlock / strengthen (tiers I..IV). */
+  passiveTierLevels: [5, 10, 15, 20] as const,
   /** Per-turn chance an uncharged boss gathers power instead of acting. */
   bossChargeChance: 0.3,
   /** Damage multiplier of a charged boss's next damaging action. */

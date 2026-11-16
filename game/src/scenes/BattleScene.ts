@@ -15,6 +15,10 @@ import {
   describeItem,
   AREAS,
   Affinity,
+  PASSIVES,
+  passiveDescription,
+  partyPassives,
+  effectiveAbilityCost,
   type FamiliarData,
   type AbilityData,
   type ItemData,
@@ -835,6 +839,7 @@ export class BattleScene extends Phaser.Scene {
             recruitedLevel: rewards.recruitedLevel,
             recruitProgress: rewards.recruitProgress,
             learned: rewards.learned,
+            passiveUnlocks: rewards.passiveUnlocks,
           }
         : undefined,
       inDungeon: Boolean(this.gameState?.dungeon),
@@ -971,13 +976,14 @@ export class BattleScene extends Phaser.Scene {
       .filter((a): a is AbilityData => Boolean(a))
       .map((ability) => {
         const cooldown = player.cooldowns[ability.id] ?? 0;
-        const hasMp = player.currentMp >= ability.mpCost;
+        const mpCost = effectiveAbilityCost(ability, player.relayDiscount ?? 0);
+        const hasMp = player.currentMp >= mpCost;
         const disabledReason = cooldown > 0 ? `Cooldown ${cooldown}` : !hasMp ? 'Not enough MP' : undefined;
         return {
           id: ability.id,
           name: ability.name,
           description: ability.description,
-          mpCost: ability.mpCost,
+          mpCost,
           usable: !disabledReason,
           cooldown,
           disabledReason,
@@ -999,6 +1005,9 @@ export class BattleScene extends Phaser.Scene {
         iconUrl: itemData.icon ? `/assets/sprites/items/${itemData.icon}.png` : undefined,
       }));
     const runLoot = getRunLoot(this.gameState?.dungeon);
+    const activePassives =
+      this.battleState.playerPassives ??
+      partyPassives(partyIds.map((id) => ({ familiarId: id, level: this.gameState?.familiarLevels?.[id] ?? 1 })));
     const snapshot: GameStateSnapshot = {
       familiars: [this.toFamiliarState(player)],
       currency: (this.gameState?.inventory?.currency ?? 0) + runLoot.currency,
@@ -1015,6 +1024,12 @@ export class BattleScene extends Phaser.Scene {
       isBoss: this.battleState.isBoss,
       runLootCurrency: runLoot.currency,
       runLootItemCount: runLoot.items.reduce((sum, item) => sum + item.quantity, 0),
+      passives: activePassives.map((passive) => ({
+        id: passive.id,
+        name: PASSIVES[passive.id].name,
+        tier: passive.tier,
+        description: passiveDescription(PASSIVES[passive.id], passive.tier),
+      })),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }

@@ -3,6 +3,7 @@ import type { DungeonState } from '@/types/exploration';
 import { getAbility, EffectType, Target } from '@/data/abilities';
 import { getItem, ItemType, type ItemData } from '@/data/items';
 import { validateMove } from '@/utils/dungeonEngine';
+import { effectiveAbilityCost } from '@/utils/battleEngine';
 
 export interface ValidationResult {
   valid: boolean;
@@ -104,10 +105,11 @@ export function validateBattleAction(
       if (!ability) {
         return { valid: false, error: `Unknown ability: ${action.abilityId}` };
       }
-      if (battleState.playerFamiliar.currentMp < ability.mpCost) {
+      const mpCost = effectiveAbilityCost(ability, battleState.playerFamiliar.relayDiscount ?? 0);
+      if (battleState.playerFamiliar.currentMp < mpCost) {
         return {
           valid: false,
-          error: `Not enough MP. Need ${ability.mpCost}, have ${battleState.playerFamiliar.currentMp}`,
+          error: `Not enough MP. Need ${mpCost}, have ${battleState.playerFamiliar.currentMp}`,
         };
       }
       const cooldown = battleState.playerFamiliar.cooldowns[action.abilityId] || 0;

@@ -26,6 +26,9 @@ import {
   scaleFamiliarStats,
   abilitiesAtLevel,
   newlyLearned,
+  newPassiveTiers,
+  partyPassives,
+  PASSIVES,
   getAbility,
   battleXp,
   BALANCE,
@@ -181,6 +184,61 @@ function learnedAbilities(
   }));
 }
 
+/** Passive tiers unlocked by a familiar that levelled from `fromLevel` to `toLevel`. */
+function passiveUnlocks(
+  familiarId: string,
+  fromLevel: number,
+  toLevel: number
+): NonNullable<BattleRewards['passiveUnlocks']> {
+  if (toLevel <= fromLevel) return [];
+  const species = getFamiliar(familiarId);
+  if (!species) return [];
+
+  return newPassiveTiers(species, fromLevel, toLevel).map(({ id, tier }) => ({
+    familiarId,
+    familiarName: species.name,
+    passiveId: id,
+    passiveName: PASSIVES[id].name,
+    tier,
+  }));
+}
+
+/** Party-wide passives from the dungeon party (falling back to the active party). */
+function battlePassives(state: GameState) {
+  const dungeonParty = state.dungeon?.party ?? [];
+  const ids = dungeonParty.length > 0 ? dungeonParty : (state.activeParty ?? []);
+  return partyPassives(ids.map((id) => ({ familiarId: id, level: state.familiarLevels?.[id] ?? 1 })));
+}
+
+function relayInstinctDiscount(passives: ReturnType<typeof battlePassives>): number | undefined {
+  return passives.find((passive) => passive.id === 'relayInstinct')?.value;
+}
+
+/**
+ * Build the combatant that replaces the current one (manual swap or KO relay).
+ * Once-per-battle passive effects are tracked per species on the battle, so a
+ * familiar keeps a spent Second Wind when it returns, and each familiar gets
+ * the Relay Instinct discount at most once per battle (otherwise a free swap
+ * every turn would make abilities free).
+ */
+function swapInCombatant(battle: BattleState, state: GameState, familiarId: string): BattleFamiliar {
+  const uses = (battle.passiveUses ??= { secondWind: [], relay: [] });
+  const outgoing = battle.playerFamiliar;
+  if (outgoing.secondWindUsed && !uses.secondWind.includes(outgoing.familiarData.id)) {
+    uses.secondWind.push(outgoing.familiarData.id);
+  }
+
+  const incoming = buildIncomingCombatant(state.dungeon, familiarId, state.familiarLevels?.[familiarId] ?? 1);
+  if (uses.secondWind.includes(familiarId)) incoming.secondWindUsed = true;
+
+  const discount = relayInstinctDiscount(battle.playerPassives ?? []);
+  if (discount !== undefined && !uses.relay.includes(familiarId)) {
+    incoming.relayDiscount = discount;
+    uses.relay.push(familiarId);
+  }
+  return incoming;
+}
+
 gameBattleRouter.post('/game/battle/start', async (c) => {
   try {
     const body = await readBody<{ anonymousId: string; playerFamiliarId: string }>(c);
@@ -299,6 +357,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       status: BattleResult.Active,
       swapsThisTurn: 0,
       seed: battleSeed,
+      playerPassives: battlePassives(state),
     };
 
     // A battle row is created only after the active-battle guard above. Resume
@@ -348,6 +407,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     ensureBattleUids(battle);
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
     const state = loaded.state;
+    // Battles persisted before passives existed get the party's current passives.
+    battle.playerPassives ??= battlePassives(state);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -431,7 +492,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       updatedEnemyFamiliar,
       steps: turnSteps,
       canceledActions,
-    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng);
+    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng, battle.playerPassives ?? []);
 
     const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
     const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
@@ -502,7 +563,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       const otherId = state.activeParty.find((id) => id !== fallenId);
       if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
-        const incoming = buildIncomingCombatant(state.dungeon, otherId, state.familiarLevels?.[otherId] ?? 1);
+        const incoming = swapInCombatant(battle, state, otherId);
         forcedSwap = {
           fallenName: battle.playerFamiliar.familiarData.name,
           incomingName: incoming.familiarData.name,
@@ -525,6 +586,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let levelUps = 0;
     let benchReward: Pick<BattleRewards, 'benchXp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
     let learned: NonNullable<BattleRewards['learned']> = [];
+    let passiveUnlockList: NonNullable<BattleRewards['passiveUnlocks']> = [];
     let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
@@ -543,6 +605,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       state.familiarXp[activeId] = progress.xp;
       levelUps = progress.levelsGained;
       learned = learned.concat(learnedAbilities(activeId, activeLevelBefore, progress.level));
+      passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(activeId, activeLevelBefore, progress.level));
 
       // The party member who did not land the winning blow still gains a
       // reduced share, so swapping/relaying does not starve the bench.
@@ -555,6 +618,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           state.familiarLevels[benchId] = benchProgress.level;
           state.familiarXp[benchId] = benchProgress.xp;
           learned = learned.concat(learnedAbilities(benchId, benchLevelBefore, benchProgress.level));
+          passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(benchId, benchLevelBefore, benchProgress.level));
           benchReward = {
             benchXp,
             benchFamiliarId: benchId,
@@ -655,6 +719,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         levelUp: levelUps,
         ...benchReward,
         ...(learned.length > 0 ? { learned } : {}),
+        ...(passiveUnlockList.length > 0 ? { passiveUnlocks: passiveUnlockList } : {}),
       };
       rewards = rewards ? { ...rewards, ...xpReward } : { currency: 0, items: [], ...xpReward };
     }
@@ -782,6 +847,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     }
 
     const state = loaded.state;
+    battle.playerPassives ??= battlePassives(state);
 
     const party = state.activeParty ?? [];
     if (!party.includes(newFamiliarId)) {
@@ -801,11 +867,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     const previousSwaps = battle.swapsThisTurn ?? 0;
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
-    battle.playerFamiliar = buildIncomingCombatant(
-      state.dungeon,
-      newFamiliarId,
-      state.familiarLevels?.[newFamiliarId] ?? 1
-    );
+    battle.playerFamiliar = swapInCombatant(battle, state, newFamiliarId);
     battle.swapsThisTurn = previousSwaps + 1;
 
     // See the action route: battle first (guarded by the state version), then
