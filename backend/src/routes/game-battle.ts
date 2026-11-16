@@ -36,6 +36,7 @@ import {
   battleXp,
   BALANCE,
   MAX_FAMILIAR_LEVEL,
+  applyElite,
   getRunLoot,
   addInventoryItem,
   bankRunLoot,
@@ -351,7 +352,10 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     // fleeing and re-starting cannot reroll enemy strength. Bosses sit at the
     // top of their area's level band and are scaled like any other enemy.
     const enemyLevel = baseEnemy.isBoss ? area.levelRange[1] : (pending.level ?? area.levelRange[0]);
-    const scaled = scaleEnemy(baseEnemy, enemyLevel);
+    // Elites are normal encounters with one affix; bosses never roll one.
+    const eliteId = baseEnemy.isBoss ? undefined : pending.elite;
+    const scaledBase = scaleEnemy(baseEnemy, enemyLevel);
+    const scaled = eliteId ? applyElite(scaledBase, eliteId) : scaledBase;
     const enemyFamiliar: BattleFamiliar = {
       uid: generateId(),
       familiarData: scaled,
@@ -360,6 +364,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       statusEffects: [],
       cooldowns: {},
       isAlly: false,
+      ...(eliteId ? { elite: eliteId } : {}),
     };
 
     const battle: BattleState = {
@@ -613,6 +618,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       // XP is derived from the level the enemy was actually scaled to. Legacy
       // battles persisted before enemyLevel existed fall back to level 1.
       xpGained = battleXp(battle.enemyLevel ?? 1, battle.isBoss);
+      // Elites are worth more XP (and, below, double coins plus a rare chest).
+      if (battle.enemyFamiliar.elite && !battle.isBoss) {
+        xpGained = Math.round(xpGained * BALANCE.eliteXpMultiplier);
+      }
       state.familiarLevels ??= {};
       state.familiarXp ??= {};
       const activeLevelBefore = state.familiarLevels[activeId] ?? 1;
@@ -693,6 +702,21 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         state.dungeon = null;
       } else {
         const battleRewards = generateBattleRewards(rng);
+        // Elite victories pay double coins and a rare chest. The chest and its
+        // charm are banked with the run loot exactly like the boss chest.
+        if (battle.enemyFamiliar.elite) {
+          battleRewards.currency *= 2;
+          const eliteChest = rollChest('rare', rng);
+          battleRewards.eliteChest = eliteChest;
+          const eliteLoot = getRunLoot(state.dungeon);
+          for (const itemId of eliteChest.items) {
+            addInventoryItem(eliteLoot, itemId);
+          }
+          eliteLoot.currency += eliteChest.currency;
+          if (eliteChest.charm && state.dungeon) {
+            (state.dungeon.runCharms ??= []).push({ ...eliteChest.charm, uid: generateId() });
+          }
+        }
         rewards = battleRewards;
         const runLoot = getRunLoot(state.dungeon);
         runLoot.currency += battleRewards.currency;

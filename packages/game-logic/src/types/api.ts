@@ -2,6 +2,7 @@ import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle
 import type { Area, ChestTier, DungeonState, RestHeal, Room } from '@/types/exploration';
 import type { CharmRoll } from '@/data/charms';
 import type { CurioOutcome } from '@/data/curios';
+import type { EliteId } from '@/data/elites';
 import type { GameState, Inventory } from '@/types/gameState';
 import type { RunLootSummary } from '@/utils/runLoot';
 
@@ -51,6 +52,10 @@ export interface ExploreResponse {
   treasureCurrency?: number;
   /** Present only on the first visit to a rest shrine. */
   rest?: RestHeal;
+  /** Elite affix on this encounter, if any. */
+  elite?: EliteId;
+  /** Prefixed display name of the elite ("Armored White Dog"). */
+  eliteName?: string;
 }
 
 export interface CollectTreasureRequest {

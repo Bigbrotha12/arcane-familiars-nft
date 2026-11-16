@@ -1,5 +1,6 @@
 import type { Directions } from '@/utils/dungeonEngine';
 import type { CharmInstance, CharmRoll } from '@/data/charms';
+import type { EliteId } from '@/data/elites';
 import type { Inventory } from '@/types/gameState';
 
 export interface Area {
@@ -55,7 +56,7 @@ export interface Room {
   cleared: boolean;
   /** Rest rooms only: whether this run's one-time heal has been taken. */
   rested?: boolean;
-  pendingEncounter?: { enemyId: string; resolved: boolean; level?: number };
+  pendingEncounter?: { enemyId: string; resolved: boolean; level?: number; elite?: EliteId };
   pendingTreasure?: PendingTreasure;
   /**
    * Chest placed at generation (dead-end caches). Known to the player in

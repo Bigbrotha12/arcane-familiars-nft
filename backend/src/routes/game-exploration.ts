@@ -4,11 +4,15 @@ import {
   AREAS,
   BALANCE,
   CURIOS,
+  ELITE_IDS,
   generateDungeon,
   rollEncounter,
   rollRoomTreasure,
   roomRollSeed,
   selectEnemy,
+  eliteChanceForRoom,
+  isEliteRoom,
+  eliteName as formatEliteName,
   getFamiliar,
   getItem,
   getAbility,
@@ -31,6 +35,7 @@ import {
   resolveCurioOption,
   rollChest,
 } from '@arcane-familiars/game-logic';
+import type { EliteId } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
@@ -158,12 +163,19 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
     let treasureItems: string[] | undefined;
     let treasureCurrency: number | undefined;
     let rest: { healed: Record<string, { hp: number; mp: number }> } | undefined;
+    let elite: EliteId | undefined;
+    let eliteName: string | undefined;
 
     if (room.cleared) {
       // Re-entering a cleared room: replay the persisted outcome, never re-roll.
       if (room.pendingEncounter && !room.pendingEncounter.resolved) {
         encounter = true;
         enemy = room.pendingEncounter.enemyId;
+        if (room.pendingEncounter.elite) {
+          elite = room.pendingEncounter.elite;
+          const base = getFamiliar(room.pendingEncounter.enemyId);
+          if (base) eliteName = formatEliteName(base.name, elite);
+        }
       }
       if (room.pendingTreasure && !room.pendingTreasure.looted) {
         treasure = true;
@@ -213,6 +225,18 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
           ...(rolled.charm ? { charm: rolled.charm } : {}),
         };
       }
+
+      // Elite roll: after the existing encounter/treasure rolls so those stay
+      // identical for a given seed. Never bosses, the entrance or room_1.
+      if (encounter && room.pendingEncounter && isEliteRoom(room)) {
+        if (rng() < eliteChanceForRoom(room, area)) {
+          const eliteId = ELITE_IDS[randomInRange(rng, 0, ELITE_IDS.length - 1)];
+          room.pendingEncounter.elite = eliteId;
+          elite = eliteId;
+          const base = getFamiliar(room.pendingEncounter.enemyId);
+          if (base) eliteName = formatEliteName(base.name, eliteId);
+        }
+      }
     }
 
     // First visit to a rest shrine restores part of every living party member's
@@ -236,6 +260,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       treasureItem,
       ...(treasure ? { treasureTier, treasureItems, treasureCurrency } : {}),
       ...(rest ? { rest } : {}),
+      ...(elite ? { elite, eliteName } : {}),
     });
   } catch (error: unknown) {
     return internalError(c, error, 'Explore room');

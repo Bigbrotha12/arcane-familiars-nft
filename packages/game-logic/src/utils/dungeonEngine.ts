@@ -416,6 +416,34 @@ export function healPartyAtRest(
 }
 
 /**
+ * Position of a main-path room as a fraction of the dungeon's normal rooms
+ * (0..1). This is the same depth used to scale encounter/treasure chances at
+ * generation. Branch/unknown room ids count as deepest.
+ */
+export function roomDepth(room: Room, area: Area): number {
+  const match = /^room_(\d+)$/.exec(room.id);
+  if (!match) return 1;
+  const normalCount = Math.max(1, area.roomCount - 2);
+  return Math.min(1, Math.max(0, Number(match[1]) / normalCount));
+}
+
+/**
+ * Whether a room can host an elite encounter. Only main-path normal rooms
+ * qualify: never the start room, the boss chamber, or `room_1` (the first room
+ * after the entrance). Curio ambushes never call this.
+ */
+export function isEliteRoom(room: Room): boolean {
+  if (room.type !== RoomType.Normal) return false;
+  const match = /^room_(\d+)$/.exec(room.id);
+  return match ? Number(match[1]) > 1 : false;
+}
+
+/** Per-room elite chance: base + depth-scaled bonus. */
+export function eliteChanceForRoom(room: Room, area: Area): number {
+  return BALANCE.eliteChance + BALANCE.eliteChancePerDepth * roomDepth(room, area);
+}
+
+/**
  * Scale an enemy familiar's stats based on level.
  * Uses the plan's scaling: base stats * (1 + 0.1 * (level - 1))
  */

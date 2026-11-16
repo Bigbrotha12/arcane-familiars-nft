@@ -19,6 +19,7 @@ import { abilitiesAtLevel } from '@/utils/learnset';
 import { partyPassives } from '@/utils/passives';
 import { seededRandom, randomInRange } from '@/utils/mathUtils';
 import { BALANCE, affinityMultiplier } from '@/data/balance';
+import { applyElite, type EliteId } from '@/data/elites';
 
 export interface PartyMember {
   id: string;
@@ -105,10 +106,16 @@ export function simulateBattle(
   isBoss: boolean,
   seed: number,
   charm?: SimCharmPercents,
-  maxTurns = 200
+  maxTurns = 200,
+  elite?: EliteId
 ): BattleSimResult {
   // Same enemy construction as the backend battle/start route.
   let enemy = makeCombatant(enemyId, enemyLevel, false, true);
+  if (elite) {
+    enemy = { ...enemy, familiarData: applyElite(enemy.familiarData, elite), elite };
+    // Hulking raises max HP, so the starting HP must follow it.
+    enemy.currentHp = enemy.familiarData.stats.hp;
+  }
   const playerPassives = partyPassives(party.map((m) => ({ familiarId: m.id, level: m.level })));
   const relayDiscount = playerPassives.find((p) => p.id === 'relayInstinct')?.value;
 
