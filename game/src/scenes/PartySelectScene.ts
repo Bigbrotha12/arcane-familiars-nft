@@ -25,7 +25,7 @@ import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
 import { preloadFamiliarPortraits } from '../sprites/loader';
-import { safeFamiliarTextureKey } from '../sprites/registry';
+import { AFFINITY_COLORS, safeFamiliarTextureKey } from '../sprites/registry';
 import { audioManager } from '../audio/manager';
 import { fadeIn, fadeToScene } from '../ui/transitions';
 
@@ -45,16 +45,6 @@ interface FamiliarCard {
   orderBadge: Phaser.GameObjects.Text;
   orderBadgeBg: Phaser.GameObjects.Rectangle;
 }
-
-/** DESIGN.md palette colours per affinity, mirroring the React HUD chips. */
-const AFFINITY_COLORS: Record<string, number> = {
-  Fire: 0xf59e0b,
-  Water: 0x2dd4bf,
-  Earth: 0x10b981,
-  Wind: 0xa5a3c4,
-  Light: 0xfbbf24,
-  Dark: 0x7c5cfc,
-};
 
 const LAYOUT = {
   TITLE_Y: 30,
