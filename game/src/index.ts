@@ -22,4 +22,6 @@ export type {
   OverlayMode,
   BattlePhase,
   UiSfxName,
+  BattleSpeed,
+  BattleSpeedPayload,
 } from './events';

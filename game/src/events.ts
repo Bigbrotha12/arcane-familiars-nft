@@ -16,6 +16,13 @@ export enum GameEvent {
   PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
   TOGGLE_MUTE = 'game:toggleMute', // React → Phaser: toggle music/SFX mute
   UI_SFX = 'game:uiSfx', // React → Phaser: play a UI sound
+  SET_BATTLE_SPEED = 'game:setBattleSpeed', // React → Phaser: change battle turn playback speed
+}
+
+export type BattleSpeed = 'slow' | 'medium' | 'fast';
+
+export interface BattleSpeedPayload {
+  speed: BattleSpeed;
 }
 
 export type UiSfxName = 'click' | 'confirm' | 'cancel' | 'error' | 'hover';

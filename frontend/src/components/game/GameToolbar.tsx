@@ -1,6 +1,9 @@
 import Button from '@/components/ui/Button';
 import AuthForm from '@/components/auth/AuthForm';
-import type { GameStateSnapshot } from '@/game';
+import type { BattleSpeed, GameStateSnapshot } from '@/game';
+
+const SPEED_LABEL: Record<BattleSpeed, string> = { slow: 'Slow', medium: 'Medium', fast: 'Fast' };
+const SPEED_SHORT: Record<BattleSpeed, string> = { slow: '1×', medium: '2×', fast: '3×' };
 
 interface GameToolbarProps {
   gameState: GameStateSnapshot | null;
@@ -8,6 +11,8 @@ interface GameToolbarProps {
   onExit: () => void;
   onToggleMute: () => void;
   muted: boolean;
+  battleSpeed: BattleSpeed;
+  onCycleBattleSpeed: () => void;
   saving: boolean;
   signedIn: boolean;
   onAuthChange: (signedIn: boolean) => void;
@@ -19,6 +24,8 @@ export default function GameToolbar({
   onExit,
   onToggleMute,
   muted,
+  battleSpeed,
+  onCycleBattleSpeed,
   saving,
   signedIn,
   onAuthChange,
@@ -61,6 +68,17 @@ export default function GameToolbar({
 
           <span aria-hidden="true" className="mx-0.5 h-5 w-px bg-border" />
 
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onCycleBattleSpeed}
+            aria-label={`Battle speed: ${SPEED_LABEL[battleSpeed]}. Click to change.`}
+            title={`Battle speed: ${SPEED_LABEL[battleSpeed]} (click to change)`}
+          >
+            <span aria-hidden="true">⏱</span>
+            <span className="ml-1 hidden sm:inline">{SPEED_LABEL[battleSpeed]}</span>
+            <span className="ml-1 font-mono tabular-nums sm:hidden">{SPEED_SHORT[battleSpeed]}</span>
+          </Button>
           <Button
             variant="ghost"
             size="sm"
