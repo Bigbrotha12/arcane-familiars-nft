@@ -210,6 +210,59 @@ describe('selectEnemyAction (non-boss)', () => {
   });
 });
 
+describe('selectEnemyAction (elite affixes)', () => {
+  it('a volatile elite gathers power at the elite charge chance', () => {
+    const enemy = makeEnemy({ elite: 'volatile' });
+    const spy = countingRng([BALANCE.eliteChargeChance - 0.01]);
+    const action = selectEnemyAction(enemy, makePlayer(), spy.rng);
+    expect(action).toEqual<BattleAction>({ type: ActionType.Charge, targetId: enemy.uid });
+    expect(spy.calls()).toBe(1);
+  });
+
+  it('a volatile elite below the charge roll follows the normal tree', () => {
+    const enemy = makeEnemy({ elite: 'volatile' });
+    const action = selectEnemyAction(enemy, makePlayer(), rngFrom([BALANCE.eliteChargeChance, 0.99, 0.99]));
+    expect(action.type).not.toBe(ActionType.Charge);
+  });
+
+  it('a charged volatile elite unleashes its strongest direct damage', () => {
+    const enemy = makeEnemy({ elite: 'volatile', charged: true });
+    const spy = countingRng();
+    const action = selectEnemyAction(enemy, makePlayer(), spy.rng);
+    expect(action).toEqual<BattleAction>({
+      type: ActionType.Ability,
+      abilityId: 'brave',
+      targetId: 'player',
+    });
+    expect(spy.calls()).toBe(0);
+  });
+
+  it('volatile charging is deterministic under seededRandom', () => {
+    const enemy = makeEnemy({ elite: 'volatile' });
+    const seeded = (seed: number) => selectEnemyAction(enemy, makePlayer(), seededRandom(seed));
+    let seed = 1;
+    while (seeded(seed).type !== ActionType.Charge && seed < 100) seed++;
+    expect(seeded(seed).type).toBe(ActionType.Charge);
+    expect(seeded(seed)).toEqual(seeded(seed));
+  });
+
+  it('a phase-two boss charges at the higher phase-two chance', () => {
+    const boss = makeBoss({ phaseTwo: true });
+    const action = selectEnemyAction(boss, makePlayer(), rngFrom([BALANCE.bossPhaseTwoChargeChance - 0.01]));
+    expect(action).toEqual<BattleAction>({ type: ActionType.Charge, targetId: boss.uid });
+  });
+
+  it('a boss outside phase two does not charge at the phase-two-only roll', () => {
+    const boss = makeBoss();
+    const action = selectEnemyAction(
+      boss,
+      makePlayer(),
+      rngFrom([BALANCE.bossPhaseTwoChargeChance - 0.01, 0.99, 0.99])
+    );
+    expect(action.type).not.toBe(ActionType.Charge);
+  });
+});
+
 describe('selectEnemyAction (boss charge)', () => {
   it('gathers power when the charge roll succeeds', () => {
     const boss = makeBoss();

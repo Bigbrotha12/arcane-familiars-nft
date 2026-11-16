@@ -30,23 +30,33 @@ function strongestDamageAbility(enemy: BattleFamiliar, directOnly: boolean): str
 
 /**
  * Select an enemy action using a priority-based decision tree:
- * 0. Boss only: already charged → unleash the strongest direct damaging
- *    ability, else basic attack (no RNG draw).
+ * 0. Boss or volatile elite: already charged → unleash the strongest direct
+ *    damaging ability, else basic attack (no RNG draw).
  * 1. If HP < 30% AND has heal ability AND MP >= heal cost → use heal
- * 2. Boss only: if rng() < bossChargeChance → gather power (Charge)
+ * 2. Boss / volatile elite: if rng() < the charge chance → gather power (Charge)
  * 3. If has buff available AND not already buffed → use buff (50% chance)
  * 4. If has damage ability AND MP >= cost → use strongest damage (70% chance)
  * 5. Else → basic attack
  *
- * The boss charge roll is inserted before the buff check, so non-boss enemies
- * draw exactly the same RNG sequence they always have.
+ * The charge roll is inserted before the buff check, so ordinary non-elite
+ * enemies draw exactly the same RNG sequence they always have. A boss in phase
+ * two charges at `bossPhaseTwoChargeChance` instead of the base rate.
  */
 export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar, rng: () => number): BattleAction {
   const isBoss = enemy.familiarData.isBoss === true;
+  // Volatile elites reuse the boss charge cycle. A phase-two boss charges more
+  // often for the rest of the battle.
+  const chargeChance = isBoss
+    ? enemy.phaseTwo
+      ? BALANCE.bossPhaseTwoChargeChance
+      : BALANCE.bossChargeChance
+    : enemy.elite === 'volatile'
+      ? BALANCE.eliteChargeChance
+      : undefined;
 
-  // 0. A charged boss always unleashes: strongest direct damage ability if one
-  // is usable, otherwise a basic attack.
-  if (isBoss && enemy.charged) {
+  // 0. A charged boss (or volatile elite) always unleashes: strongest direct
+  // damage ability if one is usable, otherwise a basic attack.
+  if (chargeChance !== undefined && enemy.charged) {
     const abilityId = strongestDamageAbility(enemy, true);
     if (abilityId) {
       return { type: ActionType.Ability, abilityId, targetId: player.uid };
@@ -85,8 +95,8 @@ export function selectEnemyAction(enemy: BattleFamiliar, player: BattleFamiliar,
     }
   }
 
-  // 2. Boss telegraphed heavy attack.
-  if (isBoss && rng() < BALANCE.bossChargeChance) {
+  // 2. Boss / volatile-elite telegraphed heavy attack.
+  if (chargeChance !== undefined && rng() < chargeChance) {
     return { type: ActionType.Charge, targetId: enemy.uid };
   }
 

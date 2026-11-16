@@ -14,6 +14,7 @@ export * from '@/data/balance';
 export * from '@/data/passives';
 export * from '@/data/curios';
 export * from '@/data/charms';
+export * from '@/data/elites';
 
 // Utils
 export * from '@/utils/battleEngine';

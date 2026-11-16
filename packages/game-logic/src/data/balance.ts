@@ -31,6 +31,20 @@ export const BALANCE = {
   bossChargeChance: 0.3,
   /** Damage multiplier of a charged boss's next damaging action. */
   bossChargeMultiplier: 2.0,
+  /** Permanent direct-damage multiplier a boss gains when it enters phase two. */
+  bossPhaseTwoAttack: 1.1,
+  /** Per-turn charge chance for a boss in phase two. */
+  bossPhaseTwoChargeChance: 0.35,
+  /** Per-turn chance an uncharged volatile elite gathers power instead of acting. */
+  eliteChargeChance: 0.2,
+  /** Base chance a normal encounter rolls an elite affix. */
+  eliteChance: 0.12,
+  /** Added to the elite chance per unit of room depth (0..1). */
+  eliteChancePerDepth: 0.12,
+  /** Vampiric elites heal this fraction of the direct damage they deal. */
+  eliteVampiricDrain: 0.3,
+  /** XP multiplier for defeating an elite. Coins are doubled separately. */
+  eliteXpMultiplier: 1.5,
   xpBase: 30,
   xpPerEnemyLevel: 10,
   bossXpMultiplier: 2.5,

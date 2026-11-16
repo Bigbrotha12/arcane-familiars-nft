@@ -35,13 +35,17 @@ interface DamageMods {
   affinity?: number;
   guard?: number;
   charged?: number;
+  phaseTwo?: number;
 }
 
 /** Re-derivation of the documented damage rule, for expected values. */
 function expectedDamage(attackerStat: number, defenderStat: number, multiplier: number, mods: DamageMods = {}): number {
-  const { crit = false, variance = 1, affinity = 1, guard = 1, charged = 1 } = mods;
+  const { crit = false, variance = 1, affinity = 1, guard = 1, charged = 1, phaseTwo = 1 } = mods;
   const base = (attackerStat * multiplier * BALANCE.defenseScale) / (BALANCE.defenseScale + defenderStat);
-  return Math.max(1, Math.round(base * affinity * (crit ? BALANCE.critMultiplier : 1) * variance * guard * charged));
+  return Math.max(
+    1,
+    Math.round(base * affinity * (crit ? BALANCE.critMultiplier : 1) * variance * guard * charged * phaseTwo)
+  );
 }
 
 let uidCounter = 0;
@@ -246,6 +250,14 @@ describe('calculateDamage', () => {
     expect(hit.damage).toBe(expectedDamage(55, 70, 1.0, { charged: BALANCE.bossChargeMultiplier }));
     const plain = calculateDamage(makeFamiliar(), defender, 1.0, ScalingStat.Attack, steadyRng());
     expect(hit.damage / plain.damage).toBeGreaterThan(1.8);
+  });
+
+  it('applies the phase-two attack buff to a boss in phase two', () => {
+    const boss = makeFamiliar({ familiarData: getFamiliar('meadowGuardian')!, phaseTwo: true });
+    const hit = calculateDamage(boss, makeFamiliar(), 1.0, ScalingStat.Attack, steadyRng());
+    expect(hit.damage).toBe(expectedDamage(60, 70, 1.0, { phaseTwo: BALANCE.bossPhaseTwoAttack }));
+    const plain = calculateDamage({ ...boss, phaseTwo: false }, makeFamiliar(), 1.0, ScalingStat.Attack, steadyRng());
+    expect(hit.damage).toBeGreaterThan(plain.damage);
   });
 });
 
@@ -983,6 +995,151 @@ describe('resolveTurn', () => {
     // brave 1.3x attack (80) vs defense 70, doubled by the charge.
     expect(result.enemyResult.value).toBe(expectedDamage(80, 70, 1.3, { charged: BALANCE.bossChargeMultiplier }));
     expect(result.updatedEnemyFamiliar.charged).toBe(false);
+  });
+});
+
+describe('elite vampiric drain', () => {
+  it('heals a share of the direct damage and logs the drain as a step', () => {
+    const player = makeFamiliar({ currentHp: 120 });
+    const enemy = makeFamiliar({
+      familiarData: getFamiliar('yellowFighter')!,
+      currentHp: 100,
+      currentMp: 60,
+      elite: 'vampiric',
+    });
+
+    const result = resolveTurn({ type: ActionType.Charge }, player, enemy, { type: ActionType.Attack }, steadyRng());
+    const hit = result.enemyResult.value;
+    const drained = Math.round(hit * BALANCE.eliteVampiricDrain);
+    expect(hit).toBe(expectedDamage(80, 70, 1.0));
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(100 + drained);
+
+    const drainStep = result.steps.find(
+      (s) => s.result.description.endsWith('HP') && s.result.description.includes('drains')
+    );
+    expect(drainStep?.result.effectType).toBe(EffectType.Heal);
+    expect(drainStep?.result.description).toBe(`${enemy.familiarData.name} drains ${drained} HP`);
+  });
+
+  it('does not drain for a non-elite or for damage it did not deal', () => {
+    const enemy = makeFamiliar({
+      familiarData: getFamiliar('yellowFighter')!,
+      currentHp: 100,
+      currentMp: 60,
+    });
+    const result = resolveTurn(
+      { type: ActionType.Defend },
+      makeFamiliar(),
+      enemy,
+      { type: ActionType.Attack },
+      steadyRng()
+    );
+    expect(result.steps.some((s) => s.result.description.includes('drains'))).toBe(false);
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(100);
+  });
+
+  it('drains deterministically under a seeded rng', () => {
+    const enemy = makeFamiliar({
+      familiarData: getFamiliar('yellowFighter')!,
+      currentHp: 100,
+      currentMp: 60,
+      elite: 'vampiric',
+    });
+    const result = resolveTurn(
+      { type: ActionType.Charge },
+      makeFamiliar(),
+      enemy,
+      { type: ActionType.Attack },
+      seededRandom(42)
+    );
+    const drained = Math.round(result.enemyResult.value * BALANCE.eliteVampiricDrain);
+    expect(result.updatedEnemyFamiliar.currentHp).toBe(100 + drained);
+    expect(result.steps.some((s) => s.result.description === `${enemy.familiarData.name} drains ${drained} HP`)).toBe(
+      true
+    );
+  });
+});
+
+describe('boss phase two', () => {
+  const bossAt = (currentHp: number, statusEffects: StatusEffect[] = []) =>
+    makeFamiliar({
+      familiarData: getFamiliar('meadowGuardian')!,
+      currentHp,
+      currentMp: 90,
+      statusEffects,
+    });
+
+  it('enrages once at half HP, cleanses debuffs/DoTs and adds a log step', () => {
+    const boss = bossAt(140, [
+      { abilityId: 'hex', type: EffectType.Dot, stat: StatName.Hp, value: 10, turnsRemaining: 3 },
+      { abilityId: 'shadowstrike', type: EffectType.Debuff, stat: StatName.Defense, value: 0.8, turnsRemaining: 2 },
+      { abilityId: 'sturdy', type: EffectType.Buff, stat: StatName.Defense, value: 1.5, turnsRemaining: 2 },
+    ]);
+
+    const result = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar(),
+      boss,
+      { type: ActionType.Charge },
+      steadyRng()
+    );
+
+    expect(result.updatedEnemyFamiliar.phaseTwo).toBe(true);
+    expect(result.updatedEnemyFamiliar.statusEffects.map((e) => e.type)).toEqual([EffectType.Buff]);
+    const enrage = result.steps.find((s) => s.result.description === `${boss.familiarData.name} is enraged!`);
+    expect(enrage).toBeDefined();
+    expect(enrage?.result.effectType).toBe(EffectType.Buff);
+    expect(enrage?.result.targetId).toBe(boss.uid);
+  });
+
+  it('does not enrage above half HP and only once per battle', () => {
+    const healthy = bossAt(235);
+    const above = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar(),
+      healthy,
+      { type: ActionType.Defend },
+      steadyRng()
+    );
+    expect(above.updatedEnemyFamiliar.phaseTwo).toBeUndefined();
+    expect(above.steps.some((s) => s.result.description.endsWith('is enraged!'))).toBe(false);
+
+    const already = bossAt(140);
+    const first = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar(),
+      already,
+      { type: ActionType.Charge },
+      steadyRng()
+    );
+    const second = resolveTurn(
+      { type: ActionType.Attack },
+      first.updatedPlayerFamiliar,
+      first.updatedEnemyFamiliar,
+      { type: ActionType.Charge },
+      steadyRng()
+    );
+    expect(first.steps.filter((s) => s.result.description.endsWith('is enraged!'))).toHaveLength(1);
+    expect(second.steps.filter((s) => s.result.description.endsWith('is enraged!'))).toHaveLength(0);
+  });
+
+  it('hits harder after enraging', () => {
+    const plain = calculateDamage(
+      makeFamiliar({ familiarData: getFamiliar('meadowGuardian')! }),
+      makeFamiliar(),
+      1.0,
+      ScalingStat.Attack,
+      steadyRng()
+    );
+    const enraged = calculateDamage(
+      makeFamiliar({ familiarData: getFamiliar('meadowGuardian')!, phaseTwo: true }),
+      makeFamiliar(),
+      1.0,
+      ScalingStat.Attack,
+      steadyRng()
+    );
+    expect(enraged.damage).toBe(expectedDamage(60, 70, 1.0, { phaseTwo: BALANCE.bossPhaseTwoAttack }));
+    expect(enraged.damage).toBeGreaterThan(plain.damage);
   });
 });
 

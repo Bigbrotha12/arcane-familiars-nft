@@ -1,5 +1,6 @@
 import type { StatName, EffectType } from '@/data/abilities';
 import type { CharmRoll } from '@/data/charms';
+import type { EliteId } from '@/data/elites';
 import type { FamiliarData } from '@/data/familiars';
 import type { ActivePassive } from '@/data/passives';
 import type { Inventory } from '@/types/gameState';
@@ -22,6 +23,12 @@ export interface BattleFamiliar {
   /** Relay Instinct: MP fraction discounted from this combatant's next ability
    *  (0..1, 1 = free). Set when it swaps in; cleared by the first ability. */
   relayDiscount?: number;
+  /** Elite affix applied to this combatant at battle start. Optional so normal
+   *  enemies and battles persisted before elites existed still load. */
+  elite?: EliteId;
+  /** Boss entered phase two (set once, at or below 50% HP). Optional for old
+   *  battles and non-boss combatants. */
+  phaseTwo?: boolean;
 }
 
 export interface StatusEffect {
@@ -125,6 +132,8 @@ export interface BattleRewards {
   items: string[];
   /** Epic chest from a first boss clear; banked with the run loot. */
   bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
+  /** Rare chest from an elite victory; banked with the run loot. */
+  eliteChest?: { items: string[]; currency: number; charm?: CharmRoll };
   /** XP awarded to the active familiar. */
   xp?: number;
   /** Number of levels gained by the active familiar. */

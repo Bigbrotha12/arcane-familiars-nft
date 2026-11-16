@@ -106,6 +106,9 @@ function rollDamage(
   if (attacker.charged) {
     total *= BALANCE.bossChargeMultiplier;
   }
+  if (attacker.phaseTwo) {
+    total *= BALANCE.bossPhaseTwoAttack;
+  }
   const damage = Math.max(1, Math.round(total));
 
   // "guarded" means the guard actually reduced the rounded result — at the
@@ -113,6 +116,9 @@ function rollDamage(
   let unguardedRaw = rawDamage;
   if (attacker.charged) {
     unguardedRaw *= BALANCE.bossChargeMultiplier;
+  }
+  if (attacker.phaseTwo) {
+    unguardedRaw *= BALANCE.bossPhaseTwoAttack;
   }
   const guarded = options.defenderGuarding === true && Math.max(1, Math.round(unguardedRaw)) > damage;
 
@@ -302,6 +308,36 @@ export function resolveTurn(
   // Effects applied by ANY actor this turn must not proc or tick at end of turn.
   const freshEffects = new Set<StatusEffect>();
 
+  // Boss phase two: the first time the boss is at or below half HP (after any
+  // step, including end-of-turn ticks), it cleanses its debuffs/DoTs and fights
+  // enraged for the rest of the battle. Recorded as its own step so clients
+  // already render the log line from the step stream.
+  const checkPhaseTwo = (): void => {
+    if (!enemyCurrent.familiarData.isBoss || enemyCurrent.phaseTwo || enemyCurrent.currentHp <= 0) return;
+    const maxHp = enemyCurrent.familiarData.stats.maxHp;
+    if (enemyCurrent.currentHp > maxHp * 0.5) return;
+
+    enemyCurrent = {
+      ...enemyCurrent,
+      phaseTwo: true,
+      statusEffects: enemyCurrent.statusEffects.filter(
+        (effect) => effect.type !== EffectType.Debuff && effect.type !== EffectType.Dot
+      ),
+    };
+    steps.push({
+      actorUid: enemyCurrent.uid,
+      result: {
+        effectType: EffectType.Buff,
+        targetId: enemyCurrent.uid,
+        value: 0,
+        isCritical: false,
+        description: `${enemyCurrent.familiarData.name} is enraged!`,
+      },
+      playerAfter: playerCurrent,
+      enemyAfter: enemyCurrent,
+    });
+  };
+
   let playerResult: ActionResult | undefined;
   let enemyResult: ActionResult | undefined;
 
@@ -391,6 +427,40 @@ export function resolveTurn(
       enemyAfter: enemyCurrent,
     });
 
+    // Vampiric elite: after a direct hit lands, drain a share of the damage it
+    // dealt back into its own HP (capped at max HP). Logged as its own step so
+    // the hit and the heal read as two events, like other extra effects.
+    if (
+      !isPlayer &&
+      actorPre.elite === 'vampiric' &&
+      result.effectType === EffectType.Damage &&
+      result.targetId === opponentPre.uid &&
+      result.value > 0
+    ) {
+      const maxHp = enemyCurrent.familiarData.stats.maxHp;
+      const drained = Math.min(
+        Math.max(0, maxHp - enemyCurrent.currentHp),
+        Math.round(result.value * BALANCE.eliteVampiricDrain)
+      );
+      if (drained > 0) {
+        enemyCurrent = { ...enemyCurrent, currentHp: enemyCurrent.currentHp + drained };
+        steps.push({
+          actorUid: actorPre.uid,
+          result: {
+            effectType: EffectType.Heal,
+            targetId: actorPre.uid,
+            value: drained,
+            isCritical: false,
+            description: `${actorPre.familiarData.name} drains ${drained} HP`,
+          },
+          playerAfter: playerCurrent,
+          enemyAfter: enemyCurrent,
+        });
+      }
+    }
+
+    checkPhaseTwo();
+
     if (relayNote) {
       steps.push({
         actorUid: runtime.playerUid,
@@ -441,6 +511,9 @@ export function resolveTurn(
   // neither proc nor decrement — they have not existed for a full turn yet.
   playerCurrent = applyStatusEffects(playerCurrent, freshEffects);
   enemyCurrent = applyStatusEffects(enemyCurrent, freshEffects);
+
+  // A DoT tick can carry the boss across the half-HP line after the last step.
+  checkPhaseTwo();
 
   // Radiance: end-of-turn regen for the living fighting familiar.
   const radiance = runtime.value('radiance');
