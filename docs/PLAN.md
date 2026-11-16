@@ -380,7 +380,7 @@ Based on the **DESIGN.md** design system (created 2026-07-27 via /design-consult
 
 ### 12.1 Design System Foundation
 
-The complete design system is defined in `DESIGN.md` at the repo root. Key tokens have been extracted as CSS custom properties in the design preview (`/home/bigbrotha/.gstack/projects/Bigbrotha12-arcane-familiars-nft/designs/design-system-20260727/preview.html`).
+The complete design system is defined in `DESIGN.md` at the repo root. Key tokens have been extracted as CSS custom properties in the design preview (kept outside the repo).
 
 **The design system must be migrated from the preview HTML into the actual project as:**
 - CSS custom properties on `:root` (matching the preview's `--bg-primary`, `--accent`, etc.)
