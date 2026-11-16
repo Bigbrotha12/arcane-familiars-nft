@@ -20,7 +20,7 @@ const COLLISION_STEP = 0.5;
 const DISCONNECT_OFFSET = 30;
 const ORIGIN_X = 0;
 const ORIGIN_Y = 0;
-const RADIUS = 2.5;
+const RADIUS = 5;
 
 const DIR_OFFSETS: Record<string, { dx: number; dy: number }> = {
   north: { dx: 0, dy: -DIAMOND_STEP },
@@ -210,6 +210,7 @@ const NODE_COLORS: Record<string, { fill: string; stroke: string }> = {
   visited: { fill: '#A5A3C4', stroke: '#1E1B4B' },
   boss: { fill: '#EF4444', stroke: '#0A0A0F' },
   rest: { fill: '#2DD4BF', stroke: '#0A0A0F' },
+  chest: { fill: '#FBBF24', stroke: '#1E1B4B' },
   unknown: { fill: '#3B3870', stroke: '#6366A1' },
 };
 
@@ -250,6 +251,7 @@ const LEGEND: { key: string; label: string }[] = [
   { key: 'start', label: 'Start' },
   { key: 'visited', label: 'Visited' },
   { key: 'rest', label: 'Rest' },
+  { key: 'chest', label: 'Chest' },
   { key: 'boss', label: 'Boss' },
   { key: 'unknown', label: 'Unseen' },
 ];
@@ -305,22 +307,42 @@ function MiniMap({ dungeon }: MiniMapProps) {
                 const isCurrent = room.id === dungeon.currentRoomId;
                 const r = isCurrent ? nodeRadius * 1.35 : nodeRadius;
                 const title = `${room.name}${isCurrent ? ' (current)' : ''}`;
+                const hasChest =
+                  Boolean(room.chest) || (dungeon.visitedRoomIds.includes(room.id) && room.hasTreasure === true);
+                const chestSize = Math.max(1.2, r * 0.8);
+                const chestMarker = hasChest ? (
+                  <rect
+                    x={pos.x + r * 0.6}
+                    y={pos.y - r * 1.6}
+                    width={chestSize}
+                    height={chestSize}
+                    rx={0.3}
+                    fill={NODE_COLORS.chest.fill}
+                    stroke={NODE_COLORS.chest.stroke}
+                    strokeWidth={0.75}
+                    vectorEffect="non-scaling-stroke"
+                  >
+                    <title>Chest</title>
+                  </rect>
+                ) : null;
                 if (isRest) {
                   return (
-                    <rect
-                      key={room.id}
-                      x={pos.x - r}
-                      y={pos.y - r}
-                      width={r * 2}
-                      height={r * 2}
-                      transform={`rotate(45 ${pos.x} ${pos.y})`}
-                      fill={style.fill}
-                      stroke={style.stroke}
-                      strokeWidth={1}
-                      vectorEffect="non-scaling-stroke"
-                    >
-                      <title>{title}</title>
-                    </rect>
+                    <g key={room.id}>
+                      <rect
+                        x={pos.x - r}
+                        y={pos.y - r}
+                        width={r * 2}
+                        height={r * 2}
+                        transform={`rotate(45 ${pos.x} ${pos.y})`}
+                        fill={style.fill}
+                        stroke={style.stroke}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      >
+                        <title>{title}</title>
+                      </rect>
+                      {chestMarker}
+                    </g>
                   );
                 }
                 return (
@@ -350,6 +372,7 @@ function MiniMap({ dungeon }: MiniMapProps) {
                     >
                       <title>{title}</title>
                     </circle>
+                    {chestMarker}
                   </g>
                 );
               })}
@@ -365,7 +388,7 @@ function MiniMap({ dungeon }: MiniMapProps) {
             <span key={key} className="flex items-center gap-0.5">
               <span
                 className={`inline-block h-1.5 w-1.5 border ${
-                  key === 'rest' ? 'rotate-45 rounded-[1px]' : 'rounded-full'
+                  key === 'rest' ? 'rotate-45 rounded-[1px]' : key === 'chest' ? 'rounded-[1px]' : 'rounded-full'
                 }`}
                 style={{ backgroundColor: color.fill, borderColor: color.stroke }}
               />

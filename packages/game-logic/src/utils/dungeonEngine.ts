@@ -1,7 +1,14 @@
-import { type Area, type Room, type DungeonState, RoomType, type RestHealAmount } from '@/types/exploration';
+import {
+  type Area,
+  type ChestTier,
+  type Room,
+  type DungeonState,
+  RoomType,
+  type RestHealAmount,
+} from '@/types/exploration';
 import { getFamiliar, type FamiliarData } from '@/data/familiars';
 import { BALANCE } from '@/data/balance';
-import { ITEMS } from '@/data/items';
+import { ITEMS, itemRarity } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
 import { scaleFamiliarStats } from '@/utils/progression';
 import { abilitiesAtLevel } from '@/utils/learnset';
@@ -43,6 +50,14 @@ const ROOM_DESCRIPTIONS = [
   'The walls glisten with moisture.',
   'A gentle breeze flows through.',
   'Ancient runes line the walls.',
+];
+
+/** Named side chambers that guarantee a chest at the end of a detour. */
+const BRANCH_ROOMS = [
+  { name: 'Forgotten Cache', description: 'A stash left by a traveller who never returned.' },
+  { name: 'Overgrown Alcove', description: 'Vines part to reveal a hidden alcove.' },
+  { name: 'Sunken Strongbox', description: 'A rusted strongbox rests in the damp quiet.' },
+  { name: 'Dust-Choked Vault', description: 'An old vault, sealed until now.' },
 ];
 
 export enum Directions {
@@ -101,7 +116,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
       type: isRest ? RoomType.Rest : RoomType.Normal,
       exits: [],
       encounterChance: isRest ? 0 : 0.3 + depth * 0.3,
-      treasureChance: isRest ? 0 : 0.15 + depth * 0.1,
+      treasureChance: isRest ? 0 : 0.25 + depth * 0.15,
       treasurePool: isRest ? [] : TREASURE_POOL.map((entry) => ({ ...entry })),
       cleared: false,
     };
@@ -153,6 +168,37 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     }
   }
 
+  // Add side branches: dead-end chambers that always hold a chest. They attach
+  // to distinct normal main-path rooms so a detour is always optional. The
+  // branch ids live outside the room_0..room_N chain, so every piece of
+  // main-path logic (boss reachability, rest placement) is untouched.
+  const branchCount = area.roomCount <= 6 ? 1 : 2;
+  const branchHosts = roomIds.map((id) => rooms[id]).filter((room) => room.type === RoomType.Normal);
+  for (let b = 0; b < branchCount && branchHosts.length > 0; b++) {
+    const hostIdx = randomInRange(rng, 0, branchHosts.length - 1);
+    const [host] = branchHosts.splice(hostIdx, 1);
+    const branchId = `branch_${b + 1}`;
+    const template = BRANCH_ROOMS[randomInRange(rng, 0, BRANCH_ROOMS.length - 1)];
+    const branch: Room = {
+      id: branchId,
+      name: template.name,
+      description: template.description,
+      type: RoomType.Deadend,
+      exits: [],
+      // Guarded by a fight 60% of the time; the chest itself is guaranteed.
+      encounterChance: 0.6,
+      treasureChance: 1,
+      treasurePool: TREASURE_POOL.map((entry) => ({ ...entry })),
+      cleared: false,
+      chest: 'rare',
+    };
+    rooms[branchId] = branch;
+
+    const dir = randomInRange(rng, 0, 7) as Directions;
+    host.exits.push({ direction: dir, roomId: branchId, label: branch.name });
+    branch.exits.push({ direction: getOppositeDirection(dir), roomId: host.id, label: host.name });
+  }
+
   return {
     areaId: area.id,
     currentRoomId: 'room_0',
@@ -191,6 +237,86 @@ export function rollEncounter(room: Room, rng: () => number): boolean {
  */
 export function rollTreasure(room: Room, rng: () => number): boolean {
   return rng() < room.treasureChance;
+}
+
+const CHEST_CONFIG: Record<ChestTier, { itemCount: number; minCoins: number; maxCoins: number }> = {
+  common: { itemCount: 1, minCoins: 0, maxCoins: 0 },
+  rare: { itemCount: 2, minCoins: 30, maxCoins: 60 },
+  epic: { itemCount: 3, minCoins: 80, maxCoins: 150 },
+};
+
+function rollPoolItem(rng: () => number): string {
+  return TREASURE_POOL[weightedRandom(rng, TREASURE_POOL)].itemId;
+}
+
+function rollPoolItems(count: number, rng: () => number): string[] {
+  return Array.from({ length: count }, () => rollPoolItem(rng));
+}
+
+function meetsChestFloor(tier: ChestTier, itemIds: string[]): boolean {
+  if (tier === 'common') return true;
+  return itemIds.some((id) => {
+    const item = ITEMS[id];
+    if (!item) return false;
+    const rarity = itemRarity(item);
+    return tier === 'epic' ? rarity === 'rare' : rarity !== 'common';
+  });
+}
+
+/**
+ * Roll a chest of the given tier from the shared treasure pool.
+ * Rare chests guarantee at least one uncommon-or-better item; epic chests
+ * guarantee at least one rare item. Both reroll the set up to 5 times before
+ * accepting an unlucky roll, so the guarantee is strong but not absolute.
+ */
+export function rollChest(tier: ChestTier, rng: () => number): { items: string[]; currency: number } {
+  const config = CHEST_CONFIG[tier];
+  if (TREASURE_POOL.length === 0) return { items: [], currency: 0 };
+
+  let items = rollPoolItems(config.itemCount, rng);
+  if (tier !== 'common') {
+    for (let reroll = 0; reroll < 5 && !meetsChestFloor(tier, items); reroll++) {
+      items = rollPoolItems(config.itemCount, rng);
+    }
+  }
+
+  const currency = config.maxCoins > 0 ? randomInRange(rng, config.minCoins, config.maxCoins) : 0;
+  return { items, currency };
+}
+
+export interface RoomTreasure {
+  tier: ChestTier;
+  items: string[];
+  currency: number;
+}
+
+/**
+ * First-visit treasure roll for one room. Shared by the explore route and the
+ * loot-rate simulation so the two can never drift. A room with `chest` set
+ * always yields that chest; a normal room rolls its treasureChance and then a
+ * common chest, with a 15% chance of an upgrade to rare.
+ */
+export function rollRoomTreasure(room: Room, rng: () => number): RoomTreasure | null {
+  if (room.chest) {
+    return { tier: room.chest, ...rollChest(room.chest, rng) };
+  }
+  if (room.type !== RoomType.Normal || room.treasurePool.length === 0) return null;
+  if (!rollTreasure(room, rng)) return null;
+
+  const tier: ChestTier = rng() < 0.15 ? 'rare' : 'common';
+  return { tier, ...rollChest(tier, rng) };
+}
+
+/**
+ * Deterministic seed for a room's first-visit rolls: same dungeon seed and
+ * room id always replay the same outcome.
+ */
+export function roomRollSeed(dungeonSeed: number, roomId: string): number {
+  let hash = 0;
+  for (let i = 0; i < roomId.length; i++) {
+    hash = (Math.imul(hash, 31) + roomId.charCodeAt(i)) | 0;
+  }
+  return (dungeonSeed ?? 0) ^ (hash >>> 0);
 }
 
 /**

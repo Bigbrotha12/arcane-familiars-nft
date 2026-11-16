@@ -122,6 +122,8 @@ export interface BattleTurnResult {
 export interface BattleRewards {
   currency: number;
   items: string[];
+  /** Epic chest from a first boss clear; banked with the run loot. */
+  bossChest?: { items: string[]; currency: number };
   /** XP awarded to the active familiar. */
   xp?: number;
   /** Number of levels gained by the active familiar. */

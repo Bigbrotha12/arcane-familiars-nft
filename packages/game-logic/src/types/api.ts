@@ -1,5 +1,5 @@
 import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
-import type { Area, DungeonState, RestHeal, Room } from '@/types/exploration';
+import type { Area, ChestTier, DungeonState, RestHeal, Room } from '@/types/exploration';
 import type { GameState, Inventory } from '@/types/gameState';
 
 export interface LoadStateRequest {
@@ -41,6 +41,11 @@ export interface ExploreResponse {
   enemy: string | null;
   treasure: boolean;
   treasureItem: string | null;
+  /** Chest tier, when the room's treasure is a chest roll. */
+  treasureTier?: ChestTier;
+  /** Full chest contents (old saves omit these; treasureItem still works). */
+  treasureItems?: string[];
+  treasureCurrency?: number;
   /** Present only on the first visit to a rest shrine. */
   rest?: RestHeal;
 }

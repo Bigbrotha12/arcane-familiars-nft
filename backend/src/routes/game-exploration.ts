@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
-import type { GameState } from '@arcane-familiars/game-logic';
+import type { ChestTier, GameState } from '@arcane-familiars/game-logic';
 import {
   AREAS,
   generateDungeon,
   rollEncounter,
-  rollTreasure,
-  selectTreasure,
+  rollRoomTreasure,
+  roomRollSeed,
   selectEnemy,
   getFamiliar,
   healPartyAtRest,
@@ -34,14 +34,6 @@ const ACTIVE_BATTLE_ERROR = 'Cannot change dungeon state during an active battle
 
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
-}
-
-function hashString(value: string): number {
-  let hash = 0;
-  for (let i = 0; i < value.length; i++) {
-    hash = (Math.imul(hash, 31) + value.charCodeAt(i)) | 0;
-  }
-  return hash >>> 0;
 }
 
 explorationRouter.post('/game/dungeon/enter', async (c) => {
@@ -149,6 +141,9 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
     let enemy: string | null = null;
     let treasure = false;
     let treasureItem: string | null = null;
+    let treasureTier: ChestTier | undefined;
+    let treasureItems: string[] | undefined;
+    let treasureCurrency: number | undefined;
     let rest: { healed: Record<string, { hp: number; mp: number }> } | undefined;
 
     if (room.cleared) {
@@ -160,11 +155,14 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       if (room.pendingTreasure && !room.pendingTreasure.looted) {
         treasure = true;
         treasureItem = room.pendingTreasure.itemId;
+        treasureTier = room.pendingTreasure.tier;
+        treasureItems = room.pendingTreasure.items ?? [room.pendingTreasure.itemId];
+        treasureCurrency = room.pendingTreasure.currency ?? 0;
       }
     } else {
       room.cleared = true;
 
-      const rng = seededRandom((state.dungeon.seed ?? 0) ^ hashString(roomId));
+      const rng = seededRandom(roomRollSeed(state.dungeon.seed ?? 0, roomId));
 
       if (room.type === RoomType.Boss) {
         encounter = true;
@@ -184,14 +182,22 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
         }
       }
 
-      // Treasure only when the room has no encounter (spec: "if no encounter").
-      if (!encounter && room.treasurePool.length > 0 && rollTreasure(room, rng)) {
-        const selectedTreasure = selectTreasure(room, rng);
-        if (selectedTreasure) {
-          treasure = true;
-          treasureItem = selectedTreasure;
-          room.pendingTreasure = { itemId: selectedTreasure, looted: false };
-        }
+      // Treasure is rolled independently of the encounter: a guarded chest is
+      // still lootable once the fight is won (collect-treasure enforces that).
+      const rolled = rollRoomTreasure(room, rng);
+      if (rolled && rolled.items.length > 0) {
+        treasure = true;
+        treasureItem = rolled.items[0];
+        treasureTier = rolled.tier;
+        treasureItems = rolled.items;
+        treasureCurrency = rolled.currency;
+        room.pendingTreasure = {
+          itemId: rolled.items[0],
+          looted: false,
+          tier: rolled.tier,
+          items: rolled.items,
+          currency: rolled.currency,
+        };
       }
     }
 
@@ -208,7 +214,15 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ room, encounter, enemy, treasure, treasureItem, ...(rest ? { rest } : {}) });
+    return c.json({
+      room,
+      encounter,
+      enemy,
+      treasure,
+      treasureItem,
+      ...(treasure ? { treasureTier, treasureItems, treasureCurrency } : {}),
+      ...(rest ? { rest } : {}),
+    });
   } catch (error: unknown) {
     return internalError(c, error, 'Explore room');
   }
@@ -267,7 +281,10 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     // Treasure is run loot, not banked inventory. It is usable during the run
     // and is lost on defeat; exiting or winning banks it.
     const runLoot = getRunLoot(state.dungeon);
-    addInventoryItem(runLoot, itemId);
+    for (const id of pending.items ?? [itemId]) {
+      addInventoryItem(runLoot, id);
+    }
+    runLoot.currency += pending.currency ?? 0;
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {

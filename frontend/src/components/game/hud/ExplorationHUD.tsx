@@ -95,7 +95,7 @@ function ExplorationHUD({
           ownedFamiliars={snapshot.ownedFamiliars}
         />
       ) : snapshot.treasureActive ? (
-        <TreasureOverlay onTake={onCollectTreasure} onLeave={onFleeEncounter} />
+        <TreasureOverlay treasure={snapshot.treasure} onTake={onCollectTreasure} onLeave={onFleeEncounter} />
       ) : snapshot.bossRoom ? (
         <BossOverlay
           onEnter={onStartBattle}

@@ -39,6 +39,7 @@ import {
   discardRunLoot,
   findOwnedItem,
   consumeOwnedItem,
+  rollChest,
   BattleResult,
   ActionType,
   Outcome,
@@ -644,12 +645,21 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.defeatedBosses.push(area.bossId);
             // One-time reward: re-fighting a defeated boss does not farm
             // currency or items (the encounter can otherwise be re-entered).
+            // The epic boss chest is part of that one-time reward.
+            const bossChest = rollChest('epic', rng);
             const runLoot = getRunLoot(state.dungeon);
-            runLoot.currency += area.bossReward.currency;
+            runLoot.currency += area.bossReward.currency + bossChest.currency;
             for (const itemId of area.bossReward.items) {
               addInventoryItem(runLoot, itemId);
             }
-            rewards = { currency: area.bossReward.currency, items: [...area.bossReward.items] };
+            for (const itemId of bossChest.items) {
+              addInventoryItem(runLoot, itemId);
+            }
+            rewards = {
+              currency: area.bossReward.currency,
+              items: [...area.bossReward.items],
+              bossChest,
+            };
           }
           if (!state.playerFamiliars.includes(area.baseFamiliar)) {
             state.playerFamiliars.push(area.baseFamiliar);
