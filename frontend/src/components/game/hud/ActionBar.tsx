@@ -20,6 +20,8 @@ export interface ActionBarItem {
   hint?: string;
   /** Why this action cannot be used right now. */
   disabledReason?: string;
+  /** Guided battle: pulsing ring around this action. Never disables the button. */
+  highlight?: boolean;
   onClick: () => void;
 }
 
@@ -41,38 +43,42 @@ function ActionBar({ items }: ActionBarProps) {
 
   return (
     <div className="hud-frame pointer-events-auto flex flex-wrap items-stretch justify-center gap-1.5 rounded-md px-2 py-1.5 max-sm:gap-2 max-sm:px-2 max-sm:py-2">
-      {items.map(({ key, label, icon, primary = false, disabled = false, hint, disabledReason, onClick }) => {
-        const subline = disabled && disabledReason ? disabledReason : hint;
-        return (
-          <Button
-            key={key}
-            size="sm"
-            variant={primary ? 'primary' : 'secondary'}
-            disabled={disabled}
-            onClick={onClick}
-            title={disabled && disabledReason ? disabledReason : hint}
-            className={`flex-1 flex-col gap-0 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs max-sm:px-3 max-sm:py-2 max-sm:text-[22px]`}
-          >
-            <span className="flex items-center justify-center gap-1">
-              {icon && (
-                <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none max-sm:w-7 max-sm:text-[26px]">
-                  {icon}
+      {items.map(
+        ({ key, label, icon, primary = false, disabled = false, hint, disabledReason, highlight = false, onClick }) => {
+          const subline = disabled && disabledReason ? disabledReason : hint;
+          return (
+            <Button
+              key={key}
+              size="sm"
+              variant={primary ? 'primary' : 'secondary'}
+              disabled={disabled}
+              onClick={onClick}
+              title={disabled && disabledReason ? disabledReason : hint}
+              className={`flex-1 flex-col gap-0 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs max-sm:px-3 max-sm:py-2 max-sm:text-[22px] ${
+                highlight ? 'guided-highlight' : ''
+              }`}
+            >
+              <span className="flex items-center justify-center gap-1">
+                {icon && (
+                  <span className="flex w-4 shrink-0 items-center justify-center text-sm leading-none max-sm:w-7 max-sm:text-[26px]">
+                    {icon}
+                  </span>
+                )}
+                <span className="whitespace-nowrap">{label}</span>
+              </span>
+              {subline && (
+                <span
+                  className={`whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight max-sm:hidden ${
+                    disabled && disabledReason ? 'text-warning' : 'opacity-70'
+                  }`}
+                >
+                  {subline}
                 </span>
               )}
-              <span className="whitespace-nowrap">{label}</span>
-            </span>
-            {subline && (
-              <span
-                className={`whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight max-sm:hidden ${
-                  disabled && disabledReason ? 'text-warning' : 'opacity-70'
-                }`}
-              >
-                {subline}
-              </span>
-            )}
-          </Button>
-        );
-      })}
+            </Button>
+          );
+        }
+      )}
     </div>
   );
 }

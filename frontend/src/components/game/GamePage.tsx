@@ -22,7 +22,9 @@ import Button from '@/components/ui/Button';
 import BattleHUD from '@/components/game/hud/BattleHUD';
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD';
 import TipCard from '@/components/game/hud/TipCard';
+import GuidedHintCard from '@/components/game/hud/GuidedHintCard';
 import { useFirstTimeTips } from '@/components/game/hud/useFirstTimeTips';
+import { useGuidedBattle } from '@/components/game/hud/useGuidedBattle';
 
 interface PlayLayoutContext {
   signedIn: boolean;
@@ -311,7 +313,8 @@ export default function GamePage() {
   });
 
   const canvasRect = useCanvasRect(containerRef, gameState);
-  const tips = useFirstTimeTips(gameState);
+  const guide = useGuidedBattle(gameState);
+  const tips = useFirstTimeTips(gameState, { paused: guide.running });
   // The canvas is letterboxed and centered, so the gap below it equals
   // canvasRect.top. On tall phones that gap fits a tip without covering the game.
   const tipBelowCanvas = Boolean(canvasRect && canvasRect.top >= 140);
@@ -474,6 +477,7 @@ export default function GamePage() {
       <BattleHUD
         snapshot={gameState}
         outcome={battleOutcome}
+        guidedHighlight={guide.highlight}
         onAction={handlePlayerAction}
         onContinue={handleBattleContinue}
         onRecruitSwap={handleRecruitSwap}
@@ -542,28 +546,48 @@ export default function GamePage() {
               hud
             )}
             {!tipBelowCanvas && (
-              <TipCard
-                tip={tips.currentTip}
-                visible={tips.visible}
-                battle={gameState.currentScene === 'battle'}
-                onDismiss={tips.dismiss}
-                onDisable={() => tips.setEnabled(false)}
-              />
+              <>
+                <TipCard
+                  tip={tips.currentTip}
+                  visible={tips.visible}
+                  battle={gameState.currentScene === 'battle'}
+                  onDismiss={tips.dismiss}
+                  onDisable={() => tips.setEnabled(false)}
+                />
+                <GuidedHintCard
+                  hint={guide.hint}
+                  battle={gameState.currentScene === 'battle'}
+                  onGotIt={guide.gotIt}
+                  onSkip={guide.skip}
+                />
+              </>
             )}
           </div>
         )}
         {gameState && tipBelowCanvas && canvasRect && (
-          <TipCard
-            tip={tips.currentTip}
-            visible={tips.visible}
-            anchor={{
-              top: canvasRect.top + canvasRect.height + 8,
-              left: canvasRect.left + 12,
-              width: Math.min(320, canvasRect.width - 24),
-            }}
-            onDismiss={tips.dismiss}
-            onDisable={() => tips.setEnabled(false)}
-          />
+          <>
+            <TipCard
+              tip={tips.currentTip}
+              visible={tips.visible}
+              anchor={{
+                top: canvasRect.top + canvasRect.height + 8,
+                left: canvasRect.left + 12,
+                width: Math.min(320, canvasRect.width - 24),
+              }}
+              onDismiss={tips.dismiss}
+              onDisable={() => tips.setEnabled(false)}
+            />
+            <GuidedHintCard
+              hint={guide.hint}
+              anchor={{
+                top: canvasRect.top + canvasRect.height + 8,
+                left: canvasRect.left + 12,
+                width: Math.min(320, canvasRect.width - 24),
+              }}
+              onGotIt={guide.gotIt}
+              onSkip={guide.skip}
+            />
+          </>
         )}
       </div>
 

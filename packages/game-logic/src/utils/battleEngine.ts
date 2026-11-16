@@ -244,6 +244,17 @@ function scaleAppliedStatus(effect: StatusEffect, source: BattleFamiliar, runtim
 }
 
 /**
+ * Guided first battle safety net. When enabled, the first direct or DoT damage
+ * that would drop the player's fighting familiar to 0 HP leaves it at 1 HP
+ * instead, once per battle. Enemies are never protected.
+ */
+export interface GuidedSaveRuntime {
+  enabled: boolean;
+  /** The one save has already been spent. */
+  used: boolean;
+}
+
+/**
  * Resolve a single battle turn. Actors are ordered by effective Speed (higher
  * first; ties go to the player, with no RNG roll so seeded runs stay
  * deterministic). Each actor executes against the states left by the previous
@@ -252,6 +263,7 @@ function scaleAppliedStatus(effect: StatusEffect, source: BattleFamiliar, runtim
  * filled with a zero-damage placeholder carrying the cancel reason.
  *
  * `playerPassives` apply to the player side only; enemies and bosses have none.
+ * `guided` enables the first-battle safety net (see GuidedSaveRuntime).
  */
 export function resolveTurn(
   playerAction: BattleAction,
@@ -259,7 +271,8 @@ export function resolveTurn(
   enemyFamiliar: BattleFamiliar,
   enemyAction: BattleAction,
   rng: () => number,
-  playerPassives: ActivePassive[] = []
+  playerPassives: ActivePassive[] = [],
+  guided?: GuidedSaveRuntime
 ): {
   playerResult: ActionResult;
   enemyResult: ActionResult;
@@ -267,10 +280,26 @@ export function resolveTurn(
   updatedEnemyFamiliar: BattleFamiliar;
   steps: TurnStep[];
   canceledActions: CanceledAction[];
+  /** Set only while guided mode is on: whether the one save has been spent. */
+  guidedSaveUsed?: boolean;
 } {
   // Initiative is locked in before any action executes: speed effects applied
   // during this turn only influence the NEXT turn's ordering.
   const runtime = makePassiveRuntime(playerFamiliar.uid, playerPassives);
+
+  // Guided first battle: one save per battle, for the player's fighting familiar
+  // only. Any damage that would take it from above 0 to 0 leaves it at 1 HP and
+  // logs a step, like the other extra effects (Second Wind, vampiric drain).
+  let guidedSaveUsed = guided?.enabled === true ? guided.used : false;
+  let guidedSaveFired: boolean;
+  const applyGuidedSave = (hpBefore: number, after: BattleFamiliar): BattleFamiliar => {
+    if (!guided?.enabled || guidedSaveUsed) return after;
+    if (after.uid !== runtime.playerUid) return after;
+    if (hpBefore <= 0 || after.currentHp > 0) return after;
+    guidedSaveUsed = true;
+    guidedSaveFired = true;
+    return { ...after, currentHp: 1 };
+  };
   const playerSpeed = Math.round(
     getEffectiveStat(playerFamiliar.familiarData.stats.speed, playerFamiliar.statusEffects, StatName.Speed) *
       (1 + runtime.value('tailwind'))
@@ -365,7 +394,12 @@ export function resolveTurn(
     const execution = executeAction(action, actorPre, opponentPre, rng, isGuarding, runtime);
     const result = execution.result;
     let actorPost = applyActionResult(actorPre, result);
-    const opponentPost = applyActionResult(opponentPre, result);
+    let opponentPost = applyActionResult(opponentPre, result);
+
+    // Guided save: the first lethal direct hit leaves the player at 1 HP.
+    guidedSaveFired = false;
+    if (isPlayer) actorPost = applyGuidedSave(actorPre.currentHp, actorPost);
+    else opponentPost = applyGuidedSave(opponentPre.currentHp, opponentPost);
 
     // Basic attacks refund a slice of the actor's max MP. Applied to the actor
     // (not the result's target) so the per-step snapshot carries the new MP.
@@ -426,6 +460,23 @@ export function resolveTurn(
       playerAfter: playerCurrent,
       enemyAfter: enemyCurrent,
     });
+
+    // The guided save fires as its own log step right after the lethal hit, so
+    // the player understands why the familiar survived.
+    if (guidedSaveFired) {
+      steps.push({
+        actorUid: runtime.playerUid,
+        result: {
+          effectType: EffectType.Buff,
+          targetId: runtime.playerUid,
+          value: 0,
+          isCritical: false,
+          description: `${playerCurrent.familiarData.name} holds on!`,
+        },
+        playerAfter: playerCurrent,
+        enemyAfter: enemyCurrent,
+      });
+    }
 
     // Vampiric elite: after a direct hit lands, drain a share of the damage it
     // dealt back into its own HP (capped at max HP). Logged as its own step so
@@ -509,8 +560,27 @@ export function resolveTurn(
 
   // Tick status effects. Effects applied during this turn (by either side)
   // neither proc nor decrement — they have not existed for a full turn yet.
+  const playerHpBeforeTick = playerCurrent.currentHp;
   playerCurrent = applyStatusEffects(playerCurrent, freshEffects);
   enemyCurrent = applyStatusEffects(enemyCurrent, freshEffects);
+
+  // A lethal DoT tick gets the same one-time guided save as a direct hit.
+  guidedSaveFired = false;
+  playerCurrent = applyGuidedSave(playerHpBeforeTick, playerCurrent);
+  if (guidedSaveFired) {
+    steps.push({
+      actorUid: runtime.playerUid,
+      result: {
+        effectType: EffectType.Buff,
+        targetId: runtime.playerUid,
+        value: 0,
+        isCritical: false,
+        description: `${playerCurrent.familiarData.name} holds on!`,
+      },
+      playerAfter: playerCurrent,
+      enemyAfter: enemyCurrent,
+    });
+  }
 
   // A DoT tick can carry the boss across the half-HP line after the last step.
   checkPhaseTwo();
@@ -552,6 +622,7 @@ export function resolveTurn(
     updatedEnemyFamiliar: enemyCurrent,
     steps,
     canceledActions,
+    ...(guided?.enabled === true ? { guidedSaveUsed } : {}),
   };
 }
 

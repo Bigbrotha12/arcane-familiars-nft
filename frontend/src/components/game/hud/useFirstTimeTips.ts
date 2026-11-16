@@ -35,11 +35,50 @@ export interface FirstTimeTips {
   toggleEnabled: () => void;
 }
 
-export function useFirstTimeTips(snapshot: GameStateSnapshot | null): FirstTimeTips {
+export interface FirstTimeTipsOptions {
+  /**
+   * Hold every card while something else is coaching the player (the guided
+   * first battle). When the pause ends, `battleStart` is marked seen because
+   * the guide covered the same ground.
+   */
+  paused?: boolean;
+}
+
+export function useFirstTimeTips(
+  snapshot: GameStateSnapshot | null,
+  options: FirstTimeTipsOptions = {}
+): FirstTimeTips {
+  const paused = options.paused === true;
   const [enabled, setEnabledState] = useState<boolean>(readTipsEnabled);
   const [state, setState] = useState<TipsState>({ current: null, queue: [] });
   const seenRef = useRef<Set<TipId>>(new Set());
   const playerIdRef = useRef<string | null>(null);
+  const wasPausedRef = useRef(false);
+
+  const markSeen = useCallback((id: TipId) => {
+    if (!seenRef.current.has(id)) {
+      seenRef.current.add(id);
+      writeSeenTips(playerIdRef.current ?? currentTipsPlayerId(), seenRef.current);
+    }
+    setState((previous) => {
+      if (previous.current !== id && !previous.queue.includes(id)) return previous;
+      return {
+        ...previous,
+        current: previous.current === id ? null : previous.current,
+        queue: previous.queue.filter((queuedId) => queuedId !== id),
+      };
+    });
+  }, []);
+
+  // The guided battle card explains the same actions as the battleStart tip.
+  // Once the guide ends (or is skipped) the tip is spent, so it never appears
+  // afterwards as a duplicate.
+  useEffect(() => {
+    const wasPaused = wasPausedRef.current;
+    wasPausedRef.current = paused;
+    if (!wasPaused || paused) return;
+    markSeen('battleStart');
+  }, [paused, markSeen]);
 
   // Load the per-player seen list when the snapshot first arrives, then keep
   // queueing newly triggered tips. Detection runs even while tips are off so
@@ -83,7 +122,7 @@ export function useFirstTimeTips(snapshot: GameStateSnapshot | null): FirstTimeT
   // functional update keeps StrictMode's double effect invocation from
   // dropping a queued tip or showing two cards.
   useEffect(() => {
-    if (!enabled) return;
+    if (!enabled || paused) return;
     const now = activeKey ? (activeKey.split(',') as TipId[]) : [];
     setState((previous) => {
       if (previous.current) return previous;
@@ -91,7 +130,7 @@ export function useFirstTimeTips(snapshot: GameStateSnapshot | null): FirstTimeT
       if (!next) return previous;
       return { current: next, queue: previous.queue.filter((id) => id !== next) };
     });
-  }, [enabled, blocked, activeKey, state.current, state.queue]);
+  }, [enabled, paused, blocked, activeKey, state.current, state.queue]);
 
   // An overlay tip closes with its overlay (it is already marked seen).
   useEffect(() => {
@@ -122,7 +161,7 @@ export function useFirstTimeTips(snapshot: GameStateSnapshot | null): FirstTimeT
   return {
     enabled,
     currentTip: state.current ? getTip(state.current) : null,
-    visible: Boolean(enabled && snapshot && state.current && (!blocked || OVERLAY_TIPS.has(state.current))),
+    visible: Boolean(!paused && enabled && snapshot && state.current && (!blocked || OVERLAY_TIPS.has(state.current))),
     dismiss,
     setEnabled,
     toggleEnabled,

@@ -291,21 +291,23 @@ describe('daily battle cap', () => {
     const anonId = '7399e2bb-be47-40d8-8df3-8c9871f337b6';
     const ip = '1.0.0.14';
     const today = new Date().toISOString().slice(0, 10);
-    await seedState(
-      anonId,
-      makeState(anonId, {
-        // Single-familiar party at 1 HP so the KO relay cannot turn the Loss
-        // into a Continue. yellowFighter as the enemy (rather than tideTurtle,
-        // whose 50% sturdy-buff branch leaves the player alive) guarantees the
-        // enemy's action deals damage -> the player is KO'd this turn.
-        activeParty: ['yellowFighter'],
-        partyHp: { yellowFighter: 1 },
-        partyMp: { yellowFighter: 60 },
-        enemyId: 'yellowFighter',
-        battlesToday: 99,
-        battlesDayUtc: today,
-      })
-    );
+    const state = makeState(anonId, {
+      // Single-familiar party at 1 HP so the KO relay cannot turn the Loss
+      // into a Continue. yellowFighter as the enemy (rather than tideTurtle,
+      // whose 50% sturdy-buff branch leaves the player alive) guarantees the
+      // enemy's action deals damage -> the player is KO'd this turn.
+      activeParty: ['yellowFighter'],
+      partyHp: { yellowFighter: 1 },
+      partyMp: { yellowFighter: 60 },
+      enemyId: 'yellowFighter',
+      battlesToday: 99,
+      battlesDayUtc: today,
+    });
+    // Not a new player: the guided first battle safety net must not save this
+    // mandatory loss.
+    state.battleCount = 1;
+    state.winCount = 1;
+    await seedState(anonId, state);
 
     const start = await fetchApp(post('/api/game/battle/start', startBody(anonId, 'yellowFighter'), ip));
     expect(start.status).toBe(200);

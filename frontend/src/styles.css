@@ -119,6 +119,27 @@
     }
   }
 
+  /* Guided first battle: soft pulsing ring around the coached action. Pink is
+     the design system's special-UI accent. Never disables the button. */
+  .guided-highlight {
+    animation: guided-pulse 1.6s ease-in-out infinite;
+  }
+
+  @keyframes guided-pulse {
+    0%,
+    100% {
+      box-shadow:
+        0 0 0 3px rgba(244, 114, 182, 0.9),
+        0 0 12px 4px rgba(244, 114, 182, 0.45);
+    }
+
+    50% {
+      box-shadow:
+        0 0 0 5px rgba(244, 114, 182, 0.4),
+        0 0 20px 8px rgba(244, 114, 182, 0.6);
+    }
+  }
+
   /* Landing page entrance: a single staggered rise used on page load. */
   .landing-rise {
     animation: landing-rise 500ms ease-out both;
@@ -160,5 +181,11 @@
   .landing-pop-in,
   .animate-float {
     animation: none;
+  }
+
+  /* Guided highlight keeps a static ring instead of pulsing. */
+  .guided-highlight {
+    animation: none;
+    box-shadow: 0 0 0 3px #f472b6;
   }
 }

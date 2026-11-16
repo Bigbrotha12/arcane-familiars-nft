@@ -124,6 +124,12 @@ export interface GameStateSnapshot {
   forcedSwap?: boolean;
   /** Outcome and rewards while the battle outcome screen is open. */
   battleOutcome?: BattleEndedPayload;
+  /** Set only for a brand-new player's guided first battle. */
+  guided?: boolean;
+  /** Identity of the battle on screen, for session-scoped guided coaching. */
+  battleId?: string;
+  /** Turns resolved in the current battle (0 on the opening snapshot). */
+  turnCount?: number;
 }
 
 /** The elite affix on a pending encounter, shown before the fight. */

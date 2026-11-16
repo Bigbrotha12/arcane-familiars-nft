@@ -1,6 +1,16 @@
 import type { FamiliarStats } from '@/data/familiars';
+import type { GameState } from '@/types/gameState';
 
 export const MAX_FAMILIAR_LEVEL = 20;
+
+/**
+ * A player who has never finished a battle (win or loss). Fleeing does not
+ * increment either counter, so fleeing the first fight keeps the player new.
+ * Their first fight is guided: a level-floor enemy and a one-time safety net.
+ */
+export function isNewPlayer(state: Pick<GameState, 'battleCount' | 'winCount'>): boolean {
+  return (state.battleCount ?? 0) === 0 && (state.winCount ?? 0) === 0;
+}
 
 /** XP needed to go from `level` to `level + 1`. */
 export function xpToNextLevel(level: number): number {

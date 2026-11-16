@@ -151,7 +151,11 @@ describe('elite encounters', () => {
     const anonId = 'a1b2c3d4-1111-4222-8333-444455556666';
     const room = normalRoom('room_2');
     const seedValue = findEliteSeed(room, AREA);
-    await seed(anonId, makeState(anonId, room, seedValue));
+    const seeded = makeState(anonId, room, seedValue);
+    // Elites are gated behind the win threshold.
+    seeded.winCount = 3;
+    seeded.battleCount = 3;
+    await seed(anonId, seeded);
 
     const res = await fetchApp(
       post('/api/game/dungeon/explore', { anonymousId: anonId, roomId: 'room_2' }, '10.20.0.1')
@@ -169,6 +173,9 @@ describe('elite encounters', () => {
   it('applies the affix to the scaled enemy at battle start', async () => {
     const anonId = 'b2c3d4e5-2222-4333-8444-555566667777';
     const state = makeState(anonId, normalRoom('room_2'));
+    // Existing player: elite encounters only roll after the win threshold.
+    state.winCount = 3;
+    state.battleCount = 3;
     state.dungeon!.currentRoomId = 'room_2';
     state.dungeon!.rooms.room_2.cleared = true;
     state.dungeon!.rooms.room_2.pendingEncounter = {
@@ -195,6 +202,9 @@ describe('elite encounters', () => {
   it('leaves an encounter without an elite unchanged', async () => {
     const anonId = 'c3d4e5f6-3333-4444-8555-666677778888';
     const state = makeState(anonId, normalRoom('room_2'));
+    // Existing player so the first-fight guided rules do not rescale the enemy.
+    state.winCount = 1;
+    state.battleCount = 1;
     state.dungeon!.currentRoomId = 'room_2';
     state.dungeon!.rooms.room_2.cleared = true;
     state.dungeon!.rooms.room_2.pendingEncounter = { enemyId: 'tideTurtle', resolved: false, level: 2 };
@@ -213,6 +223,8 @@ describe('elite encounters', () => {
   it('pays an elite win double coins, bonus XP and a rare chest into run loot', async () => {
     const anonId = 'd4e5f607-4444-4555-8666-777788889999';
     const state = makeState(anonId, normalRoom('room_2'));
+    state.winCount = 3;
+    state.battleCount = 3;
     state.dungeon!.currentRoomId = 'room_2';
     state.dungeon!.rooms.room_2.cleared = true;
     state.dungeon!.rooms.room_2.pendingEncounter = {

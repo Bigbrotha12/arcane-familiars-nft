@@ -197,7 +197,11 @@ async function actAndReadRewards(
 describe('battle start scaling', () => {
   it('spawns a non-boss enemy at the level fixed when the encounter was rolled', async () => {
     const anonId = '1c1c6f60-6a0d-4f0b-9d3a-1f1b2c3d4e5f';
-    await seed(anonId, makeState(anonId, { enemyId: 'tideTurtle', enemyLevel: 2 }));
+    const state = makeState(anonId, { enemyId: 'tideTurtle', enemyLevel: 2 });
+    // An existing player: a brand-new player's first fight is guided to level 1.
+    state.battleCount = 1;
+    state.winCount = 1;
+    await seed(anonId, state);
 
     const res = await fetchApp(post('/api/game/battle/start', { anonymousId: anonId, playerFamiliarId: 'whiteDog' }));
     expect(res.status).toBe(200);
