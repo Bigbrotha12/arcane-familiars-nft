@@ -1,40 +1,38 @@
 import { Link } from 'react-router-dom';
+import LogoMark from '@/components/layout/LogoMark';
 
-function Footer() {
+function Footer(): JSX.Element {
   const routeLinks = [
     { label: 'Privacy Policy', to: '/privacy' },
     { label: 'Terms of Service', to: '/terms' },
     { label: 'Credits', to: '/credits' },
   ];
 
-  const placeholderLinks = [
-    { label: 'White Paper', href: '#' },
-    { label: 'Documentation', href: '#' },
-  ];
-
-  const linkClass = 'text-text-muted hover:text-text-secondary transition-colors text-sm font-body';
+  const linkClass =
+    'rounded-sm text-sm font-body text-text-muted transition-colors hover:text-text-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt';
 
   return (
-    <footer className="bg-surface-alt border-t border-border mt-auto">
-      <div className="max-w-content mx-auto px-lg py-xl">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-md">
-          <span className="text-lg font-display font-semibold text-text-primary">Arcane Familiars</span>
+    <footer className="mt-auto border-t border-border bg-surface-alt">
+      <div className="mx-auto max-w-content px-md py-xl sm:px-lg">
+        <div className="flex flex-col items-start gap-md md:flex-row md:items-center md:justify-between">
+          <Link
+            to="/"
+            className="flex items-center gap-2 rounded-sm focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-alt"
+          >
+            <LogoMark />
+            <span className="font-display text-lg font-semibold text-text-primary">Arcane Familiars</span>
+          </Link>
 
-          <div className="flex items-center gap-6">
+          <div className="flex flex-wrap items-center gap-x-md gap-y-sm">
             {routeLinks.map((link) => (
               <Link key={link.label} to={link.to} className={linkClass}>
                 {link.label}
               </Link>
             ))}
-            {placeholderLinks.map((link) => (
-              <a key={link.label} href={link.href} className={linkClass}>
-                {link.label}
-              </a>
-            ))}
           </div>
         </div>
 
-        <div className="mt-lg pt-md border-t border-border text-center text-xs text-text-muted font-body">
+        <div className="mt-lg border-t border-border pt-md text-left font-body text-xs text-text-muted">
           &copy; {new Date().getFullYear()} Arcane Familiars. All rights reserved.
         </div>
       </div>
