@@ -102,6 +102,23 @@
     animation-name: zoom-in-95;
   }
 
+  /* First-time tip card: short fade + slide, matching DESIGN.md's ease-out. */
+  .tip-in {
+    animation: tip-in 200ms ease-out both;
+  }
+
+  @keyframes tip-in {
+    from {
+      opacity: 0;
+      transform: translateY(-6px);
+    }
+
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
   /* Landing page entrance: a single staggered rise used on page load. */
   .landing-rise {
     animation: landing-rise 500ms ease-out both;
@@ -138,6 +155,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .tip-in,
   .landing-rise,
   .landing-pop-in,
   .animate-float {

@@ -108,6 +108,8 @@ export class BattleScene extends Phaser.Scene {
   private battleLog: string[] = [];
   private phase: BattlePhase = 'connecting';
   private battleOutcome: BattleEndedPayload | null = null;
+  /** True only for the state update emitted right after a KO relay. */
+  private relayTriggered = false;
   private isLeavingBattle = false;
   private pendingTreasureItemId: string | null = null;
   private roomsExplored = 0;
@@ -471,7 +473,9 @@ export class BattleScene extends Phaser.Scene {
         // combatant, and keep the battle going.
         this.battleUI.addLogMessage(`${forcedSwap.fallenName} fell! ${forcedSwap.incomingName} steps in!`);
         this.activateIncomingFamiliar(turnResult.playerFamiliar);
+        this.relayTriggered = true;
         this.emitStateUpdate();
+        this.relayTriggered = false;
 
         await this.sleep(this.STEP_DELAY_MS);
         if (!this.scene || !this.scene.isActive()) return;
@@ -1041,6 +1045,8 @@ export class BattleScene extends Phaser.Scene {
         tier: passive.tier,
         description: passiveDescription(PASSIVES[passive.id], passive.tier),
       })),
+      ...(this.relayTriggered ? { forcedSwap: true } : {}),
+      ...(this.phase === 'outcome' && this.battleOutcome ? { battleOutcome: this.battleOutcome } : {}),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }

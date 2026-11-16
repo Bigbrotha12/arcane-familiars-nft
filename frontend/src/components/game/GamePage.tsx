@@ -21,6 +21,8 @@ import { useCanvasRect } from '@/components/game/useCanvasRect';
 import Button from '@/components/ui/Button';
 import BattleHUD from '@/components/game/hud/BattleHUD';
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD';
+import TipCard from '@/components/game/hud/TipCard';
+import { useFirstTimeTips } from '@/components/game/hud/useFirstTimeTips';
 
 interface PlayLayoutContext {
   signedIn: boolean;
@@ -309,6 +311,10 @@ export default function GamePage() {
   });
 
   const canvasRect = useCanvasRect(containerRef, gameState);
+  const tips = useFirstTimeTips(gameState);
+  // The canvas is letterboxed and centered, so the gap below it equals
+  // canvasRect.top. On tall phones that gap fits a tip without covering the game.
+  const tipBelowCanvas = Boolean(canvasRect && canvasRect.top >= 140);
 
   const handleCancelExit = useCallback(() => {
     playUiSfx('cancel');
@@ -496,6 +502,8 @@ export default function GamePage() {
         muted={muted}
         battleSpeed={battleSpeed}
         onCycleBattleSpeed={handleCycleBattleSpeed}
+        tipsEnabled={tips.enabled}
+        onToggleTips={tips.toggleEnabled}
         saving={saving}
         signedIn={signedIn}
         onAuthChange={onAuthChange}
@@ -533,7 +541,29 @@ export default function GamePage() {
             ) : (
               hud
             )}
+            {!tipBelowCanvas && (
+              <TipCard
+                tip={tips.currentTip}
+                visible={tips.visible}
+                battle={gameState.currentScene === 'battle'}
+                onDismiss={tips.dismiss}
+                onDisable={() => tips.setEnabled(false)}
+              />
+            )}
           </div>
+        )}
+        {gameState && tipBelowCanvas && canvasRect && (
+          <TipCard
+            tip={tips.currentTip}
+            visible={tips.visible}
+            anchor={{
+              top: canvasRect.top + canvasRect.height + 8,
+              left: canvasRect.left + 12,
+              width: Math.min(320, canvasRect.width - 24),
+            }}
+            onDismiss={tips.dismiss}
+            onDisable={() => tips.setEnabled(false)}
+          />
         )}
       </div>
 
