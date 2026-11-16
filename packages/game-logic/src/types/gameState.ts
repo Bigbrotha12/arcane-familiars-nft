@@ -19,6 +19,8 @@ export interface GameState {
   /** Per-species progression. Missing entries mean level 1 / 0 XP. */
   familiarLevels?: Record<string, number>;
   familiarXp?: Record<string, number>;
+  /** Per-species wins against it while unowned; optional so old saves load. */
+  recruitBond?: Record<string, number>;
   inventory: Inventory;
   dungeon: DungeonState | null;
   unlockedAreas: string[];

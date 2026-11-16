@@ -98,6 +98,19 @@ export default function GamePage() {
     setBattleOutcome(null);
   }, [playUiSfx]);
 
+  const handleRecruitSwap = useCallback(
+    (outId: string) => {
+      const inId = battleOutcome?.rewards?.recruitedFamiliar;
+      if (!inId) return;
+      playUiSfx('confirm');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.BATTLE_CONTINUE, {
+        recruitSwap: { inId, outId },
+      });
+      setBattleOutcome(null);
+    },
+    [battleOutcome, playUiSfx]
+  );
+
   const handleNavigate = useCallback(
     (roomId: string) => {
       playUiSfx('click');
@@ -398,6 +411,7 @@ export default function GamePage() {
         outcome={battleOutcome}
         onAction={handlePlayerAction}
         onContinue={handleBattleContinue}
+        onRecruitSwap={handleRecruitSwap}
       />
       <ExplorationHUD
         snapshot={gameState}

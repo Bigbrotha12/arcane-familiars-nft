@@ -40,6 +40,7 @@ import type {
   PlayerActionPayload,
   BattleStartedPayload,
   BattleEndedPayload,
+  BattleContinuePayload,
   BattlePhase,
   AbilityOption,
   ItemOption,
@@ -831,8 +832,11 @@ export class BattleScene extends Phaser.Scene {
             benchLevelUp: rewards.benchLevelUp,
             recruitedFamiliar: rewards.recruitedFamiliar,
             recruitedName: rewards.recruitedName,
+            recruitedLevel: rewards.recruitedLevel,
+            recruitProgress: rewards.recruitProgress,
           }
         : undefined,
+      inDungeon: Boolean(this.gameState?.dungeon),
     };
     this.phase = 'outcome';
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
@@ -850,7 +854,7 @@ export class BattleScene extends Phaser.Scene {
     gameEventBus.emit(GameEvent.BATTLE_ENDED, this.battleOutcome);
   }
 
-  private handleContinue = (): void => {
+  private handleContinue = (payload?: BattleContinuePayload): void => {
     if (this.isLeavingBattle) return;
     this.isLeavingBattle = true;
     this.phase = 'connecting';
@@ -881,6 +885,7 @@ export class BattleScene extends Phaser.Scene {
       areaId: this.areaId,
       lastBattleOutcome: this.battleOutcome?.outcome,
       pendingTreasureItemId: this.pendingTreasureItemId,
+      recruitSwap: payload?.recruitSwap,
       activeIndex: this.activeFamiliarIndex,
       enemiesDefeated: this.enemiesDefeated,
       roomsExplored: this.roomsExplored,

@@ -3,7 +3,7 @@
 // receives the pending-encounter snapshot emitted by the exploration scene.
 
 import { useState } from 'react';
-import { Affinity, FAMILIARS, affinityEffectiveness } from '@arcane-familiars/game-logic';
+import { Affinity, BALANCE, FAMILIARS, affinityEffectiveness } from '@arcane-familiars/game-logic';
 import { portraitPath } from '@/components/collection/entries';
 import type { EncounterSnapshot, FamiliarState } from '@/game';
 
@@ -21,6 +21,10 @@ interface EncounterDetailsProps {
   encounter: EncounterSnapshot;
   party?: FamiliarState[];
   activeId?: string;
+  /** Per-species recruit bond from the game state. */
+  recruitBond?: Record<string, number>;
+  /** Species ids the player already owns. */
+  ownedFamiliars?: string[];
 }
 
 /** `whiteDog` -> `White Dog` (fallback when a species has no metadata). */
@@ -44,13 +48,18 @@ function matchupLine(familiar: FamiliarState, enemyAffinity: Affinity): string {
   }
 }
 
-function EncounterDetails({ encounter, party = [], activeId }: EncounterDetailsProps) {
+function EncounterDetails({ encounter, party = [], activeId, recruitBond, ownedFamiliars }: EncounterDetailsProps) {
   const [imageFailed, setImageFailed] = useState(false);
 
   const enemy = FAMILIARS[encounter.enemyId];
   const name = enemy?.name ?? humanizeId(encounter.enemyId);
   const affinity = enemy ? Affinity[enemy.affinity] : undefined;
   const affinityColor = affinity ? (AFFINITY_COLORS[affinity] ?? '#A5A3C4') : undefined;
+
+  const showRecruit =
+    Boolean(enemy) && !encounter.isBoss && ownedFamiliars !== undefined && !ownedFamiliars.includes(encounter.enemyId);
+  const bond = recruitBond?.[encounter.enemyId] ?? 0;
+  const needed = enemy ? (BALANCE.recruitBondNeeded[enemy.rarity] ?? 0) : 0;
 
   const lead = party.find((f) => f.id === activeId) ?? party[0];
   const bench = party.find((f) => f.id !== lead?.id);
@@ -102,6 +111,11 @@ function EncounterDetails({ encounter, party = [], activeId }: EncounterDetailsP
               </span>
             )}
           </div>
+          {showRecruit && (
+            <p className="font-mono text-[11px] tabular-nums text-pink max-sm:text-[18px]">
+              Recruitable · Bond {bond}/{needed}
+            </p>
+          )}
         </div>
       </div>
 

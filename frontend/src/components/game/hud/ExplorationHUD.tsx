@@ -91,6 +91,8 @@ function ExplorationHUD({
           encounter={snapshot.pendingEncounter}
           party={snapshot.familiars}
           activeId={snapshot.activeId}
+          recruitBond={snapshot.recruitBond}
+          ownedFamiliars={snapshot.ownedFamiliars}
         />
       ) : snapshot.treasureActive ? (
         <TreasureOverlay onTake={onCollectTreasure} onLeave={onFleeEncounter} />

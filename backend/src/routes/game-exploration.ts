@@ -22,7 +22,7 @@ import {
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
-import { sanitizeDungeonForClient } from '../utils/sanitize';
+import { sanitizeDungeonForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
@@ -277,6 +277,87 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     return c.json({ success: true, inventory: state.inventory, runLoot });
   } catch (error: unknown) {
     return internalError(c, error, 'Collect treasure');
+  }
+});
+
+explorationRouter.post('/game/dungeon/party/replace', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string; outId: string; inId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { anonymousId, outId, inId } = body;
+    if (!anonymousId || !outId || !inId) {
+      return c.json({ error: 'Missing required fields: anonymousId, outId, inId' }, 400);
+    }
+
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+
+    const state = loaded.state;
+
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
+
+    const dungeon = state.dungeon;
+    if (!dungeon) {
+      return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    if (!state.playerFamiliars.includes(inId)) {
+      return c.json({ error: 'That familiar is not owned' }, 400);
+    }
+
+    if (dungeon.party.includes(inId)) {
+      return c.json({ error: 'That familiar is already in your party' }, 400);
+    }
+
+    // Only a familiar recruited during this run can join mid-run, and only
+    // once: otherwise any owned familiar could be cycled in at full HP.
+    if (!(dungeon.runRecruits ?? []).includes(inId)) {
+      return c.json({ error: 'Only a familiar recruited this run can join mid-run' }, 400);
+    }
+
+    const outIndex = dungeon.party.indexOf(outId);
+    if (outIndex === -1) {
+      return c.json({ error: 'That familiar is not in your party' }, 400);
+    }
+
+    const incoming = getFamiliar(inId);
+    if (!incoming) {
+      return c.json({ error: 'Invalid familiar id' }, 400);
+    }
+
+    // Replace in place so activeIndex keeps pointing at the same slot. The two
+    // rosters normally match index-for-index; fall back to the other roster's
+    // index if an old save drifted.
+    dungeon.party[outIndex] = inId;
+    if (state.activeParty[outIndex] === outId) {
+      state.activeParty[outIndex] = inId;
+    } else {
+      const activeIndex = state.activeParty.indexOf(outId);
+      if (activeIndex !== -1) {
+        state.activeParty[activeIndex] = inId;
+      }
+    }
+
+    dungeon.runRecruits = (dungeon.runRecruits ?? []).filter((id) => id !== inId);
+    delete dungeon.partyHp[outId];
+    delete dungeon.partyMp[outId];
+    const stats = scaleFamiliarStats(incoming.stats, state.familiarLevels?.[inId] ?? 1);
+    dungeon.partyHp[inId] = stats.maxHp;
+    dungeon.partyMp[inId] = stats.maxMp;
+
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({ state: sanitizeStateForClient(state) });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Replace party member');
   }
 });
 

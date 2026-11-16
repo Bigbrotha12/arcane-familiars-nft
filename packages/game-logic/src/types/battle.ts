@@ -128,6 +128,15 @@ export interface BattleRewards {
   recruitedFamiliar?: string;
   /** Display name of the recruited familiar. */
   recruitedName?: string;
+  /** Level the recruited familiar joined at. */
+  recruitedLevel?: number;
+  /** Bond progress after an unowned species was beaten but not recruited. */
+  recruitProgress?: {
+    familiarId: string;
+    name: string;
+    bond: number;
+    needed: number;
+  };
 }
 
 export enum BattleResult {

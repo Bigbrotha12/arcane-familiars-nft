@@ -79,6 +79,10 @@ export interface GameStateSnapshot {
   bossRoom?: boolean;
   runLootCurrency?: number;
   runLootItemCount?: number;
+  /** Per-species recruit bond built by wins against unowned species. */
+  recruitBond?: Record<string, number>;
+  /** Species ids the player owns, for exploration recruitability hints. */
+  ownedFamiliars?: string[];
 }
 
 /** What the explore response knows about a pending encounter, for the HUD. */
@@ -119,6 +123,15 @@ export interface PartySwapPayload {
   familiarId: string;
 }
 
+export interface RecruitSwap {
+  inId: string;
+  outId: string;
+}
+
+export interface BattleContinuePayload {
+  recruitSwap?: RecruitSwap;
+}
+
 export interface OverlayModePayload {
   mode: OverlayMode;
   enabled: boolean;
@@ -150,7 +163,16 @@ export interface BattleEndedPayload {
     benchLevelUp?: number;
     recruitedFamiliar?: string;
     recruitedName?: string;
+    recruitedLevel?: number;
+    recruitProgress?: {
+      familiarId: string;
+      name: string;
+      bond: number;
+      needed: number;
+    };
   };
+  /** True when the victory happened inside a dungeon run. */
+  inDungeon?: boolean;
   lostLoot?: {
     currency: number;
     items: { itemId: string; name: string; quantity: number }[];

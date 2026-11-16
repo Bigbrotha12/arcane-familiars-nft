@@ -80,12 +80,40 @@ const COLORS = {
   TEXT_ENABLED: '#F0EFFF',
   TEXT_HOVER: '#F0EFFF',
   ERROR: '#EF4444',
+  NEW_TAG: 0xf472b6,
+  NEW_TAG_TEXT: '#F472B6',
 } as const;
 
 const MAX_SAVE_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 const MAX_PARTY_SIZE = 2;
 const DEFAULT_FALLBACK_FAMILIARS = ['whiteDog', 'yellowFighter'];
+const SEEN_FAMILIARS_KEY = 'af_seen_familiars';
+
+/**
+ * Seen ids are best-effort; private browsing or disabled storage must not throw.
+ * Returns null when nothing has been stored yet (first visit).
+ */
+function loadSeenFamiliars(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(SEEN_FAMILIARS_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === 'string'));
+  } catch {
+    // Unreadable storage: treat as a first visit so tags never get stuck on.
+    return null;
+  }
+}
+
+function saveSeenFamiliars(seen: Set<string>): void {
+  try {
+    localStorage.setItem(SEEN_FAMILIARS_KEY, JSON.stringify([...seen]));
+  } catch {
+    // Storage unavailable: the NEW tag simply reappears next session.
+  }
+}
 
 export class PartySelectScene extends Phaser.Scene {
   private layout!: Layout;
@@ -95,6 +123,9 @@ export class PartySelectScene extends Phaser.Scene {
   private cardMap: Map<string, FamiliarCard> = new Map();
   private selectedIds: string[] = [];
   private allFamiliarIds: string[] = [];
+  private seenFamiliars: Set<string> = new Set();
+  /** First visit with no stored list: everything owned now is the baseline, not "new". */
+  private seenBaselineMissing = false;
   private page = 0;
   private readonly PAGE_SIZE = 4;
   private pageText?: Phaser.GameObjects.Text;
@@ -124,6 +155,9 @@ export class PartySelectScene extends Phaser.Scene {
     this.cardMap.clear();
     this.selectedIds = [];
     this.allFamiliarIds = [];
+    const storedSeen = loadSeenFamiliars();
+    this.seenFamiliars = storedSeen ?? new Set();
+    this.seenBaselineMissing = storedSeen === null;
     this.page = 0;
     this.pageText = undefined;
     this.pagePrev = undefined;
@@ -222,6 +256,12 @@ export class PartySelectScene extends Phaser.Scene {
 
       const state = result.state;
       this.fullGameState = state;
+      if (this.seenBaselineMissing) {
+        // Starters (or a save from before NEW tags existed) are not news.
+        for (const id of state.playerFamiliars ?? []) this.seenFamiliars.add(id);
+        saveSeenFamiliars(this.seenFamiliars);
+        this.seenBaselineMissing = false;
+      }
       const savedFamiliars = state.playerFamiliars || [];
       const validSavedFamiliars = savedFamiliars.filter((id) => FAMILIARS[id]);
 
@@ -413,6 +453,33 @@ export class PartySelectScene extends Phaser.Scene {
         )
         .setOrigin(1, 0);
 
+      // NEW tag: owned but not yet seen on this screen. Pink accent matches the
+      // recruit callout from the old victory screen (DESIGN.md rarity colour).
+      const isNew = Boolean(this.fullGameState?.playerFamiliars?.includes(id)) && !this.seenFamiliars.has(id);
+      const newTagText = isNew
+        ? this.add
+            .text(-cardRight + this.layout.s(8), cardTop + this.layout.s(13), 'NEW', {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              fontStyle: '600',
+              color: COLORS.NEW_TAG_TEXT,
+            })
+            .setOrigin(0, 0)
+        : undefined;
+      const newTagBg = newTagText
+        ? this.add
+            .rectangle(
+              newTagText.x - this.layout.s(4),
+              newTagText.y - this.layout.s(2),
+              newTagText.width + this.layout.s(8),
+              this.layout.s(16),
+              COLORS.NEW_TAG,
+              0.22
+            )
+            .setOrigin(0, 0)
+            .setStrokeStyle(this.layout.s(1), COLORS.NEW_TAG, 0.9)
+        : undefined;
+
       // Affinity chip: code-drawn pill + glyph dot in the affinity's palette colour.
       const affinityName = Affinity[familiar.affinity] ?? String(familiar.affinity);
       const affinityColor = AFFINITY_COLORS[affinityName] ?? 0xa5a3c4;
@@ -504,6 +571,8 @@ export class PartySelectScene extends Phaser.Scene {
         ring,
         orderBadgeBg,
         orderBadge,
+        ...(newTagBg ? [newTagBg] : []),
+        ...(newTagText ? [newTagText] : []),
       ]);
 
       const card: FamiliarCard = {
@@ -618,6 +687,7 @@ export class PartySelectScene extends Phaser.Scene {
       await gameApiClient.setParty(this.selectedIds);
       if (this._sceneGeneration !== gen) return;
 
+      this.markOwnedFamiliarsSeen();
       fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
@@ -640,6 +710,19 @@ export class PartySelectScene extends Phaser.Scene {
         this.confirmParty();
       });
     }
+  }
+
+  /** Confirming the party counts as seeing every owned familiar. */
+  private markOwnedFamiliarsSeen(): void {
+    const owned = this.fullGameState?.playerFamiliars ?? [];
+    let changed = false;
+    for (const id of owned) {
+      if (!this.seenFamiliars.has(id)) {
+        this.seenFamiliars.add(id);
+        changed = true;
+      }
+    }
+    if (changed) saveSeenFamiliars(this.seenFamiliars);
   }
 
   private showSaveErrorWithGoBack(): void {

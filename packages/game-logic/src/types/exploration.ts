@@ -77,4 +77,10 @@ export interface DungeonState {
   seed?: number;
   /** Loot found during this run; banked on exit/victory, lost on defeat. */
   runLoot?: Inventory;
+  /**
+   * Species recruited during this run that may still be swapped into the
+   * party once (from the victory screen). Limits the swap to fresh recruits so
+   * it cannot be used to cycle owned familiars back in at full HP.
+   */
+  runRecruits?: string[];
 }
