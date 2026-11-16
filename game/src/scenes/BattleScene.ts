@@ -835,6 +835,7 @@ export class BattleScene extends Phaser.Scene {
             items: rewards.items,
             bossChest: rewards.bossChest,
             eliteChest: rewards.eliteChest,
+            dailyBonus: rewards.dailyBonus,
             xp: rewards.xp,
             levelUp: rewards.levelUp,
             activeFamiliarName: this.battleState?.playerFamiliar.familiarData.name,

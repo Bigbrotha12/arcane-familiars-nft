@@ -82,6 +82,50 @@ export interface TreasureEntry {
   weight: number;
 }
 
+/**
+ * Tallies for one dungeon run. Created lazily by `getRunStats` so saves made
+ * before run summaries existed keep loading. Every field is additive: the
+ * matching route increments the counters as events happen.
+ */
+export interface RunStats {
+  battlesWon: number;
+  elitesWon: number;
+  roomsExplored: number;
+  chestsOpened: number;
+  curiosUsed: number;
+  xpByFamiliar: Record<string, number>;
+  /** Levels gained per familiar during the run (not the final level). */
+  levelsByFamiliar: Record<string, number>;
+  /** Largest single player damage step, with the action that produced it. */
+  bestHit?: { familiarId: string; damage: number; abilityName: string };
+  /** Species ids recruited during the run. */
+  recruits: string[];
+  /** Bond gained per unowned species during the run. */
+  bondGains: Record<string, number>;
+  /** Display strings, e.g. "White Dog learned Sturdy". */
+  learned: string[];
+  /** Display strings, e.g. "White Dog unlocked Sturdy". */
+  passiveUnlocks: string[];
+}
+
+/** Loot shape used by the end-of-run summary. */
+export interface RunSummaryLoot {
+  currency: number;
+  /** One entry per item unit, so the client can group and count. */
+  items: string[];
+  charms?: number;
+}
+
+export interface RunSummary {
+  outcome: 'cleared' | 'retreated' | 'defeated';
+  areaId: string;
+  areaName: string;
+  stats: RunStats;
+  loot: RunSummaryLoot;
+  /** Only set for a defeat: the loot that was discarded. */
+  lost?: RunSummaryLoot;
+}
+
 export interface RoomExit {
   direction: Directions;
   roomId: string;
@@ -106,6 +150,10 @@ export interface DungeonState {
   runLoot?: Inventory;
   /** Charms found during this run; banked on exit/victory, lost on defeat. */
   runCharms?: CharmInstance[];
+  /** Per-run event tallies; created lazily by `getRunStats`. */
+  runStats?: RunStats;
+  /** UTC day (YYYY-MM-DD) of a Daily Expedition; absent on normal runs. */
+  daily?: string;
   /**
    * Species recruited during this run that may still be swapped into the
    * party once (from the victory screen). Limits the swap to fresh recruits so

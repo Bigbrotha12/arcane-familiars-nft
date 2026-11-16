@@ -24,6 +24,20 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
 
   return (
     <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-lg max-sm:py-md">
+      {(snapshot.areaName || snapshot.daily) && (
+        <div className="flex max-w-full items-center gap-1.5">
+          {snapshot.areaName && (
+            <span className="truncate font-body text-[9px] uppercase tracking-wider text-[#A5A3C4] max-sm:text-[15px]">
+              {snapshot.areaName}
+            </span>
+          )}
+          {snapshot.daily && (
+            <span className="shrink-0 rounded-sm bg-teal/20 px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider text-teal max-sm:px-2 max-sm:text-[15px]">
+              ☀ Daily Expedition
+            </span>
+          )}
+        </div>
+      )}
       <div className="flex max-w-full items-center gap-1.5">
         <h2 className="truncate font-display text-sm font-bold text-[#F0EFFF] max-sm:text-[24px]">
           {snapshot.roomName ?? 'Unknown Room'}

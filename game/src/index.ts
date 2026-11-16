@@ -33,4 +33,5 @@ export type {
   CharmsPayload,
   CharmEquipPayload,
   CharmSalvagePayload,
+  RunSummaryPayload,
 } from './events';

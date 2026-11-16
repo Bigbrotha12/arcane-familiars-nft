@@ -10,6 +10,7 @@ import type {
   CurioResponse,
   CharmInstance,
   CharmRoll,
+  RunSummary,
 } from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
@@ -125,8 +126,12 @@ class GameApiClient {
     return this.request('POST', '/api/game/state/party/active', { anonymousId: this.anonymousId, familiarId });
   }
 
-  async enterDungeon(areaId: string): Promise<{ dungeon: DungeonState; area: Area }> {
-    return this.request('POST', '/api/game/dungeon/enter', { anonymousId: this.anonymousId, areaId });
+  async enterDungeon(areaId: string, daily = false): Promise<{ dungeon: DungeonState; area: Area }> {
+    return this.request('POST', '/api/game/dungeon/enter', {
+      anonymousId: this.anonymousId,
+      areaId,
+      ...(daily ? { daily: true } : {}),
+    });
   }
 
   async exploreRoom(roomId: string): Promise<ExploreResponse> {
@@ -152,7 +157,7 @@ class GameApiClient {
     });
   }
 
-  async exitDungeon(): Promise<{ success: boolean }> {
+  async exitDungeon(): Promise<{ success: boolean; runSummary?: RunSummary }> {
     return this.request('POST', '/api/game/dungeon/exit', { anonymousId: this.anonymousId });
   }
 
@@ -162,6 +167,10 @@ class GameApiClient {
       outId,
       inId,
     });
+  }
+
+  async ackRunSummary(): Promise<{ success: boolean }> {
+    return this.request('POST', '/api/game/run-summary/ack', { anonymousId: this.anonymousId });
   }
 
   async buyItem(itemId: string): Promise<{ success: boolean; state: GameState }> {
@@ -176,7 +185,7 @@ class GameApiClient {
     battleId: string,
     action: BattleAction,
     expectedTurnCount?: number
-  ): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number }> {
+  ): Promise<{ turnResult: BattleTurnResult; state?: GameState; turnCount: number; runSummary?: RunSummary }> {
     return this.request('POST', '/api/game/battle/action', {
       anonymousId: this.anonymousId,
       battleId,
