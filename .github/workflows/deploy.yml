@@ -94,6 +94,26 @@ jobs:
       - name: Verify staging Worker health
         run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.staging-worker-url.outputs.worker-url }}/api/health" > /dev/null
 
+      # Audio is gitignored (pack licences forbid redistributing the raw files),
+      # so fetch it here or the deployed game is silent. Cached by script hash;
+      # ffmpeg is only installed on a cache miss. See docs/AUDIO-PIPELINE.md.
+      - name: Restore audio assets
+        id: audio-cache
+        uses: actions/cache@v4
+        with:
+          path: game/public/assets/audio
+          key: audio-${{ hashFiles('scripts/fetch-audio-assets.sh') }}
+
+      - name: Fetch audio assets
+        if: steps.audio-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+          npm run audio:fetch
+
+      - name: Check audio assets
+        run: npm run audio:check
+
       # No VITE_BACKEND_URL: the SPA calls /api same-origin, and the Pages
       # Function (frontend/functions/api) forwards it to the Worker over a
       # service binding, so session cookies are first-party (docs P0.28).
@@ -204,6 +224,26 @@ jobs:
 
       - name: Verify production Worker health
         run: curl -fsS --retry-all-errors --retry 5 --retry-delay 2 --retry-connrefused "${{ steps.prod-worker-url.outputs.worker-url }}/api/health" > /dev/null
+
+      # Audio is gitignored (pack licences forbid redistributing the raw files),
+      # so fetch it here or the deployed game is silent. Cached by script hash;
+      # ffmpeg is only installed on a cache miss. See docs/AUDIO-PIPELINE.md.
+      - name: Restore audio assets
+        id: audio-cache
+        uses: actions/cache@v4
+        with:
+          path: game/public/assets/audio
+          key: audio-${{ hashFiles('scripts/fetch-audio-assets.sh') }}
+
+      - name: Fetch audio assets
+        if: steps.audio-cache.outputs.cache-hit != 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends ffmpeg
+          npm run audio:fetch
+
+      - name: Check audio assets
+        run: npm run audio:check
 
       # No VITE_BACKEND_URL: the SPA calls /api same-origin, and the Pages
       # Function (frontend/functions/api) forwards it to the Worker over a
