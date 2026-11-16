@@ -52,6 +52,8 @@ export interface ActionResult {
   appliedEffects?: StatusEffect[];
   /** Secondary MP restoration applied alongside the primary effect (multi-effect items). */
   mpValue?: number;
+  /** MP restored to the acting combatant by this action (basic-attack MP regain). */
+  actorMpRestore?: number;
   /** Removes Debuff/Dot status effects from the target (item cleanse). */
   cleanse?: boolean;
   /** Affinity matchup that scaled a direct hit (omitted when neutral). */
@@ -137,6 +139,13 @@ export interface BattleRewards {
     bond: number;
     needed: number;
   };
+  /** Abilities unlocked by level-ups earned in this battle. */
+  learned?: {
+    familiarId: string;
+    familiarName: string;
+    abilityId: string;
+    abilityName: string;
+  }[];
 }
 
 export enum BattleResult {

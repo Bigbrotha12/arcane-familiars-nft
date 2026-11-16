@@ -10,7 +10,7 @@ import {
 import { seededRandom } from '../mathUtils';
 import { getFamiliar } from '../../data/familiars';
 import { ActionType, Outcome } from '../../types/battle';
-import { EffectType, ScalingStat, StatName } from '../../data/abilities';
+import { EffectType, ScalingStat, StatName, getAbility } from '../../data/abilities';
 import { BALANCE } from '../../data/balance';
 import type { BattleFamiliar, StatusEffect } from '../../types/battle';
 
@@ -487,8 +487,60 @@ describe('resolveTurn', () => {
       steadyRng()
     );
     expect(result.playerResult.effectType).toBe(EffectType.Damage);
-    // brave: 1.5x attack
-    expect(result.playerResult.value).toBe(expectedDamage(55, 70, 1.5));
+    // brave: 1.3x attack at full HP
+    expect(result.playerResult.value).toBe(expectedDamage(55, 70, 1.3));
+  });
+
+  it("scales Brave with the user's missing HP and calls out the desperate blow", () => {
+    const full = resolveTurn(
+      { type: ActionType.Ability, abilityId: 'brave' },
+      makeFamiliar({ currentHp: 120 }),
+      makeFamiliar(),
+      { type: ActionType.Attack },
+      steadyRng()
+    );
+    expect(full.playerResult.value).toBe(expectedDamage(55, 70, 1.3));
+    expect(full.playerResult.description).not.toContain('desperate');
+
+    // 12 / 120 HP: 1.3 + 0.9 * (1 - 0.1) = 2.11x
+    const desperate = resolveTurn(
+      { type: ActionType.Ability, abilityId: 'brave' },
+      makeFamiliar({ currentHp: 12 }),
+      makeFamiliar(),
+      { type: ActionType.Attack },
+      steadyRng()
+    );
+    expect(desperate.playerResult.value).toBe(expectedDamage(55, 70, 2.11));
+    expect(desperate.playerResult.description).toContain('a desperate blow!');
+  });
+
+  it('restores a little MP to the attacker on a basic attack, capped at max', () => {
+    const player = makeFamiliar({ currentMp: 40 }); // max 80
+    const enemy = makeFamiliar({ currentMp: 50 }); // max 80
+    const result = resolveTurn({ type: ActionType.Attack }, player, enemy, { type: ActionType.Attack }, steadyRng());
+
+    const restored = Math.max(1, Math.round(80 * BALANCE.attackMpRestore));
+    expect(result.playerResult.value).toBe(expectedDamage(55, 70, 1.0));
+    expect(result.playerResult.actorMpRestore).toBe(restored);
+    expect(result.updatedPlayerFamiliar.currentMp).toBe(40 + restored);
+    expect(result.updatedEnemyFamiliar.currentMp).toBe(50 + restored);
+
+    // Per-step snapshots carry the new MP so the client MP bar updates.
+    const playerStep = result.steps.find((step) => step.actorUid === player.uid)!;
+    expect(playerStep.playerAfter.currentMp).toBe(40 + restored);
+    const enemyStep = result.steps.find((step) => step.actorUid === enemy.uid)!;
+    expect(enemyStep.enemyAfter.currentMp).toBe(50 + restored);
+
+    // Full MP cannot overflow.
+    const capped = resolveTurn(
+      { type: ActionType.Attack },
+      makeFamiliar({ currentMp: 80 }),
+      makeFamiliar({ currentMp: 80 }),
+      { type: ActionType.Attack },
+      steadyRng()
+    );
+    expect(capped.updatedPlayerFamiliar.currentMp).toBe(80);
+    expect(capped.playerResult.actorMpRestore).toBeUndefined();
   });
 
   it('appends affinity text to the attack description', () => {
@@ -864,11 +916,12 @@ describe('resolveTurn', () => {
       rng
     );
     expect(result.steps.map((s) => s.actorUid)).toEqual([enemy.uid, player.uid]);
-    expect(result.updatedEnemyFamiliar.currentMp).toBe(60 - 10);
-    expect(result.updatedPlayerFamiliar.currentMp).toBe(80 - 10);
+    const braveCost = getAbility('brave')!.mpCost;
+    expect(result.updatedEnemyFamiliar.currentMp).toBe(60 - braveCost);
+    expect(result.updatedPlayerFamiliar.currentMp).toBe(80 - braveCost);
     // Playback snapshots carry per-step MP state too.
     expect(result.steps[0].playerAfter.currentMp).toBe(80);
-    expect(result.steps[1].playerAfter.currentMp).toBe(70);
+    expect(result.steps[1].playerAfter.currentMp).toBe(80 - braveCost);
   });
 
   it('Charge sets the charged flag, costs no MP and creates no status effect', () => {
@@ -927,8 +980,8 @@ describe('resolveTurn', () => {
       { type: ActionType.Ability, abilityId: 'brave' },
       steadyRng()
     );
-    // brave 1.5x attack (80) vs defense 70, doubled by the charge.
-    expect(result.enemyResult.value).toBe(expectedDamage(80, 70, 1.5, { charged: BALANCE.bossChargeMultiplier }));
+    // brave 1.3x attack (80) vs defense 70, doubled by the charge.
+    expect(result.enemyResult.value).toBe(expectedDamage(80, 70, 1.3, { charged: BALANCE.bossChargeMultiplier }));
     expect(result.updatedEnemyFamiliar.charged).toBe(false);
   });
 });

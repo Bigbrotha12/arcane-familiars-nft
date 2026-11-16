@@ -170,6 +170,13 @@ export interface BattleEndedPayload {
       bond: number;
       needed: number;
     };
+    /** Abilities unlocked by level-ups earned in this battle. */
+    learned?: {
+      familiarId: string;
+      familiarName: string;
+      abilityId: string;
+      abilityName: string;
+    }[];
   };
   /** True when the victory happened inside a dungeon run. */
   inDungeon?: boolean;
