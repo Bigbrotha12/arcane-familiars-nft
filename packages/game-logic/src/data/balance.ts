@@ -64,6 +64,8 @@ export const BALANCE = {
   /** Per-win chance to recruit a defeated unowned species. */
   recruitChanceCommon: 0.22,
   recruitChanceRare: 0.12,
+  /** Coins granted by the first Daily Expedition clear of a UTC day. */
+  dailyBonusCurrency: 150,
   /**
    * Wins against an unowned species needed to guarantee a recruit. The bond
    * meter makes recruitment workable even when the per-win roll never lands.

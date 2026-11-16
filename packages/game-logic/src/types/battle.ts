@@ -134,6 +134,8 @@ export interface BattleRewards {
   bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
   /** Rare chest from an elite victory; banked with the run loot. */
   eliteChest?: { items: string[]; currency: number; charm?: CharmRoll };
+  /** Daily Expedition first-clear bonus (coins plus an epic chest). */
+  dailyBonus?: { currency: number; items: string[]; charm?: CharmRoll };
   /** XP awarded to the active familiar. */
   xp?: number;
   /** Number of levels gained by the active familiar. */

@@ -1,5 +1,5 @@
 import type { BattleAction, BattleState, BattleTurnResult } from '@/types/battle';
-import type { Area, ChestTier, DungeonState, RestHeal, Room } from '@/types/exploration';
+import type { Area, ChestTier, DungeonState, RestHeal, Room, RunSummary } from '@/types/exploration';
 import type { CharmRoll } from '@/data/charms';
 import type { CurioOutcome } from '@/data/curios';
 import type { EliteId } from '@/data/elites';
@@ -26,7 +26,10 @@ export interface SetPartyResponse {
 
 export interface EnterDungeonRequest {
   anonymousId: string;
+  /** Ignored when `daily` is true; the server uses the day's expedition area. */
   areaId: string;
+  /** Enter the shared UTC-day expedition instead of the requested area. */
+  daily?: boolean;
 }
 
 export interface EnterDungeonResponse {
@@ -117,6 +120,8 @@ export interface ExitDungeonResponse {
   success: boolean;
   /** What leaving the run banked, including charms and any auto-salvage. */
   banked?: RunLootSummary;
+  /** End-of-run summary; also stored on the state as `lastRunSummary`. */
+  runSummary?: RunSummary;
 }
 
 export interface StartBattleRequest {
@@ -139,6 +144,8 @@ export interface BattleActionResponse {
   turnResult: BattleTurnResult;
   state?: GameState;
   turnCount: number;
+  /** Set when this turn ended the run (boss clear or defeat). */
+  runSummary?: RunSummary;
 }
 
 export interface SwapFamiliarRequest {
@@ -179,4 +186,12 @@ export interface AbandonBattleResponse {
   success: boolean;
   state: GameState;
   forfeited: boolean;
+}
+
+export interface AckRunSummaryRequest {
+  anonymousId: string;
+}
+
+export interface AckRunSummaryResponse {
+  success: boolean;
 }

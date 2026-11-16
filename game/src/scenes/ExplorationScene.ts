@@ -39,6 +39,8 @@ import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface ExplorationSceneData {
   areaId: string;
+  /** True when this run is today's shared Daily Expedition. */
+  daily?: boolean;
   lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
   pendingTreasureItemId?: string | null;
   recruitSwap?: RecruitSwap;
@@ -57,6 +59,7 @@ export class ExplorationScene extends Phaser.Scene {
   private fullGameState: GameState | null = null;
   private area: Area | null = null;
   private areaId!: string;
+  private daily = false;
   private layout!: Layout;
   private isProcessing = false;
   private isSwapping = false;
@@ -81,6 +84,7 @@ export class ExplorationScene extends Phaser.Scene {
 
   init(data: ExplorationSceneData): void {
     this.areaId = data.areaId;
+    this.daily = data.daily === true;
     this.isProcessing = false;
     this.isSwapping = false;
     this.dungeon = null;
@@ -189,6 +193,7 @@ export class ExplorationScene extends Phaser.Scene {
       if (state.dungeon) {
         this.dungeon = state.dungeon;
         this.areaId = state.dungeon.areaId;
+        this.daily = Boolean(state.dungeon.daily);
         this.area = AREAS[this.areaId];
         this.syncAreaAudio();
 
@@ -255,8 +260,11 @@ export class ExplorationScene extends Phaser.Scene {
     try {
       this.pendingTreasureItemId = null;
       this.enemiesDefeated = 0;
-      const result = await this.gameApi.enterDungeon(this.areaId);
+      const result = await this.gameApi.enterDungeon(this.areaId, this.daily);
       this.dungeon = result.dungeon;
+      this.areaId = result.dungeon.areaId;
+      this.area = AREAS[this.areaId] ?? this.area;
+      this.daily = Boolean(result.dungeon.daily);
 
       const currentRoom = result.dungeon.rooms[result.dungeon.currentRoomId];
       if (!currentRoom) {
@@ -554,6 +562,7 @@ export class ExplorationScene extends Phaser.Scene {
       wins: this.fullGameState?.winCount ?? 0,
       currentScene: 'exploration',
       areaName: this.area?.name,
+      daily: Boolean(dungeon.daily),
       roomName: currentRoom?.name,
       roomType: currentRoom ? RoomType[currentRoom.type] : undefined,
       roomDescription: currentRoom?.description,

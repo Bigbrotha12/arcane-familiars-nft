@@ -1,4 +1,11 @@
-import type { ChestTier, ItemRarity, CharmRoll, CharmInstance, EliteId } from '@arcane-familiars/game-logic';
+import type {
+  ChestTier,
+  ItemRarity,
+  CharmRoll,
+  CharmInstance,
+  EliteId,
+  RunSummary,
+} from '@arcane-familiars/game-logic';
 
 export enum GameEvent {
   STATE_UPDATED = 'game:stateUpdated',
@@ -24,6 +31,8 @@ export enum GameEvent {
   OPEN_CHARMS = 'game:openCharms', // Phaser → React: open the charm management modal
   CHARM_EQUIP = 'game:charmEquip', // React → Phaser: equip/unequip a charm
   CHARM_SALVAGE = 'game:charmSalvage', // React → Phaser: salvage an unequipped charm
+  SHOW_RUN_SUMMARY = 'game:showRunSummary', // Phaser → React: open the end-of-run summary
+  RUN_SUMMARY_ACK = 'game:runSummaryAck', // React → Phaser: summary dismissed, clear it server-side
 }
 
 export type BattleSpeed = 'slow' | 'medium' | 'fast';
@@ -109,6 +118,8 @@ export interface GameStateSnapshot {
   ownedFamiliars?: string[];
   /** Party-wide passives active in this battle. */
   passives?: PassiveView[];
+  /** True while exploring today's Daily Expedition. */
+  daily?: boolean;
 }
 
 /** The elite affix on a pending encounter, shown before the fight. */
@@ -238,6 +249,8 @@ export interface BattleEndedPayload {
     bossChest?: { items: string[]; currency: number; charm?: CharmRoll };
     /** Rare chest from an elite victory. */
     eliteChest?: { items: string[]; currency: number; charm?: CharmRoll };
+    /** First Daily Expedition clear of the day. */
+    dailyBonus?: { currency: number; items: string[]; charm?: CharmRoll };
     xp?: number;
     levelUp?: number;
     /** Display name of the familiar that landed the winning blow. */
@@ -347,4 +360,10 @@ export interface CharmEquipPayload {
 /** React → Phaser: salvage an unequipped charm. */
 export interface CharmSalvagePayload {
   charmUid: string;
+}
+
+/** Phaser → React: the run's summary, plus final levels for the Lv → Lv line. */
+export interface RunSummaryPayload {
+  summary: RunSummary;
+  familiarLevels?: Record<string, number>;
 }

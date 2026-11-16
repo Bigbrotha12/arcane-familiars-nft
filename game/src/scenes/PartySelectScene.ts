@@ -31,6 +31,8 @@ import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface PartySelectData {
   areaId: string;
+  /** Enter the day's shared expedition after party selection. */
+  daily?: boolean;
 }
 
 interface FamiliarCard {
@@ -130,6 +132,7 @@ function saveSeenFamiliars(seen: Set<string>): void {
 export class PartySelectScene extends Phaser.Scene {
   private layout!: Layout;
   private areaId!: string;
+  private daily = false;
   private fullGameState: GameState | null = null;
   private cards: FamiliarCard[] = [];
   private cardMap: Map<string, FamiliarCard> = new Map();
@@ -184,6 +187,7 @@ export class PartySelectScene extends Phaser.Scene {
       return;
     }
     this.areaId = data.areaId;
+    this.daily = data.daily === true;
   }
 
   preload(): void {
@@ -786,7 +790,7 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       this.markOwnedFamiliarsSeen();
-      fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
+      fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: this.areaId, ...(this.daily ? { daily: true } : {}) });
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
 

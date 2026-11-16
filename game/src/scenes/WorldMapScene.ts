@@ -1,11 +1,17 @@
 import Phaser from 'phaser';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, FAMILIARS } from '@arcane-familiars/game-logic';
+import { AREAS, FAMILIARS, dailyExpedition } from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
-import type { GameStateSnapshot, CharmsPayload, CharmEquipPayload, CharmSalvagePayload } from '../events';
+import type {
+  GameStateSnapshot,
+  CharmsPayload,
+  CharmEquipPayload,
+  CharmSalvagePayload,
+  RunSummaryPayload,
+} from '../events';
 import { Layout } from '../ui/layout';
 import { MOTION } from '../ui/motion';
 import { fadeIn, fadeToScene } from '../ui/transitions';
@@ -39,6 +45,10 @@ const CARD = {
   START_Y: 92,
 } as const;
 
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 export class WorldMapScene extends Phaser.Scene {
   private readonly MESSAGE_DISPLAY_MS = 2000;
   private layout!: Layout;
@@ -46,6 +56,9 @@ export class WorldMapScene extends Phaser.Scene {
   private loadingText!: Phaser.GameObjects.Text;
   private statsText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
+  private dailyText!: Phaser.GameObjects.Text;
+  private dailyAreaId?: string;
+  private dailyCleared = false;
   private timers: Phaser.Time.TimerEvent[] = [];
   private _sceneGeneration = 0;
   private selectedCardIndex = -1;
@@ -99,6 +112,7 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
     gameEventBus.on(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
     gameEventBus.on(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
+    gameEventBus.on(GameEvent.RUN_SUMMARY_ACK, this.handleRunSummaryAck);
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
     this.layout = new Layout(this);
@@ -191,6 +205,28 @@ export class WorldMapScene extends Phaser.Scene {
     charmsText.on('pointerover', () => charmsText.setColor('#A78BFA'));
     charmsText.on('pointerout', () => charmsText.setColor('#7C5CFC'));
 
+    // Daily Expedition: same text-button treatment as Shop, on the left so the
+    // two never overlap.
+    this.dailyText = this.add
+      .text(this.layout.x(80), this.layout.y(558), '☀ Daily Expedition', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        fontStyle: '500',
+        color: '#7C5CFC',
+      })
+      .setOrigin(0, 0.5)
+      .setInteractive({ useHandCursor: true });
+    this.dailyText.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.openDailyExpedition();
+    });
+    this.dailyText.on('pointerover', () => {
+      if (!this.dailyCleared) this.dailyText.setColor('#A78BFA');
+    });
+    this.dailyText.on('pointerout', () => {
+      this.dailyText.setColor(this.dailyCleared ? '#A5A3C4' : '#7C5CFC');
+    });
+
     this.setupKeyboardNavigation();
 
     try {
@@ -205,14 +241,24 @@ export class WorldMapScene extends Phaser.Scene {
       );
 
       const unlockedAreas = state.unlockedAreas?.length ? state.unlockedAreas : ['verdantMeadow'];
+      this.updateDailyButton(unlockedAreas, state.dailyClearedDay);
       this.createAreaCards(unlockedAreas, state.defeatedBosses ?? []);
       this.loadingText.setAlpha(0);
       this.emitStateUpdate();
+
+      if (state.lastRunSummary) {
+        const payload: RunSummaryPayload = {
+          summary: state.lastRunSummary,
+          familiarLevels: state.familiarLevels ?? {},
+        };
+        gameEventBus.emit(GameEvent.SHOW_RUN_SUMMARY, payload);
+      }
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
       console.error('WorldMapScene: failed to load game state:', err);
 
       this.statsText.setText('Battles: 0  |  Wins: 0  |  Currency: 0');
+      this.updateDailyButton(['verdantMeadow']);
       this.createAreaCards(['verdantMeadow'], []);
       this.loadingText.setAlpha(0);
     }
@@ -498,6 +544,16 @@ export class WorldMapScene extends Phaser.Scene {
     }
   };
 
+  private handleRunSummaryAck = async (): Promise<void> => {
+    try {
+      await gameApiClient.ackRunSummary();
+      if (this.fullGameState) this.fullGameState.lastRunSummary = undefined;
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to dismiss the run summary';
+      this.showMessage(message);
+    }
+  };
+
   private handleSave = async (): Promise<void> => {
     // The server owns game state; nothing client-side to persist here.
     gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
@@ -508,13 +564,31 @@ export class WorldMapScene extends Phaser.Scene {
    * refresh), continue that run instead of opening party selection — an active
    * dungeon rejects party changes with a 409.
    */
-  private openArea(areaId: string): void {
+  private openArea(areaId: string, daily = false): void {
     const dungeon = this.fullGameState?.dungeon;
     if (dungeon) {
       fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: dungeon.areaId });
       return;
     }
-    fadeToScene(this, SCENE_KEYS.PARTY_SELECT, { areaId });
+    fadeToScene(this, SCENE_KEYS.PARTY_SELECT, { areaId, ...(daily ? { daily: true } : {}) });
+  }
+
+  /** Show the day's area and whether its bonus has already been claimed. */
+  private updateDailyButton(unlockedAreas: string[], dailyClearedDay?: string): void {
+    const today = todayUtc();
+    const expedition = dailyExpedition(today, unlockedAreas);
+    this.dailyAreaId = expedition.areaId;
+    this.dailyCleared = dailyClearedDay === today;
+
+    const areaName = AREAS[expedition.areaId]?.name ?? expedition.areaId;
+    const cleared = this.dailyCleared ? ' · ✓ Cleared today' : '';
+    this.dailyText.setText(`☀ Daily Expedition · ${areaName}${cleared}`);
+    this.dailyText.setColor(this.dailyCleared ? '#A5A3C4' : '#7C5CFC');
+  }
+
+  private openDailyExpedition(): void {
+    if (!this.dailyAreaId) return;
+    this.openArea(this.dailyAreaId, true);
   }
 
   private handleExit = (): void => {
@@ -529,6 +603,7 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
     gameEventBus.off(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
     gameEventBus.off(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
+    gameEventBus.off(GameEvent.RUN_SUMMARY_ACK, this.handleRunSummaryAck);
     this.ariaLiveElement?.remove();
     this.ariaLiveElement = null;
   }

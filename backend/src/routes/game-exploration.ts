@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { CharmInstance, ChestTier, CurioGains, GameState } from '@arcane-familiars/game-logic';
+import type { CharmInstance, ChestTier, CurioGains, GameState, RunSummary } from '@arcane-familiars/game-logic';
 import {
   AREAS,
   BALANCE,
@@ -25,6 +25,8 @@ import {
   validateParty,
   scaleFamiliarStats,
   getRunLoot,
+  getRunStats,
+  buildRunSummary,
   addInventoryItem,
   bankRunLoot,
   findOwnedItem,
@@ -34,6 +36,7 @@ import {
   newPassiveTiers,
   resolveCurioOption,
   rollChest,
+  dailyExpedition,
 } from '@arcane-familiars/game-logic';
 import type { EliteId } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
@@ -54,27 +57,50 @@ function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 explorationRouter.post('/game/dungeon/enter', async (c) => {
   try {
-    const body = await readBody<{ anonymousId: string; areaId: string }>(c);
+    const body = await readBody<{ anonymousId: string; areaId?: string; daily?: boolean }>(c);
     if (!body) {
       return c.json({ error: 'Invalid JSON body' }, 400);
     }
 
-    const { anonymousId, areaId } = body;
-    if (!anonymousId || !areaId) {
-      return c.json({ error: 'Missing required fields: anonymousId, areaId' }, 400);
+    const { anonymousId, areaId: requestedAreaId, daily } = body;
+    if (!anonymousId) {
+      return c.json({ error: 'Missing required field: anonymousId' }, 400);
     }
-
-    const area = AREAS[areaId];
-    if (!area) {
-      return c.json({ error: 'Invalid area id' }, 400);
+    if (daily !== true && !requestedAreaId) {
+      return c.json({ error: 'Missing required fields: anonymousId, areaId' }, 400);
     }
 
     const isGuest = c.get('isGuest') ?? false;
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
 
     const state = loaded.state;
+    const today = todayUtc();
+
+    let areaId: string;
+    let seed: number;
+    if (daily === true) {
+      const expedition = dailyExpedition(today, state.unlockedAreas);
+      areaId = expedition.areaId;
+      seed = expedition.seed;
+    } else {
+      areaId = requestedAreaId as string;
+      const requested = AREAS[areaId];
+      if (!requested) {
+        return c.json({ error: 'Invalid area id' }, 400);
+      }
+      seed = cryptoSeed();
+    }
+
+    const area = AREAS[areaId];
+    if (!area) {
+      return c.json({ error: 'Invalid area id' }, 400);
+    }
 
     if (!state.unlockedAreas.includes(areaId)) {
       return c.json({ error: 'Area is not unlocked' }, 403);
@@ -89,7 +115,14 @@ explorationRouter.post('/game/dungeon/enter', async (c) => {
       return c.json({ error: partyValidation.error ?? 'Party is invalid' }, 400);
     }
 
-    const dungeon = generateDungeon(area, cryptoSeed());
+    const dungeon = generateDungeon(area, seed);
+    if (daily === true) {
+      dungeon.daily = today;
+      // The date seed fixes the shared layout (rooms, branches, curio spots).
+      // Per-room rolls (encounters, chests, curio outcomes) use a fresh seed per
+      // entry, so retreating and re-entering cannot farm a known chest.
+      dungeon.seed = cryptoSeed();
+    }
     dungeon.party = [...state.activeParty];
     for (const familiarId of dungeon.party) {
       const familiar = getFamiliar(familiarId);
@@ -186,6 +219,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       }
     } else {
       room.cleared = true;
+      getRunStats(state.dungeon).roomsExplored += 1;
 
       const rng = seededRandom(roomRollSeed(state.dungeon.seed ?? 0, roomId));
 
@@ -316,6 +350,7 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     }
 
     pending.looted = true;
+    getRunStats(state.dungeon).chestsOpened += 1;
 
     // Treasure is run loot, not banked inventory. It is usable during the run
     // and is lost on defeat; exiting or winning banks it.
@@ -437,6 +472,7 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
 
     const { outcome, text } = resolution;
     const gains: CurioGains = {};
+    const runStats = getRunStats(dungeon);
     let ambushEnemy: string | undefined;
 
     const living = (dungeon.party ?? []).filter((id) => (dungeon.partyHp[id] ?? 0) > 0);
@@ -481,6 +517,7 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
           addInventoryItem(runLoot, itemId);
         }
         runLoot.currency += chest.currency;
+        runStats.chestsOpened += 1;
         gains.items = chest.items;
         gains.currency = chest.currency;
         if (chest.charm) {
@@ -509,6 +546,8 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
           const progress = applyFamiliarXp(levelBefore, state.familiarXp[familiarId] ?? 0, outcome.amount);
           state.familiarLevels[familiarId] = progress.level;
           state.familiarXp[familiarId] = progress.xp;
+          runStats.xpByFamiliar[familiarId] = (runStats.xpByFamiliar[familiarId] ?? 0) + outcome.amount;
+          runStats.levelsByFamiliar[familiarId] = (runStats.levelsByFamiliar[familiarId] ?? 0) + progress.levelsGained;
           levels.push({
             familiarId,
             name: base.name,
@@ -541,6 +580,12 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
         gains.levels = levels;
         if (learned.length > 0) gains.learned = learned;
         if (passiveUnlocks.length > 0) gains.passiveUnlocks = passiveUnlocks;
+        for (const entry of learned) {
+          runStats.learned.push(`${entry.familiarName} learned ${entry.abilityName}`);
+        }
+        for (const entry of passiveUnlocks) {
+          runStats.passiveUnlocks.push(`${entry.familiarName} unlocked ${entry.passiveName}`);
+        }
         break;
       }
       case 'bond': {
@@ -561,6 +606,7 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
             state.recruitBond ??= {};
             const bond = (state.recruitBond[speciesId] ?? 0) + outcome.amount;
             state.recruitBond[speciesId] = bond;
+            runStats.bondGains[speciesId] = (runStats.bondGains[speciesId] ?? 0) + outcome.amount;
             gains.bond = {
               speciesId,
               name: species.name,
@@ -586,6 +632,7 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
 
     // A curio is spent no matter what it gave back.
     placed.used = true;
+    runStats.curiosUsed += 1;
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
@@ -717,6 +764,14 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
 
     // Leaving banks everything found this run.
     const banked = bankRunLoot(state);
+    const runSummary: RunSummary = buildRunSummary({
+      outcome: 'retreated',
+      areaId: state.dungeon.areaId,
+      areaName: AREAS[state.dungeon.areaId]?.name,
+      stats: getRunStats(state.dungeon),
+      loot: banked,
+    });
+    state.lastRunSummary = runSummary;
     state.dungeon = null;
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
@@ -724,9 +779,43 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, banked });
+    return c.json({ success: true, banked, runSummary });
   } catch (error: unknown) {
     return internalError(c, error, 'Exit dungeon');
+  }
+});
+
+explorationRouter.post('/game/run-summary/ack', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const anonymousId = body.anonymousId;
+    if (!anonymousId) {
+      return c.json({ error: 'Missing required field: anonymousId' }, 400);
+    }
+
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+    const state: GameState = loaded.state;
+
+    // Idempotent: acking an already-cleared summary is a successful no-op.
+    if (!state.lastRunSummary) {
+      return c.json({ success: true });
+    }
+
+    state.lastRunSummary = undefined;
+
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({ success: true });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Acknowledge run summary');
   }
 });
 

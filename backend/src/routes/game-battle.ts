@@ -38,6 +38,8 @@ import {
   MAX_FAMILIAR_LEVEL,
   applyElite,
   getRunLoot,
+  getRunStats,
+  buildRunSummary,
   addInventoryItem,
   bankRunLoot,
   discardRunLoot,
@@ -47,6 +49,7 @@ import {
   BattleResult,
   ActionType,
   Outcome,
+  EffectType,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
 import { commitBattleAndState, getOrCreateGameState } from '../utils/saveManager';
@@ -212,6 +215,39 @@ function passiveUnlocks(
     passiveName: PASSIVES[id].name,
     tier,
   }));
+}
+
+/** The action's display name for the best-hit line. */
+function actionDisplayName(action: BattleAction): string {
+  switch (action.type) {
+    case ActionType.Ability:
+      return getAbility(action.abilityId ?? '')?.name ?? 'Ability';
+    case ActionType.Item:
+      return getItem(action.itemId ?? '')?.name ?? 'Item';
+    default:
+      return 'Attack';
+  }
+}
+
+/** Largest single direct-damage step the acting player dealt this turn. */
+function findBestHit(
+  steps: BattleTurnResult['steps'],
+  actorUid: string,
+  familiarId: string,
+  action: BattleAction
+): { familiarId: string; damage: number; abilityName: string } | undefined {
+  let best: { familiarId: string; damage: number; abilityName: string } | undefined;
+
+  for (const step of steps) {
+    if (step.actorUid !== actorUid) continue;
+    if (step.result.effectType !== EffectType.Damage || step.result.value <= 0) continue;
+    const damage = Math.abs(step.result.value);
+    if (!best || damage > best.damage) {
+      best = { familiarId, damage, abilityName: actionDisplayName(action) };
+    }
+  }
+
+  return best;
 }
 
 /** Party-wide passives from the dungeon party (falling back to the active party). */
@@ -522,6 +558,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // state-effect notes attach to the step of whoever acted this turn, even
     // when that actor did not survive it.
     const actingPlayerUid = battle.playerFamiliar.uid;
+    const actingFamiliarId = battle.playerFamiliar.familiarData.id;
 
     // Consume the item and apply its state-level effects only if the player's
     // slot executed: a KO-canceled actor never used the item, so it must not
@@ -609,10 +646,21 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     let learned: NonNullable<BattleRewards['learned']> = [];
     let passiveUnlockList: NonNullable<BattleRewards['passiveUnlocks']> = [];
     let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
+    let runSummaryResponse: ReturnType<typeof buildRunSummary> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
+
+      const runStats = state.dungeon ? getRunStats(state.dungeon) : undefined;
+      if (runStats) {
+        runStats.battlesWon += 1;
+        if (battle.enemyFamiliar.elite) runStats.elitesWon += 1;
+        const bestHit = findBestHit(turnSteps, actingPlayerUid, actingFamiliarId, action);
+        if (bestHit && (!runStats.bestHit || bestHit.damage > runStats.bestHit.damage)) {
+          runStats.bestHit = bestHit;
+        }
+      }
 
       const activeId = battle.playerFamiliar.familiarData.id;
       // XP is derived from the level the enemy was actually scaled to. Legacy
@@ -629,6 +677,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       state.familiarLevels[activeId] = progress.level;
       state.familiarXp[activeId] = progress.xp;
       levelUps = progress.levelsGained;
+      if (runStats) {
+        runStats.xpByFamiliar[activeId] = (runStats.xpByFamiliar[activeId] ?? 0) + xpGained;
+        runStats.levelsByFamiliar[activeId] = (runStats.levelsByFamiliar[activeId] ?? 0) + levelUps;
+      }
       learned = learned.concat(learnedAbilities(activeId, activeLevelBefore, progress.level));
       passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(activeId, activeLevelBefore, progress.level));
 
@@ -642,6 +694,10 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           const benchProgress = applyFamiliarXp(benchLevelBefore, state.familiarXp[benchId] ?? 0, benchXp);
           state.familiarLevels[benchId] = benchProgress.level;
           state.familiarXp[benchId] = benchProgress.xp;
+          if (runStats) {
+            runStats.xpByFamiliar[benchId] = (runStats.xpByFamiliar[benchId] ?? 0) + benchXp;
+            runStats.levelsByFamiliar[benchId] = (runStats.levelsByFamiliar[benchId] ?? 0) + benchProgress.levelsGained;
+          }
           learned = learned.concat(learnedAbilities(benchId, benchLevelBefore, benchProgress.level));
           passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(benchId, benchLevelBefore, benchProgress.level));
           benchReward = {
@@ -649,6 +705,15 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             benchFamiliarId: benchId,
             benchLevelUp: benchProgress.levelsGained,
           };
+        }
+      }
+
+      if (runStats) {
+        for (const entry of learned) {
+          runStats.learned.push(`${entry.familiarName} learned ${entry.abilityName}`);
+        }
+        for (const entry of passiveUnlockList) {
+          runStats.passiveUnlocks.push(`${entry.familiarName} unlocked ${entry.passiveName}`);
         }
       }
 
@@ -697,8 +762,43 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.unlockedAreas.push(area.unlocks);
           }
         }
+        // Daily Expedition first-clear bonus: only for today's daily run, and
+        // only once per UTC day.
+        if (state.dungeon && state.dungeon.daily === today && state.dailyClearedDay !== today) {
+          state.dailyClearedDay = today;
+          const dailyChest = rollChest('epic', rng);
+          const runLoot = getRunLoot(state.dungeon);
+          const bonusCurrency = BALANCE.dailyBonusCurrency + dailyChest.currency;
+          runLoot.currency += bonusCurrency;
+          for (const itemId of dailyChest.items) {
+            addInventoryItem(runLoot, itemId);
+          }
+          if (dailyChest.charm) {
+            (state.dungeon.runCharms ??= []).push({ ...dailyChest.charm, uid: generateId() });
+          }
+          rewards = {
+            ...(rewards ?? { currency: 0, items: [] }),
+            dailyBonus: {
+              currency: bonusCurrency,
+              items: [...dailyChest.items],
+              ...(dailyChest.charm ? { charm: dailyChest.charm } : {}),
+            },
+          };
+        }
+
         // A boss clear ends the run; bank everything found plus the boss reward.
-        bankRunLoot(state);
+        const clearedAreaId = state.dungeon?.areaId ?? '';
+        const banked = bankRunLoot(state);
+        if (state.dungeon) {
+          state.lastRunSummary = buildRunSummary({
+            outcome: 'cleared',
+            areaId: clearedAreaId,
+            areaName: AREAS[clearedAreaId]?.name,
+            stats: getRunStats(state.dungeon),
+            loot: banked,
+          });
+          runSummaryResponse = state.lastRunSummary;
+        }
         state.dungeon = null;
       } else {
         const battleRewards = generateBattleRewards(rng);
@@ -736,10 +836,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             battleRewards.recruitedFamiliar = species.id;
             battleRewards.recruitedName = species.name;
             battleRewards.recruitedLevel = state.familiarLevels?.[species.id] ?? 1;
+            runStats?.recruits.push(species.id);
             if (state.dungeon) {
               state.dungeon.runRecruits = [...(state.dungeon.runRecruits ?? []), species.id];
             }
           } else {
+            if (runStats) {
+              runStats.bondGains[species.id] = (runStats.bondGains[species.id] ?? 0) + 1;
+            }
             battleRewards.recruitProgress = {
               familiarId: species.id,
               name: species.name,
@@ -758,6 +862,16 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       countCompletedBattle(state);
       // The run's loot is lost; the banked inventory is untouched.
       lostLoot = discardRunLoot(state);
+      if (state.dungeon) {
+        state.lastRunSummary = buildRunSummary({
+          outcome: 'defeated',
+          areaId: state.dungeon.areaId,
+          areaName: AREAS[state.dungeon.areaId]?.name,
+          stats: getRunStats(state.dungeon),
+          lost: lostLoot,
+        });
+        runSummaryResponse = state.lastRunSummary;
+      }
       state.dungeon = null;
     } else {
       if (state.dungeon) {
@@ -844,7 +958,12 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ turnResult, state: sanitizeStateForClient(state), turnCount: battle.turnCount });
+    return c.json({
+      turnResult,
+      state: sanitizeStateForClient(state),
+      turnCount: battle.turnCount,
+      ...(runSummaryResponse ? { runSummary: runSummaryResponse } : {}),
+    });
   } catch (error: unknown) {
     return internalError(c, error, 'Battle action');
   }

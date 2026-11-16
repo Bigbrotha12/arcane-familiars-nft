@@ -232,6 +232,14 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
                   elite
                 />
               )}
+              {rewards.dailyBonus && (
+                <SpoilsChest
+                  title="Daily Expedition bonus"
+                  chest={rewards.dailyBonus}
+                  delayIndex={lineIndex++}
+                  entered={entered}
+                />
+              )}
               {rewards.xp ? (
                 <RewardLine index={lineIndex++} entered={entered} className="text-accent">
                   +{rewards.xp} XP · {rewards.activeFamiliarName ?? 'Active familiar'}
