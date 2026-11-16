@@ -1,4 +1,4 @@
-import { Affinity } from '@/data/familiars';
+import { Affinity, Rarity } from '@/data/familiars';
 
 /**
  * Single home for combat tunables. Mechanics read from here; balance passes
@@ -38,6 +38,19 @@ export const BALANCE = {
   // A recruit joins this many levels below the enemy it was recruited from
   // (never below 1), so a late-game recruit is usable instead of starting at 1.
   recruitLevelOffset: 1,
+  /** Per-win chance to recruit a defeated unowned species. */
+  recruitChanceCommon: 0.22,
+  recruitChanceRare: 0.12,
+  /**
+   * Wins against an unowned species needed to guarantee a recruit. The bond
+   * meter makes recruitment workable even when the per-win roll never lands.
+   */
+  recruitBondNeeded: {
+    [Rarity.Common]: 3,
+    [Rarity.Uncommon]: 3,
+    [Rarity.Rare]: 4,
+    [Rarity.Legendary]: 5,
+  } satisfies Record<Rarity, number>,
 };
 
 export type AffinityEffectiveness = 'strong' | 'weak' | 'neutral';

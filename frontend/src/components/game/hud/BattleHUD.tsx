@@ -21,11 +21,12 @@ interface BattleHUDProps {
   outcome: BattleEndedPayload | null;
   onAction: (action: BattleActionName, payload?: PlayerActionPayload['payload']) => void;
   onContinue: () => void;
+  onRecruitSwap?: (outId: string) => void;
 }
 
 type ActivePanel = 'ability' | 'item' | 'familiars' | null;
 
-function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) {
+function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: BattleHUDProps) {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const sceneKey = snapshot.currentScene;
   const acting = snapshot.phase === 'acting';
@@ -151,7 +152,9 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue }: BattleHUDProps) 
           activeId={activeFamiliar?.id}
         />
 
-        {outcome && <BattleOutcome outcome={outcome} onContinue={onContinue} />}
+        {outcome && (
+          <BattleOutcome outcome={outcome} party={party} onContinue={onContinue} onRecruitSwap={onRecruitSwap} />
+        )}
       </div>
 
       <AbilityPanel

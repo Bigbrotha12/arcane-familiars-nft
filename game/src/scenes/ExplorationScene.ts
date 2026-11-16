@@ -13,6 +13,7 @@ import type {
   FamiliarState,
   NavigateRoomPayload,
   PartySwapPayload,
+  RecruitSwap,
   DungeonRoomSnapshot,
   EncounterSnapshot,
 } from '../events';
@@ -24,6 +25,7 @@ interface ExplorationSceneData {
   areaId: string;
   lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
   pendingTreasureItemId?: string | null;
+  recruitSwap?: RecruitSwap;
   activeIndex?: number;
   enemiesDefeated?: number;
   roomsExplored?: number;
@@ -49,6 +51,7 @@ export class ExplorationScene extends Phaser.Scene {
   private bossActive = false;
   private pendingEnemyId: string | null = null;
   private pendingTreasureItemId: string | null = null;
+  private pendingRecruitSwap: RecruitSwap | null = null;
   private enemiesDefeated = 0;
   private lastBattleOutcome?: 'victory' | 'defeat' | 'fled';
   private resumeActiveIndex?: number;
@@ -71,6 +74,7 @@ export class ExplorationScene extends Phaser.Scene {
     this.bossActive = false;
     this.pendingEnemyId = null;
     this.pendingTreasureItemId = data.pendingTreasureItemId ?? null;
+    this.pendingRecruitSwap = data.recruitSwap ?? null;
     this.lastBattleOutcome = data.lastBattleOutcome;
     this.enemiesDefeated =
       data.lastBattleOutcome === 'victory' ? (data.enemiesDefeated ?? 0) + 1 : (data.enemiesDefeated ?? 0);
@@ -140,6 +144,12 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'exploration', areaId: this.areaId });
 
     await this.loadDungeonState();
+
+    // A recruit swapped in from the victory screen is applied once, before the
+    // player can act. Failure is logged but never blocks exploration.
+    if (this.pendingRecruitSwap && this.dungeon && !this.explorationUI.isDestroyed()) {
+      await this.applyRecruitSwap(this.pendingRecruitSwap);
+    }
   }
 
   private syncAreaAudio(): void {
@@ -506,6 +516,8 @@ export class ExplorationScene extends Phaser.Scene {
       roomDescription: currentRoom?.description,
       roomLog: [...this.explorationUI.getLog()],
       pendingEncounter: this.buildPendingEncounter(currentRoom),
+      recruitBond: this.fullGameState?.recruitBond,
+      ownedFamiliars: this.fullGameState?.playerFamiliars,
       dungeon: {
         areaId: dungeon.areaId,
         currentRoomId: dungeon.currentRoomId,
@@ -609,6 +621,32 @@ export class ExplorationScene extends Phaser.Scene {
       this.isSwapping = false;
     });
   };
+
+  /** Apply a victory-screen recruit swap once, then resume normal exploration. */
+  private async applyRecruitSwap(swap: RecruitSwap): Promise<void> {
+    this.pendingRecruitSwap = null;
+    try {
+      const { state } = await this.gameApi.replacePartyMember(swap.outId, swap.inId);
+
+      if (this.dungeon && state.dungeon) {
+        this.dungeon.party = state.dungeon.party;
+        this.dungeon.partyHp = state.dungeon.partyHp;
+        this.dungeon.partyMp = state.dungeon.partyMp;
+        this.dungeon.activeIndex = state.dungeon.activeIndex ?? this.dungeon.activeIndex;
+      }
+      this.fullGameState = state;
+
+      const incomingName = getFamiliar(swap.inId)?.name ?? swap.inId;
+      const outgoingName = getFamiliar(swap.outId)?.name ?? swap.outId;
+      this.explorationUI.addLogMessage(`${incomingName} joins the party; ${outgoingName} returns to camp.`);
+      audioManager.playSfx('ui_confirm');
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to swap the recruit into the party';
+      this.explorationUI.addLogMessage(`Error: ${message}`);
+    } finally {
+      this.emitStateUpdate();
+    }
+  }
 
   private async applyPartySwap(familiarId: string): Promise<void> {
     this.isSwapping = true;

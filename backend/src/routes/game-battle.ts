@@ -22,11 +22,11 @@ import {
   seededRandom,
   resolveBattleRoomId,
   applyFamiliarXp,
+  applyRecruitWin,
   scaleFamiliarStats,
   battleXp,
   BALANCE,
   MAX_FAMILIAR_LEVEL,
-  Rarity,
   getRunLoot,
   addInventoryItem,
   bankRunLoot,
@@ -587,15 +587,27 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         }
 
         // Non-boss victories can recruit the defeated species. Rarer species
-        // are less likely; already-owned species are skipped.
+        // are less likely; already-owned species and bosses are skipped. Wins
+        // also build bond, so a guaranteed recruit eventually follows unlucky
+        // runs instead of leaving it purely to chance.
         const species = getFamiliar(battle.enemyFamiliar.familiarData.id);
         if (species && !species.isBoss && !state.playerFamiliars.includes(species.id)) {
-          const chance = species.rarity >= Rarity.Rare ? 0.12 : 0.22;
-          if (rng() < chance) {
-            state.playerFamiliars.push(species.id);
+          const recruit = applyRecruitWin(state, species.id, rng());
+          if (recruit.recruited) {
             setJoinLevel(state, species.id, battle.enemyLevel ?? 1);
             battleRewards.recruitedFamiliar = species.id;
             battleRewards.recruitedName = species.name;
+            battleRewards.recruitedLevel = state.familiarLevels?.[species.id] ?? 1;
+            if (state.dungeon) {
+              state.dungeon.runRecruits = [...(state.dungeon.runRecruits ?? []), species.id];
+            }
+          } else {
+            battleRewards.recruitProgress = {
+              familiarId: species.id,
+              name: species.name,
+              bond: recruit.bond,
+              needed: recruit.needed,
+            };
           }
         }
 

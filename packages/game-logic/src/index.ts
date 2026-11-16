@@ -21,3 +21,4 @@ export * from '@/utils/validation';
 export * from '@/utils/activeRun';
 export * from '@/utils/progression';
 export * from '@/utils/runLoot';
+export * from '@/utils/recruit';

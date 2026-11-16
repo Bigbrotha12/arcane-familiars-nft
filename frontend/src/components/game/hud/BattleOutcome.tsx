@@ -5,8 +5,10 @@
 
 import { useEffect, useState, type ReactNode } from 'react';
 import Button from '@/components/ui/Button';
-import { getItem } from '@arcane-familiars/game-logic';
-import type { BattleEndedPayload } from '@/game';
+import AffinityChip from './AffinityChip';
+import { portraitPath } from '@/components/collection/entries';
+import { Affinity, Rarity, getAbility, getFamiliar, getItem } from '@arcane-familiars/game-logic';
+import type { BattleEndedPayload, FamiliarState } from '@/game';
 
 /** Rewards arrive as item ids; show the display name, falling back to the id. */
 function itemNames(ids: string[]): string {
@@ -15,7 +17,10 @@ function itemNames(ids: string[]): string {
 
 interface BattleOutcomeProps {
   outcome: BattleEndedPayload;
+  /** Current party (from the battle snapshot), used for recruit swaps. */
+  party?: FamiliarState[];
   onContinue: () => void;
+  onRecruitSwap?: (outId: string) => void;
 }
 
 interface RewardLineProps {
@@ -38,12 +43,57 @@ function RewardLine({ index, entered, children, className = '' }: RewardLineProp
   );
 }
 
-function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
+function BondLine({
+  index,
+  entered,
+  bond,
+  needed,
+  name,
+}: {
+  index: number;
+  entered: boolean;
+  bond: number;
+  needed: number;
+  name: string;
+}) {
+  const percent = needed > 0 ? Math.min(100, Math.round((bond / needed) * 100)) : 0;
+  const remaining = Math.max(0, needed - bond);
+
+  return (
+    <div
+      className={`flex w-full flex-col items-center gap-1 transition-all duration-300 ease-out motion-reduce:transition-none ${
+        entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+      }`}
+      style={{ transitionDelay: `${index * 70}ms` }}
+    >
+      <p className="font-mono text-xs tabular-nums text-pink">
+        Bond with {name}: {bond}/{needed}
+      </p>
+      <div
+        className="h-1 w-32 overflow-hidden rounded-full bg-[#3B3870]"
+        role="progressbar"
+        aria-valuemin={0}
+        aria-valuemax={needed}
+        aria-valuenow={bond}
+        aria-label={`Recruit bond with ${name}`}
+      >
+        <div
+          className="h-full rounded-full bg-pink transition-all duration-300 ease-out"
+          style={{ width: `${percent}%` }}
+        />
+      </div>
+      <p className="font-body text-[10px] text-[#A5A3C4]">Win {remaining} more to recruit</p>
+    </div>
+  );
+}
+
+function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: BattleOutcomeProps) {
   const { outcome: result, rewards } = outcome;
   const isVictory = result === 'victory';
 
   // Flip one frame after mount so the CSS transition actually runs.
   const [entered, setEntered] = useState(false);
+  const [portraitFailed, setPortraitFailed] = useState(false);
   useEffect(() => {
     const frame = window.requestAnimationFrame(() => setEntered(true));
     return () => window.cancelAnimationFrame(frame);
@@ -66,6 +116,19 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
   }
   // Stagger budget: rewards first, then level-ups, then the recruit callout.
   let lineIndex = 0;
+
+  const recruit = rewards?.recruitedName ? getFamiliar(rewards.recruitedFamiliar ?? '') : undefined;
+  const recruitAffinity = recruit ? (Affinity[recruit.affinity] ?? String(recruit.affinity)) : undefined;
+  const recruitRarity = recruit ? (Rarity[recruit.rarity] ?? String(recruit.rarity)) : undefined;
+  const recruitAbilities = recruit?.abilities.map((id) => getAbility(id)?.name ?? id) ?? [];
+  const joinLevel = rewards?.recruitedLevel ?? 1;
+  const showRecruit = Boolean(isVictory && rewards?.recruitedName);
+  const canSwap =
+    showRecruit &&
+    outcome.inDungeon === true &&
+    Boolean(rewards?.recruitedFamiliar) &&
+    party.length > 0 &&
+    Boolean(onRecruitSwap);
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -105,14 +168,81 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
                   {entry.name ?? (entry.bench ? 'Bench familiar' : 'Active familiar')} levelled up! +{entry.levels}
                 </RewardLine>
               ))}
-              {rewards.recruitedName ? (
-                <RewardLine
+              {rewards.recruitProgress ? (
+                <BondLine
                   index={lineIndex++}
                   entered={entered}
-                  className="font-display text-sm font-semibold text-pink"
+                  name={rewards.recruitProgress.name}
+                  bond={rewards.recruitProgress.bond}
+                  needed={rewards.recruitProgress.needed}
+                />
+              ) : null}
+
+              {showRecruit ? (
+                <div
+                  className={`mt-1 flex w-full flex-col items-center gap-2 rounded-md border border-[#F472B6]/40 bg-[#2D2A5E]/80 p-md transition-all duration-300 ease-out motion-reduce:transition-none ${
+                    entered ? 'scale-100 opacity-100' : 'scale-95 opacity-0'
+                  }`}
+                  style={{
+                    transitionDelay: `${lineIndex * 70 + 120}ms`,
+                    boxShadow: entered ? '0 0 28px rgba(244, 114, 182, 0.35)' : '0 0 0 rgba(244, 114, 182, 0)',
+                  }}
                 >
-                  Recruited {rewards.recruitedName}!
-                </RewardLine>
+                  <h3 className="font-display text-lg font-semibold text-pink">New familiar!</h3>
+
+                  <div className="relative flex h-24 w-24 items-center justify-center overflow-hidden rounded-md border border-[#F472B6]/40 bg-gradient-to-br from-[#2D2A5E] to-[#1E1B4B]">
+                    {recruit && !portraitFailed ? (
+                      <img
+                        src={portraitPath(recruit.id)}
+                        alt={recruit.name}
+                        className="h-full w-full object-contain"
+                        onError={() => setPortraitFailed(true)}
+                      />
+                    ) : (
+                      <span className="font-display text-3xl font-semibold text-pink/60" aria-hidden="true">
+                        {(rewards?.recruitedName ?? '?').charAt(0)}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex flex-col items-center gap-1">
+                    <p className="font-display text-base font-semibold text-[#F0EFFF]">{rewards?.recruitedName}</p>
+                    <div className="flex flex-wrap items-center justify-center gap-1.5">
+                      {recruitRarity && (
+                        <span className="font-body text-[10px] uppercase tracking-wider text-pink">
+                          {recruitRarity}
+                        </span>
+                      )}
+                      <AffinityChip affinity={recruitAffinity} size="sm" />
+                      <span className="font-mono text-[11px] tabular-nums text-[#B8B5E0]">Lv {joinLevel}</span>
+                    </div>
+                  </div>
+
+                  {recruitAbilities.length > 0 && (
+                    <p className="font-body text-[11px] leading-snug text-[#B8B5E0]">
+                      <span className="text-[#A5A3C4]">Abilities: </span>
+                      {recruitAbilities.join(', ')}
+                    </p>
+                  )}
+
+                  {canSwap && (
+                    <div className="mt-1 flex w-full flex-col gap-1.5">
+                      {party.map((member) => (
+                        <Button
+                          key={member.id}
+                          variant="secondary"
+                          size="sm"
+                          onClick={() => onRecruitSwap?.(member.id)}
+                        >
+                          Swap in for {member.name}
+                        </Button>
+                      ))}
+                      <Button variant="primary" size="sm" onClick={onContinue}>
+                        Keep at camp
+                      </Button>
+                    </div>
+                  )}
+                </div>
               ) : null}
             </div>
           )}
@@ -131,9 +261,11 @@ function BattleOutcome({ outcome, onContinue }: BattleOutcomeProps) {
           ) : null}
         </div>
 
-        <Button size="md" onClick={onContinue}>
-          Continue
-        </Button>
+        {!canSwap && (
+          <Button size="md" onClick={onContinue}>
+            Continue
+          </Button>
+        )}
       </div>
     </div>
   );

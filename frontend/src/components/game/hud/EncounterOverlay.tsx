@@ -15,9 +15,20 @@ interface EncounterOverlayProps {
   activeId?: string;
   /** Bosses (or any non-fleeable encounter) hide the Flee button. */
   canFlee?: boolean;
+  recruitBond?: Record<string, number>;
+  ownedFamiliars?: string[];
 }
 
-function EncounterOverlay({ onFight, onFlee, encounter, party, activeId, canFlee = true }: EncounterOverlayProps) {
+function EncounterOverlay({
+  onFight,
+  onFlee,
+  encounter,
+  party,
+  activeId,
+  canFlee = true,
+  recruitBond,
+  ownedFamiliars,
+}: EncounterOverlayProps) {
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       // A focused button already handles Enter itself; the global shortcut is
@@ -52,7 +63,15 @@ function EncounterOverlay({ onFight, onFlee, encounter, party, activeId, canFlee
           A wild familiar appears!
         </h2>
 
-        {encounter && <EncounterDetails encounter={encounter} party={party} activeId={activeId} />}
+        {encounter && (
+          <EncounterDetails
+            encounter={encounter}
+            party={party}
+            activeId={activeId}
+            recruitBond={recruitBond}
+            ownedFamiliars={ownedFamiliars}
+          />
+        )}
 
         <div className="mt-lg flex gap-3">
           <Button
