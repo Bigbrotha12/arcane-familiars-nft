@@ -2,8 +2,11 @@ import { describe, it, expect } from 'vitest';
 import {
   generateDungeon,
   healPartyAtRest,
+  rollChest,
   rollEncounter,
+  rollRoomTreasure,
   rollTreasure,
+  roomRollSeed,
   selectTreasure,
   selectEnemy,
   validateMove,
@@ -11,6 +14,7 @@ import {
 import { seededRandom } from '../mathUtils';
 import { AREAS } from '../../data/areas';
 import { BALANCE } from '../../data/balance';
+import { ITEMS, itemRarity } from '../../data/items';
 import { RoomType } from '../../types/exploration';
 import type { Room, DungeonState } from '../../types/exploration';
 
@@ -21,9 +25,10 @@ function makeRng(seed = 42): () => number {
 describe('generateDungeon', () => {
   const area = AREAS.verdantMeadow;
 
-  it('generates the correct number of rooms', () => {
+  it('generates the correct number of rooms (main path plus side branches)', () => {
     const dungeon = generateDungeon(area, 42);
-    expect(Object.keys(dungeon.rooms).length).toBe(area.roomCount);
+    const branchCount = area.roomCount <= 6 ? 1 : 2;
+    expect(Object.keys(dungeon.rooms).length).toBe(area.roomCount + branchCount);
   });
 
   it("first room is 'start' type named 'Entrance'", () => {
@@ -33,10 +38,9 @@ describe('generateDungeon', () => {
     expect(first.name).toBe('Entrance');
   });
 
-  it("last room is 'boss' type", () => {
+  it("last main-path room is 'boss' type", () => {
     const dungeon = generateDungeon(area, 42);
-    const ids = Object.keys(dungeon.rooms);
-    expect(dungeon.rooms[ids[ids.length - 1]].type).toBe(RoomType.Boss);
+    expect(dungeon.rooms[`room_${area.roomCount - 1}`].type).toBe(RoomType.Boss);
   });
 
   it('all rooms have at least 1 exit', () => {
@@ -68,10 +72,87 @@ describe('generateDungeon', () => {
 
   it('boss room has an exit back to previous room', () => {
     const dungeon = generateDungeon(area, 42);
-    const ids = Object.keys(dungeon.rooms);
-    const boss = dungeon.rooms[ids[ids.length - 1]];
-    const prev = ids[ids.length - 2];
-    expect(boss.exits.some((e) => e.roomId === prev)).toBe(true);
+    const boss = Object.values(dungeon.rooms).find((room) => room.type === RoomType.Boss);
+    const prev = `room_${area.roomCount - 2}`;
+    expect(boss).toBeDefined();
+    expect(boss!.exits.some((e) => e.roomId === prev)).toBe(true);
+  });
+});
+
+describe('dead-end branch generation', () => {
+  const expectedBranches = (roomCount: number): number => (roomCount <= 6 ? 1 : 2);
+
+  it('adds 1 branch for short dungeons and 2 for longer ones', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 17);
+      const branches = Object.values(dungeon.rooms).filter((room) => room.type === RoomType.Deadend);
+      expect(branches, area.id).toHaveLength(expectedBranches(area.roomCount));
+      expect(branches.map((room) => room.id).sort()).toEqual(
+        Array.from({ length: expectedBranches(area.roomCount) }, (_, i) => `branch_${i + 1}`)
+      );
+    }
+  });
+
+  it('makes each branch a leaf with a guaranteed rare chest', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 42);
+      for (const branch of Object.values(dungeon.rooms).filter((room) => room.type === RoomType.Deadend)) {
+        expect(branch.exits, `${area.id}/${branch.id}`).toHaveLength(1);
+        expect(branch.chest).toBe('rare');
+        expect(branch.encounterChance).toBe(0.6);
+        expect(branch.treasureChance).toBe(1);
+        expect(branch.cleared).toBe(false);
+      }
+    }
+  });
+
+  it('attaches branches to distinct normal main-path rooms only', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 99);
+      const hosts = Object.values(dungeon.rooms)
+        .filter((room) => room.type === RoomType.Deadend)
+        .map((branch) => dungeon.rooms[branch.exits[0].roomId]);
+
+      expect(hosts.length).toBe(expectedBranches(area.roomCount));
+      for (const host of hosts) {
+        expect(host).toBeDefined();
+        expect(host.type).toBe(RoomType.Normal);
+        expect(host.id).toMatch(/^room_\d+$/);
+      }
+      // Never two branches on the same host.
+      expect(new Set(hosts.map((host) => host.id)).size).toBe(hosts.length);
+      for (const host of hosts) {
+        expect(host.exits.filter((exit) => exit.roomId.startsWith('branch_')).length).toBe(1);
+      }
+    }
+  });
+
+  it('keeps every main-path room and the boss reachable from the entrance', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 23);
+      const seen = new Set<string>(['room_0']);
+      const queue = ['room_0'];
+      while (queue.length > 0) {
+        const room = dungeon.rooms[queue.shift()!];
+        for (const exit of room.exits) {
+          if (seen.has(exit.roomId)) continue;
+          seen.add(exit.roomId);
+          queue.push(exit.roomId);
+        }
+      }
+      const boss = Object.values(dungeon.rooms).find((room) => room.type === RoomType.Boss);
+      expect(boss).toBeDefined();
+      expect(seen.has(boss!.id), area.id).toBe(true);
+      expect(seen.size, area.id).toBe(Object.keys(dungeon.rooms).length);
+    }
+  });
+
+  it('is deterministic per seed, branches included', () => {
+    for (const area of Object.values(AREAS)) {
+      const a = generateDungeon(area, 314);
+      const b = generateDungeon(area, 314);
+      expect(JSON.stringify(b.rooms)).toBe(JSON.stringify(a.rooms));
+    }
   });
 });
 
@@ -248,6 +329,81 @@ describe('rollTreasure', () => {
     for (let i = 0; i < 100; i++) {
       expect(rollTreasure(room, rng)).toBe(true);
     }
+  });
+});
+
+describe('rollChest', () => {
+  it('common chests hold one item and no coins', () => {
+    for (let seed = 1; seed <= 50; seed++) {
+      const chest = rollChest('common', seededRandom(seed));
+      expect(chest.items).toHaveLength(1);
+      expect(chest.currency).toBe(0);
+      expect(ITEMS[chest.items[0]]).toBeDefined();
+    }
+  });
+
+  it('rare chests hold two items, 30-60 coins and one uncommon-or-better item', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const chest = rollChest('rare', seededRandom(seed));
+      expect(chest.items).toHaveLength(2);
+      expect(chest.currency).toBeGreaterThanOrEqual(30);
+      expect(chest.currency).toBeLessThanOrEqual(60);
+      expect(chest.items.some((id) => itemRarity(ITEMS[id]) !== 'common')).toBe(true);
+    }
+  });
+
+  it('epic chests hold three items, 80-150 coins and one rare item', () => {
+    for (let seed = 1; seed <= 200; seed++) {
+      const chest = rollChest('epic', seededRandom(seed));
+      expect(chest.items).toHaveLength(3);
+      expect(chest.currency).toBeGreaterThanOrEqual(80);
+      expect(chest.currency).toBeLessThanOrEqual(150);
+      expect(chest.items.some((id) => itemRarity(ITEMS[id]) === 'rare')).toBe(true);
+    }
+  });
+
+  it('is deterministic for a seeded rng', () => {
+    expect(rollChest('epic', seededRandom(77))).toEqual(rollChest('epic', seededRandom(77)));
+    expect(rollChest('rare', seededRandom(77))).toEqual(rollChest('rare', seededRandom(77)));
+  });
+});
+
+describe('rollRoomTreasure', () => {
+  const base: Room = {
+    id: 'test',
+    name: 'Test',
+    description: '',
+    type: RoomType.Normal,
+    exits: [],
+    encounterChance: 0,
+    treasureChance: 0,
+    treasurePool: [{ itemId: 'potion_small', weight: 10 }],
+    cleared: false,
+  };
+
+  it('a room with a placed chest always yields that chest', () => {
+    const room = { ...base, chest: 'rare' as const, encounterChance: 1, treasureChance: 0 };
+    const rolled = rollRoomTreasure(room, seededRandom(5));
+    expect(rolled?.tier).toBe('rare');
+    expect(rolled?.items).toHaveLength(2);
+    expect(rolled?.currency).toBeGreaterThanOrEqual(30);
+  });
+
+  it('rolls normal-room treasure independently of the encounter chance', () => {
+    const room = { ...base, treasureChance: 1, encounterChance: 1 };
+    const rolled = rollRoomTreasure(room, seededRandom(5));
+    expect(rolled).not.toBeNull();
+    expect(['common', 'rare']).toContain(rolled!.tier);
+    expect(rolled!.items).toHaveLength(rolled!.tier === 'rare' ? 2 : 1);
+  });
+
+  it('returns null when the room has no chest and no treasure roll', () => {
+    expect(rollRoomTreasure(base, seededRandom(5))).toBeNull();
+  });
+
+  it('roomRollSeed is deterministic per room and seed', () => {
+    expect(roomRollSeed(42, 'room_2')).toBe(roomRollSeed(42, 'room_2'));
+    expect(roomRollSeed(42, 'room_2')).not.toBe(roomRollSeed(42, 'room_3'));
   });
 });
 

@@ -1,3 +1,5 @@
+import type { ChestTier, ItemRarity } from '@arcane-familiars/game-logic';
+
 export enum GameEvent {
   STATE_UPDATED = 'game:stateUpdated',
   SAVE_GAME = 'game:save',
@@ -81,6 +83,8 @@ export interface GameStateSnapshot {
   dungeon?: DungeonSnapshot;
   /** Enemy identity/level for the exploration encounter overlay, when one is pending. */
   pendingEncounter?: EncounterSnapshot;
+  /** Unlooted chest contents for the treasure overlay. */
+  treasure?: TreasureSnapshot;
   encounterActive?: boolean;
   treasureActive?: boolean;
   bossRoom?: boolean;
@@ -99,6 +103,23 @@ export interface EncounterSnapshot {
   enemyId: string;
   level: number;
   isBoss: boolean;
+}
+
+/** One item shown in a treasure chest before the player takes it. */
+export interface TreasureItemSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  /** Icon file under /assets/sprites/items/ (without extension). */
+  icon?: string;
+  rarity: ItemRarity;
+}
+
+/** Unlooted chest contents for the treasure overlay. */
+export interface TreasureSnapshot {
+  tier: ChestTier;
+  items: TreasureItemSnapshot[];
+  currency: number;
 }
 
 export interface SaveResult {
@@ -160,6 +181,8 @@ export interface BattleEndedPayload {
   rewards?: {
     currency: number;
     items: string[];
+    /** Epic chest from a first boss clear. */
+    bossChest?: { items: string[]; currency: number };
     xp?: number;
     levelUp?: number;
     /** Display name of the familiar that landed the winning blow. */
@@ -228,6 +251,10 @@ export interface DungeonRoomSnapshot {
   type: string;
   cleared: boolean;
   exits: { direction: string; roomId: string; label: string }[];
+  /** Chest placed at generation (dead ends); visible before it is visited. */
+  chest?: ChestTier;
+  /** The room holds unlooted treasure the player has discovered. */
+  hasTreasure?: boolean;
 }
 
 export interface DungeonSnapshot {

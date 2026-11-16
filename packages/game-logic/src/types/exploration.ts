@@ -24,6 +24,22 @@ export enum RoomType {
   Rest,
 }
 
+/** Chest quality. Dead ends hold rare caches; bosses drop an epic chest. */
+export type ChestTier = 'common' | 'rare' | 'epic';
+
+export interface PendingTreasure {
+  /**
+   * First item in the chest. Kept as the canonical id for old saves and the
+   * collect route's item check; `items` still lists the full contents.
+   */
+  itemId: string;
+  looted: boolean;
+  tier?: ChestTier;
+  /** Every item in the chest. Older saves omit this and hold only itemId. */
+  items?: string[];
+  currency?: number;
+}
+
 export interface Room {
   id: string;
   name: string;
@@ -37,7 +53,12 @@ export interface Room {
   /** Rest rooms only: whether this run's one-time heal has been taken. */
   rested?: boolean;
   pendingEncounter?: { enemyId: string; resolved: boolean; level?: number };
-  pendingTreasure?: { itemId: string; looted: boolean };
+  pendingTreasure?: PendingTreasure;
+  /**
+   * Chest placed at generation (dead-end caches). Known to the player in
+   * advance via the minimap; `pendingTreasure` is still created on arrival.
+   */
+  chest?: ChestTier;
 }
 
 /** HP/MP actually restored to one party member at a rest shrine. */

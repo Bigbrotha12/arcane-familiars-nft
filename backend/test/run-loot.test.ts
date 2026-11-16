@@ -121,6 +121,60 @@ async function readState(anonId: string): Promise<GameState> {
 }
 
 describe('run loot', () => {
+  it('awards and banks an epic boss chest on a first boss clear', async () => {
+    const anonId = 'b7c1e2d3-4f56-4a78-9b90-c1d2e3f4a5b6';
+    await seed(anonId, makeState(anonId));
+
+    const battle: BattleState = {
+      id: 'battle-boss-chest',
+      roomId: 'room-1',
+      playerFamiliar: combatant('yellowFighter', 9999, 60),
+      enemyFamiliar: combatant('meadowGuardian', 1, 60),
+      isBoss: true,
+      turnCount: 0,
+      status: BattleResult.Active,
+      swapsThisTurn: 0,
+      seed: 7,
+    };
+    await (env as unknown as Bindings).DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at, updated_at)
+       VALUES (?, ?, ?, datetime('now'), datetime('now'))`
+    )
+      .bind(battle.id, anonId, JSON.stringify(battle))
+      .run();
+
+    const res = await fetchApp(
+      post(
+        '/api/game/battle/action',
+        {
+          anonymousId: anonId,
+          battleId: battle.id,
+          action: { type: ActionType.Attack },
+          expectedTurnCount: 0,
+        },
+        '10.8.0.6'
+      )
+    );
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as {
+      turnResult: { rewards?: { bossChest?: { items: string[]; currency: number } } };
+      state: GameState;
+    };
+
+    const bossChest = body.turnResult.rewards?.bossChest;
+    expect(bossChest).toBeDefined();
+    expect(bossChest!.items).toHaveLength(3);
+    expect(bossChest!.currency).toBeGreaterThanOrEqual(80);
+    expect(bossChest!.currency).toBeLessThanOrEqual(150);
+
+    // The run ends on a boss clear: boss reward, run loot and chest all banked.
+    expect(body.state.dungeon).toBeNull();
+    expect(body.state.inventory.currency).toBe(100 + 50 + 50 + bossChest!.currency);
+    for (const itemId of bossChest!.items) {
+      expect(body.state.inventory.items.map((item) => item.itemId)).toContain(itemId);
+    }
+  });
+
   it('discards run loot on defeat and leaves the bank intact', async () => {
     const anonId = 'f0e68f71-548c-497f-84e3-7b5a9f167551';
     await seed(anonId, makeState(anonId));

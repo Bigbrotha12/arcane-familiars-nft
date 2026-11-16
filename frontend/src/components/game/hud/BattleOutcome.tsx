@@ -14,7 +14,9 @@ import {
   getAbility,
   getFamiliar,
   getItem,
+  itemRarity,
 } from '@arcane-familiars/game-logic';
+import { RARITY_TEXT_CLASS } from './rarityStyles';
 import type { BattleEndedPayload, FamiliarState } from '@/game';
 
 const SIGNATURE_IDS = new Set(Object.values(SIGNATURE_BY_AFFINITY));
@@ -159,6 +161,40 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
               )}
               {rewards.items.length > 0 && (
                 <p className="font-body text-xs text-[#F0EFFF]">Found: {itemNames(rewards.items)}</p>
+              )}
+              {rewards.bossChest && (
+                <div
+                  className={`mt-1 flex w-full flex-col items-center gap-1 rounded-md border border-[#FBBF24]/40 bg-[#2D2A5E]/80 p-md transition-all duration-300 ease-out motion-reduce:transition-none ${
+                    entered ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0'
+                  }`}
+                  style={{ transitionDelay: `${lineIndex++ * 70}ms` }}
+                >
+                  <h3 className="font-display text-sm font-semibold text-yellow">Boss chest</h3>
+                  <ul className="flex w-full flex-col items-center gap-0.5">
+                    {rewards.bossChest.items.map((id, chestIndex) => {
+                      const item = getItem(id);
+                      return (
+                        <li key={`boss-chest-${id}-${chestIndex}`} className="flex items-center gap-1.5">
+                          {item?.icon && (
+                            <img
+                              src={`/assets/sprites/items/${item.icon}.png`}
+                              alt=""
+                              className="h-5 w-5 rounded-sm border border-[#E8E4F0] bg-white object-contain"
+                            />
+                          )}
+                          <span
+                            className={`font-body text-xs ${RARITY_TEXT_CLASS[item ? itemRarity(item) : 'common']}`}
+                          >
+                            {item?.name ?? id}
+                          </span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  {rewards.bossChest.currency > 0 && (
+                    <p className="font-mono text-xs tabular-nums text-yellow">+{rewards.bossChest.currency} coins</p>
+                  )}
+                </div>
               )}
               {rewards.xp ? (
                 <RewardLine index={lineIndex++} entered={entered} className="text-accent">

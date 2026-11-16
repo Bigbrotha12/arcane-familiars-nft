@@ -28,6 +28,9 @@ export type StateItemEffect = { kind: 'revive_party'; percentage: number } | { k
 
 export type ItemEffectSpec = CombatItemEffect | StateItemEffect;
 
+/** Drop-tier of an item, derived from its `dropWeight`. */
+export type ItemRarity = 'common' | 'uncommon' | 'rare';
+
 export interface ItemData {
   id: string;
   name: string;
@@ -248,6 +251,18 @@ export const ITEMS: Record<string, ItemData> = {
 
 export function getItem(id: string): ItemData | undefined {
   return ITEMS[id];
+}
+
+/**
+ * Rarity derived from the item's treasure-pool weight:
+ * dropWeight >= 8 common, 4-7 uncommon, <= 3 rare. Items that never drop
+ * (no dropWeight) are treated as rare.
+ */
+export function itemRarity(item: ItemData): ItemRarity {
+  const weight = item.dropWeight ?? 0;
+  if (weight >= 8) return 'common';
+  if (weight >= 4) return 'uncommon';
+  return 'rare';
 }
 
 export const STAT_LABELS: Record<StatName, string> = {

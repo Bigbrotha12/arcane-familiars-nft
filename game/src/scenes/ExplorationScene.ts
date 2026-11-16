@@ -1,6 +1,15 @@
 import Phaser from 'phaser';
 import type { DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
-import { AREAS, RoomType, getFamiliar, getRunLoot, Directions } from '@arcane-familiars/game-logic';
+import {
+  AREAS,
+  RoomType,
+  getFamiliar,
+  getItem,
+  describeItem,
+  itemRarity,
+  getRunLoot,
+  Directions,
+} from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { ExplorationUI, roomBackgroundKey } from '../ui/ExplorationUI';
 import { Layout } from '../ui/layout';
@@ -289,8 +298,10 @@ export class ExplorationScene extends Phaser.Scene {
         this.isProcessing = false;
         this.emitStateUpdate();
       } else if (result.encounter && result.enemy) {
-        if (result.treasure && result.treasureItem) {
+        if (result.treasure) {
           this.pendingTreasureItemId = result.treasureItem;
+          const enemyName = getFamiliar(result.enemy)?.name ?? 'enemy';
+          this.explorationUI.addLogMessage(`A chest sits behind the ${enemyName}…`);
         }
         this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
         this.timers.push(
@@ -480,11 +491,14 @@ export class ExplorationScene extends Phaser.Scene {
       .filter((room): room is Room => Boolean(room))
       .map((room) => {
         const seen = new Set<string>();
+        const looted = room.pendingTreasure?.looted === true;
         return {
           id: room.id,
           name: room.name,
           type: RoomType[room.type],
           cleared: room.cleared,
+          chest: looted ? undefined : room.chest,
+          hasTreasure: Boolean(room.pendingTreasure && !room.pendingTreasure.looted),
           exits: room.exits
             .filter((e) => {
               if (seen.has(e.roomId)) return false;
@@ -516,6 +530,7 @@ export class ExplorationScene extends Phaser.Scene {
       roomDescription: currentRoom?.description,
       roomLog: [...this.explorationUI.getLog()],
       pendingEncounter: this.buildPendingEncounter(currentRoom),
+      treasure: this.buildTreasureView(currentRoom),
       recruitBond: this.fullGameState?.recruitBond,
       ownedFamiliars: this.fullGameState?.playerFamiliars,
       dungeon: {
@@ -543,6 +558,40 @@ export class ExplorationScene extends Phaser.Scene {
       ? (this.area?.levelRange[1] ?? room?.pendingEncounter?.level ?? 1)
       : (room?.pendingEncounter?.level ?? this.area?.levelRange[0] ?? 1);
     return { enemyId: this.pendingEnemyId, level, isBoss };
+  }
+
+  /**
+   * Content of the current room's unlooted treasure, for the overlay. Falls
+   * back to the carried pendingTreasureItemId for older saves that persisted
+   * only the single item id.
+   */
+  private buildTreasureView(room?: Room): GameStateSnapshot['treasure'] {
+    const pending = room?.pendingTreasure;
+    const itemIds =
+      pending?.items && pending.items.length > 0
+        ? pending.items
+        : pending?.itemId
+          ? [pending.itemId]
+          : this.pendingTreasureItemId
+            ? [this.pendingTreasureItemId]
+            : [];
+
+    if (itemIds.length === 0) return undefined;
+
+    return {
+      tier: pending?.tier ?? 'common',
+      items: itemIds.map((id) => {
+        const item = getItem(id);
+        return {
+          id,
+          name: item?.name ?? id,
+          description: item ? describeItem(item) : '',
+          icon: item?.icon,
+          rarity: item ? itemRarity(item) : 'common',
+        };
+      }),
+      currency: pending?.currency ?? 0,
+    };
   }
 
   private handleSave = async (): Promise<void> => {
@@ -695,12 +744,14 @@ export class ExplorationScene extends Phaser.Scene {
 
   private getRoomIndex(roomId: string): number {
     if (!this.dungeon) return 0;
-    const roomIds = Object.keys(this.dungeon.rooms).sort((a, b) => {
-      const numA = parseInt(a, 10);
-      const numB = parseInt(b, 10);
-      if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-      return a.localeCompare(b);
-    });
-    return roomIds.indexOf(roomId);
+    // Main-path rooms keep their numeric order; a side branch borrows the index
+    // of the room it hangs off, so progress and art depth stay on the main path.
+    const roomIds = Object.keys(this.dungeon.rooms)
+      .filter((id) => /^room_\d+$/.test(id))
+      .sort((a, b) => parseInt(a.slice(5), 10) - parseInt(b.slice(5), 10));
+    const index = roomIds.indexOf(roomId);
+    if (index !== -1) return index;
+    const host = Object.values(this.dungeon.rooms).find((room) => room.exits.some((exit) => exit.roomId === roomId));
+    return host ? Math.max(0, roomIds.indexOf(host.id)) : 0;
   }
 }
