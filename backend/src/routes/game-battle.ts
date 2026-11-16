@@ -37,6 +37,7 @@ import {
   BALANCE,
   MAX_FAMILIAR_LEVEL,
   applyElite,
+  isNewPlayer,
   getRunLoot,
   getRunStats,
   buildRunSummary,
@@ -384,12 +385,21 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const battleSeed = cryptoSeed();
 
+    // A brand-new player's first fight is guided: the enemy sits at the area's
+    // minimum level, any elite on a legacy pending encounter is ignored, and
+    // the engine gets one safety net. Bosses are never guided.
+    const guided = isNewPlayer(state) && !baseEnemy.isBoss;
+
     // Non-boss levels were fixed when the encounter was rolled (explore), so
     // fleeing and re-starting cannot reroll enemy strength. Bosses sit at the
     // top of their area's level band and are scaled like any other enemy.
-    const enemyLevel = baseEnemy.isBoss ? area.levelRange[1] : (pending.level ?? area.levelRange[0]);
+    const enemyLevel = baseEnemy.isBoss
+      ? area.levelRange[1]
+      : guided
+        ? area.levelRange[0]
+        : (pending.level ?? area.levelRange[0]);
     // Elites are normal encounters with one affix; bosses never roll one.
-    const eliteId = baseEnemy.isBoss ? undefined : pending.elite;
+    const eliteId = baseEnemy.isBoss || guided ? undefined : pending.elite;
     const scaledBase = scaleEnemy(baseEnemy, enemyLevel);
     const scaled = eliteId ? applyElite(scaledBase, eliteId) : scaledBase;
     const enemyFamiliar: BattleFamiliar = {
@@ -415,6 +425,7 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       swapsThisTurn: 0,
       seed: battleSeed,
       playerPassives: battlePassives(state),
+      ...(guided ? { guided: true } : {}),
     };
 
     // A battle row is created only after the active-battle guard above. Resume
@@ -549,7 +560,22 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       updatedEnemyFamiliar,
       steps: turnSteps,
       canceledActions,
-    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng, battle.playerPassives ?? []);
+      guidedSaveUsed,
+    } = resolveTurn(
+      action,
+      battle.playerFamiliar,
+      battle.enemyFamiliar,
+      enemyAction,
+      rng,
+      battle.playerPassives ?? [],
+      {
+        enabled: battle.guided === true,
+        used: battle.guidedSaveUsed === true,
+      }
+    );
+
+    // Persist the one-time guided save so a later turn does not re-trigger it.
+    if (guidedSaveUsed !== undefined) battle.guidedSaveUsed = guidedSaveUsed;
 
     const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
     const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);

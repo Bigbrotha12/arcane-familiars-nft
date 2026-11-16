@@ -37,6 +37,8 @@ export const BALANCE = {
   bossPhaseTwoChargeChance: 0.35,
   /** Per-turn chance an uncharged volatile elite gathers power instead of acting. */
   eliteChargeChance: 0.2,
+  /** Wins required before elite encounters can roll. */
+  eliteMinWins: 3,
   /** Base chance a normal encounter rolls an elite affix. */
   eliteChance: 0.12,
   /** Added to the elite chance per unit of room depth (0..1). */

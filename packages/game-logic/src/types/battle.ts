@@ -207,4 +207,12 @@ export interface BattleState {
    * Wind or re-grant the Relay Instinct discount.
    */
   passiveUses?: { secondWind: string[]; relay: string[] };
+  /**
+   * A brand-new player's first fight: the enemy is scaled to the area's minimum
+   * level and the one-time guided save (below) applies. Optional so battles
+   * persisted before guided battles existed still load.
+   */
+  guided?: boolean;
+  /** The guided save has already kept the player's familiar at 1 HP once. */
+  guidedSaveUsed?: boolean;
 }

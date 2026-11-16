@@ -13,12 +13,15 @@ import ItemPanel from './ItemPanel';
 import FamiliarsPanel from './FamiliarsPanel';
 import BattleOutcome from './BattleOutcome';
 import type { ActionBarItem } from './ActionBar';
+import type { GuidedAction } from './guidedBattle';
 import { matchupFor } from '@/components/game/affinity';
 import type { GameStateSnapshot, BattleEndedPayload, BattleActionName, PlayerActionPayload } from '@/game';
 
 interface BattleHUDProps {
   snapshot: GameStateSnapshot;
   outcome: BattleEndedPayload | null;
+  /** Guided battle: action to ring while the player chooses (input stays free). */
+  guidedHighlight?: GuidedAction | null;
   onAction: (action: BattleActionName, payload?: PlayerActionPayload['payload']) => void;
   onContinue: () => void;
   onRecruitSwap?: (outId: string) => void;
@@ -47,7 +50,7 @@ function PassiveChips({ passives }: { passives: NonNullable<GameStateSnapshot['p
   );
 }
 
-function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: BattleHUDProps) {
+function BattleHUD({ snapshot, outcome, guidedHighlight = null, onAction, onContinue, onRecruitSwap }: BattleHUDProps) {
   const [activePanel, setActivePanel] = useState<ActivePanel>(null);
   const sceneKey = snapshot.currentScene;
   const acting = snapshot.phase === 'acting';
@@ -98,12 +101,20 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: B
   const bagCount = (snapshot.items ?? []).reduce((total, item) => total + (item.quantity || 0), 0);
 
   const actions: ActionBarItem[] = [
-    { key: 'attack', label: 'Attack', icon: '⚔️', primary: true, onClick: () => handleAction('attack') },
+    {
+      key: 'attack',
+      label: 'Attack',
+      icon: '⚔️',
+      primary: true,
+      highlight: guidedHighlight === 'attack',
+      onClick: () => handleAction('attack'),
+    },
     {
       key: 'defend',
       label: 'Defend',
       icon: '🛡️',
       hint: '−50% dmg · +' + guardMp + ' MP',
+      highlight: guidedHighlight === 'defend',
       onClick: () => handleAction('defend'),
     },
     {
@@ -111,6 +122,7 @@ function BattleHUD({ snapshot, outcome, onAction, onContinue, onRecruitSwap }: B
       label: 'Ability',
       icon: '✨',
       hint: abilities.length ? `${readyAbilities}/${abilities.length} ready` : 'none learned',
+      highlight: guidedHighlight === 'ability',
       onClick: () => handleAction('ability'),
     },
     {

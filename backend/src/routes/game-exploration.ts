@@ -24,6 +24,7 @@ import {
   validateDungeonExplore,
   validateParty,
   scaleFamiliarStats,
+  isNewPlayer,
   getRunLoot,
   getRunStats,
   buildRunSummary,
@@ -222,6 +223,11 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       getRunStats(state.dungeon).roomsExplored += 1;
 
       const rng = seededRandom(roomRollSeed(state.dungeon.seed ?? 0, roomId));
+      // New players get a gentle first fight, and elites stay locked until the
+      // win gate is met. Both rules override outcomes but never change how many
+      // rng draws a room consumes, so a given seed keeps its layout.
+      const newPlayer = isNewPlayer(state);
+      const eliteUnlocked = (state.winCount ?? 0) >= BALANCE.eliteMinWins;
 
       if (room.type === RoomType.Boss) {
         encounter = true;
@@ -234,8 +240,10 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
             encounter = true;
             enemy = selectedEnemy;
             // Persist the scaled level so fleeing and re-entering cannot reroll
-            // enemy strength for the same encounter.
-            const level = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+            // enemy strength for the same encounter. The roll is still drawn for
+            // a new player (then overridden) so later rolls do not shift.
+            const rolledLevel = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+            const level = newPlayer ? area.levelRange[0] : rolledLevel;
             room.pendingEncounter = { enemyId: selectedEnemy, resolved: false, level };
           }
         }
@@ -261,14 +269,19 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
       }
 
       // Elite roll: after the existing encounter/treasure rolls so those stay
-      // identical for a given seed. Never bosses, the entrance or room_1.
+      // identical for a given seed. Never bosses, the entrance or room_1, and
+      // never before the win gate. The elite-id draw is consumed even when the
+      // gate blocks the pickup, so the rng sequence matches the ungated code.
       if (encounter && room.pendingEncounter && isEliteRoom(room)) {
-        if (rng() < eliteChanceForRoom(room, area)) {
+        const eliteRollPassed = rng() < eliteChanceForRoom(room, area);
+        if (eliteRollPassed) {
           const eliteId = ELITE_IDS[randomInRange(rng, 0, ELITE_IDS.length - 1)];
-          room.pendingEncounter.elite = eliteId;
-          elite = eliteId;
-          const base = getFamiliar(room.pendingEncounter.enemyId);
-          if (base) eliteName = formatEliteName(base.name, eliteId);
+          if (eliteUnlocked) {
+            room.pendingEncounter.elite = eliteId;
+            elite = eliteId;
+            const base = getFamiliar(room.pendingEncounter.enemyId);
+            if (base) eliteName = formatEliteName(base.name, eliteId);
+          }
         }
       }
     }
@@ -620,7 +633,10 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
       case 'ambush': {
         const enemyId = selectEnemy(area, rng);
         if (enemyId) {
-          const level = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+          // Still draw the level roll for a new player, then override it, so a
+          // given seed keeps the same rng sequence.
+          const rolledLevel = randomInRange(rng, area.levelRange[0], area.levelRange[1]);
+          const level = isNewPlayer(state) ? area.levelRange[0] : rolledLevel;
           room.pendingEncounter = { enemyId, resolved: false, level };
           ambushEnemy = enemyId;
         }

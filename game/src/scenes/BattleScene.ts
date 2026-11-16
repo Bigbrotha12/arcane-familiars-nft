@@ -1045,6 +1045,9 @@ export class BattleScene extends Phaser.Scene {
         tier: passive.tier,
         description: passiveDescription(PASSIVES[passive.id], passive.tier),
       })),
+      battleId: this.battleState.id,
+      turnCount: this.battleState.turnCount,
+      ...(this.battleState.guided === true ? { guided: true } : {}),
       ...(this.relayTriggered ? { forcedSwap: true } : {}),
       ...(this.phase === 'outcome' && this.battleOutcome ? { battleOutcome: this.battleOutcome } : {}),
     };
