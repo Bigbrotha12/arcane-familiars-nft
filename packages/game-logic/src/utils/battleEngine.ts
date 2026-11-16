@@ -12,6 +12,7 @@ import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/a
 import { getAbility } from '@/data/abilities';
 import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
 import { BALANCE, affinityEffectiveness, affinityMultiplier, type AffinityEffectiveness } from '@/data/balance';
+import type { ActivePassive, PassiveId } from '@/data/passives';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
   let multiplier = 1;
@@ -31,6 +32,10 @@ function toStatName(scalingStat: ScalingStat): StatName {
 export interface DamageOptions {
   /** The defender is guarding this turn (its action was Defend). */
   defenderGuarding?: boolean;
+  /** Extra multiplier applied to a direct hit (player passives). */
+  damageMultiplier?: number;
+  /** Guard multiplier used instead of `BALANCE.guardDamageTaken` (Bedrock). */
+  guardMultiplier?: number;
 }
 
 /**
@@ -90,10 +95,13 @@ function rollDamage(
     rawDamage *= BALANCE.critMultiplier;
   }
   rawDamage *= variance;
+  if (options.damageMultiplier) {
+    rawDamage *= options.damageMultiplier;
+  }
 
   let total = rawDamage;
   if (options.defenderGuarding) {
-    total *= BALANCE.guardDamageTaken;
+    total *= options.guardMultiplier ?? BALANCE.guardDamageTaken;
   }
   if (attacker.charged) {
     total *= BALANCE.bossChargeMultiplier;
@@ -149,19 +157,103 @@ export function applyStatusEffects(familiar: BattleFamiliar, skip?: Set<StatusEf
 }
 
 /**
+ * Player-only passive lookup used by the turn resolver. Duplicate ids keep the
+ * highest tier, mirroring `partyPassives` (no stacking).
+ */
+interface PassiveRuntime {
+  playerUid: string;
+  value(id: PassiveId): number;
+  tier(id: PassiveId): 0 | 1 | 2 | 3 | 4;
+}
+
+function makePassiveRuntime(playerUid: string, passives: ActivePassive[]): PassiveRuntime {
+  const byId = new Map<PassiveId, ActivePassive>();
+  for (const passive of passives) {
+    const current = byId.get(passive.id);
+    if (!current || passive.tier > current.tier) byId.set(passive.id, passive);
+  }
+  return {
+    playerUid,
+    value: (id) => byId.get(id)?.value ?? 0,
+    tier: (id) => byId.get(id)?.tier ?? 0,
+  };
+}
+
+/** MP an ability actually costs after a Relay Instinct discount. */
+export function effectiveAbilityCost(ability: AbilityData, relayDiscount = 0): number {
+  const discount = Math.max(0, Math.min(1, relayDiscount));
+  return Math.max(0, Math.round(ability.mpCost * (1 - discount)));
+}
+
+/** Player-side direct-damage bonus from Battle Cry and Umbral Hunger. */
+function playerDamageMultiplier(
+  source: BattleFamiliar,
+  target: BattleFamiliar,
+  runtime: PassiveRuntime,
+  ability?: AbilityData
+): number {
+  if (source.uid !== runtime.playerUid) return 1;
+
+  let multiplier = 1;
+  if (ability && ability.scalingStat === ScalingStat.Attack) {
+    multiplier *= 1 + runtime.value('battleCry');
+  }
+  const afflicted = target.statusEffects.some(
+    (effect) => effect.type === EffectType.Debuff || effect.type === EffectType.Dot
+  );
+  if (afflicted) multiplier *= 1 + runtime.value('umbralHunger');
+  return multiplier;
+}
+
+/** Bedrock's guard multiplier for the player; undefined keeps the default. */
+function guardMultiplierFor(defender: BattleFamiliar, runtime: PassiveRuntime, guarding: boolean): number | undefined {
+  if (!guarding || defender.uid !== runtime.playerUid) return undefined;
+  const bedrock = runtime.value('bedrock');
+  return bedrock > 0 ? bedrock : undefined;
+}
+
+/** Scale a status effect the player applied (Kindling DoTs, Tidecaller HoTs). */
+function scaleAppliedStatus(effect: StatusEffect, source: BattleFamiliar, runtime: PassiveRuntime): StatusEffect {
+  if (source.uid !== runtime.playerUid) return effect;
+
+  if (effect.type === EffectType.Dot) {
+    const kindling = runtime.value('kindling');
+    if (kindling > 0) {
+      return {
+        ...effect,
+        value: Math.max(1, Math.round(effect.value * (1 + kindling))),
+        turnsRemaining: effect.turnsRemaining + (runtime.tier('kindling') >= 3 ? 1 : 0),
+      };
+    }
+  }
+
+  if (effect.type === EffectType.Hot) {
+    const tidecaller = runtime.value('tidecaller');
+    if (tidecaller > 0) {
+      return { ...effect, value: Math.max(1, Math.round(effect.value * (1 + tidecaller))) };
+    }
+  }
+
+  return effect;
+}
+
+/**
  * Resolve a single battle turn. Actors are ordered by effective Speed (higher
  * first; ties go to the player, with no RNG roll so seeded runs stay
  * deterministic). Each actor executes against the states left by the previous
  * actor. An actor whose HP has dropped to 0 before its slot is canceled: it
  * does not execute, spends no MP and applies no effects — its result slot is
  * filled with a zero-damage placeholder carrying the cancel reason.
+ *
+ * `playerPassives` apply to the player side only; enemies and bosses have none.
  */
 export function resolveTurn(
   playerAction: BattleAction,
   playerFamiliar: BattleFamiliar,
   enemyFamiliar: BattleFamiliar,
   enemyAction: BattleAction,
-  rng: () => number
+  rng: () => number,
+  playerPassives: ActivePassive[] = []
 ): {
   playerResult: ActionResult;
   enemyResult: ActionResult;
@@ -172,10 +264,10 @@ export function resolveTurn(
 } {
   // Initiative is locked in before any action executes: speed effects applied
   // during this turn only influence the NEXT turn's ordering.
-  const playerSpeed = getEffectiveStat(
-    playerFamiliar.familiarData.stats.speed,
-    playerFamiliar.statusEffects,
-    StatName.Speed
+  const runtime = makePassiveRuntime(playerFamiliar.uid, playerPassives);
+  const playerSpeed = Math.round(
+    getEffectiveStat(playerFamiliar.familiarData.stats.speed, playerFamiliar.statusEffects, StatName.Speed) *
+      (1 + runtime.value('tailwind'))
   );
   const enemySpeed = getEffectiveStat(
     enemyFamiliar.familiarData.stats.speed,
@@ -234,7 +326,7 @@ export function resolveTurn(
       continue;
     }
 
-    const execution = executeAction(action, actorPre, opponentPre, rng, isGuarding);
+    const execution = executeAction(action, actorPre, opponentPre, rng, isGuarding, runtime);
     const result = execution.result;
     let actorPost = applyActionResult(actorPre, result);
     const opponentPost = applyActionResult(opponentPre, result);
@@ -254,18 +346,33 @@ export function resolveTurn(
     if (execution.consumedCharge) actorPost = { ...actorPost, charged: false };
     if (execution.gainedCharge) actorPost = { ...actorPost, charged: true };
 
-    // Deduct MP for ability use (same gate as before: known ability and the
-    // actor had enough MP when it executed).
+    // Deduct MP for ability use. Relay Instinct discounts the first ability
+    // after a swap-in; spending it clears the discount.
+    let relayNote: { abilityName: string; cost: number; baseCost: number } | undefined;
     if (action.type === ActionType.Ability && action.abilityId) {
       const ability = getAbility(action.abilityId);
-      if (ability && actorPre.currentMp >= ability.mpCost) {
-        actorPost = { ...actorPost, currentMp: actorPost.currentMp - ability.mpCost };
+      if (ability) {
+        const discount = isPlayer ? Math.max(0, Math.min(1, actorPre.relayDiscount ?? 0)) : 0;
+        const cost = effectiveAbilityCost(ability, discount);
+        if (actorPre.currentMp >= cost) {
+          actorPost = {
+            ...actorPost,
+            currentMp: Math.max(0, actorPost.currentMp - cost),
+            ...(isPlayer && discount > 0 ? { relayDiscount: undefined } : {}),
+          };
+          if (isPlayer && discount > 0) {
+            relayNote = { abilityName: ability.name, cost, baseCost: ability.mpCost };
+          }
+        }
       }
     }
 
     if (result.appliedEffects) {
       for (const effect of result.appliedEffects) freshEffects.add(effect);
     }
+
+    // HP before this step's effects, used to detect Second Wind's threshold drop.
+    const playerHpBeforeStep = playerCurrent.currentHp;
 
     if (isPlayer) {
       playerResult = result;
@@ -283,12 +390,79 @@ export function resolveTurn(
       playerAfter: playerCurrent,
       enemyAfter: enemyCurrent,
     });
+
+    if (relayNote) {
+      steps.push({
+        actorUid: runtime.playerUid,
+        result: {
+          effectType: EffectType.Buff,
+          targetId: runtime.playerUid,
+          value: 0,
+          isCritical: false,
+          description: `Relay Instinct! ${actorPost.familiarData.name} uses ${relayNote.abilityName} for ${relayNote.cost} MP instead of ${relayNote.baseCost}`,
+        },
+        playerAfter: playerCurrent,
+        enemyAfter: enemyCurrent,
+      });
+    }
+
+    // Second Wind: once per familiar per battle, immediately after the step in
+    // which its HP first falls below 30% (but stays above 0).
+    if (!playerCurrent.secondWindUsed && playerCurrent.currentHp > 0) {
+      const maxHp = playerCurrent.familiarData.stats.maxHp;
+      const threshold = maxHp * 0.3;
+      if (playerHpBeforeStep >= threshold && playerCurrent.currentHp < threshold) {
+        const secondWind = runtime.value('secondWind');
+        const healed = Math.min(maxHp - playerCurrent.currentHp, Math.round(maxHp * secondWind));
+        if (secondWind > 0 && healed > 0) {
+          playerCurrent = {
+            ...playerCurrent,
+            currentHp: playerCurrent.currentHp + healed,
+            secondWindUsed: true,
+          };
+          steps.push({
+            actorUid: runtime.playerUid,
+            result: {
+              effectType: EffectType.Heal,
+              targetId: runtime.playerUid,
+              value: healed,
+              isCritical: false,
+              description: `Second Wind! ${playerCurrent.familiarData.name} recovers ${healed} HP`,
+            },
+            playerAfter: playerCurrent,
+            enemyAfter: enemyCurrent,
+          });
+        }
+      }
+    }
   }
 
   // Tick status effects. Effects applied during this turn (by either side)
   // neither proc nor decrement — they have not existed for a full turn yet.
   playerCurrent = applyStatusEffects(playerCurrent, freshEffects);
   enemyCurrent = applyStatusEffects(enemyCurrent, freshEffects);
+
+  // Radiance: end-of-turn regen for the living fighting familiar.
+  const radiance = runtime.value('radiance');
+  if (radiance > 0 && playerCurrent.currentHp > 0) {
+    const maxHp = playerCurrent.familiarData.stats.maxHp;
+    const healed = Math.min(maxHp - playerCurrent.currentHp, Math.round(maxHp * radiance));
+    if (healed > 0) {
+      playerCurrent = { ...playerCurrent, currentHp: playerCurrent.currentHp + healed };
+      steps.push({
+        actorUid: runtime.playerUid,
+        result: {
+          effectType: EffectType.Heal,
+          targetId: runtime.playerUid,
+          value: healed,
+          isCritical: false,
+          description: `Radiance! ${playerCurrent.familiarData.name} recovers ${healed} HP`,
+        },
+        playerAfter: playerCurrent,
+        enemyAfter: enemyCurrent,
+      });
+    }
+  }
 
   // Mutual KO: both combatants fall on the same turn. The player is awarded
   // the victory (checkBattleOutcome checks the enemy first) but survives with
@@ -364,7 +538,8 @@ function applyItemEffects(
   item: ItemData,
   source: BattleFamiliar,
   enemy: BattleFamiliar,
-  isGuarding: (familiar: BattleFamiliar) => boolean
+  isGuarding: (familiar: BattleFamiliar) => boolean,
+  runtime: PassiveRuntime
 ): ActionResult {
   const descriptions: string[] = [];
   let damage = 0;
@@ -373,23 +548,21 @@ function applyItemEffects(
   let cleanse = false;
   let selfStatus: StatusEffect | undefined;
   let enemyStatus: StatusEffect | undefined;
+  const tidecaller = source.uid === runtime.playerUid ? runtime.value('tidecaller') : 0;
+  const umbral = source.uid === runtime.playerUid ? runtime.value('umbralHunger') : 0;
 
   for (const effect of item.effects) {
     switch (effect.kind) {
       case 'heal_hp': {
-        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, effect.value));
+        const amount = Math.round(effect.value * (1 + tidecaller));
+        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, amount));
         hpHeal += healed;
         descriptions.push(`restores ${healed} HP`);
         break;
       }
       case 'heal_percentage': {
-        const healed = Math.max(
-          0,
-          Math.min(
-            source.familiarData.stats.maxHp - source.currentHp,
-            Math.floor((source.familiarData.stats.maxHp * effect.percentage) / 100)
-          )
-        );
+        const amount = Math.round(((source.familiarData.stats.maxHp * effect.percentage) / 100) * (1 + tidecaller));
+        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, amount));
         hpHeal += healed;
         descriptions.push(`restores ${healed} HP`);
         break;
@@ -400,10 +573,18 @@ function applyItemEffects(
         descriptions.push(`restores ${restored} MP`);
         break;
       }
-      case 'damage':
-        damage += effect.value;
-        descriptions.push(`deals ${effect.value} damage`);
+      case 'damage': {
+        const amount = Math.round(
+          effect.value *
+            (1 +
+              (umbral > 0 && enemy.statusEffects.some((e) => e.type === EffectType.Debuff || e.type === EffectType.Dot)
+                ? umbral
+                : 0))
+        );
+        damage += amount;
+        descriptions.push(`deals ${amount} damage`);
         break;
+      }
       case 'buff': {
         selfStatus = {
           abilityId: item.id,
@@ -431,25 +612,35 @@ function applyItemEffects(
         break;
       }
       case 'dot': {
-        enemyStatus = {
-          abilityId: item.id,
-          type: EffectType.Dot,
-          stat: StatName.Hp,
-          value: effect.value,
-          turnsRemaining: effect.turns,
-        };
-        descriptions.push(`deals ${effect.value} damage per turn for ${effect.turns} turns`);
+        const scaled = scaleAppliedStatus(
+          {
+            abilityId: item.id,
+            type: EffectType.Dot,
+            stat: StatName.Hp,
+            value: effect.value,
+            turnsRemaining: effect.turns,
+          },
+          source,
+          runtime
+        );
+        enemyStatus = scaled;
+        descriptions.push(`deals ${scaled.value} damage per turn for ${scaled.turnsRemaining} turns`);
         break;
       }
       case 'hot': {
-        selfStatus = {
-          abilityId: item.id,
-          type: EffectType.Hot,
-          stat: StatName.Hp,
-          value: effect.value,
-          turnsRemaining: effect.turns,
-        };
-        descriptions.push(`restores ${effect.value} HP per turn for ${effect.turns} turns`);
+        const scaled = scaleAppliedStatus(
+          {
+            abilityId: item.id,
+            type: EffectType.Hot,
+            stat: StatName.Hp,
+            value: effect.value,
+            turnsRemaining: effect.turns,
+          },
+          source,
+          runtime
+        );
+        selfStatus = scaled;
+        descriptions.push(`restores ${scaled.value} HP per turn for ${scaled.turnsRemaining} turns`);
         break;
       }
       case 'cure_status':
@@ -467,7 +658,8 @@ function applyItemEffects(
   // target's guard scales it, exactly like a direct hit.
   let guarded = false;
   if (damage > 0 && isGuarding(enemy)) {
-    const reduced = Math.max(1, Math.round(damage * BALANCE.guardDamageTaken));
+    const guardMultiplier = guardMultiplierFor(enemy, runtime, true) ?? BALANCE.guardDamageTaken;
+    const reduced = Math.max(1, Math.round(damage * guardMultiplier));
     guarded = Math.max(1, Math.round(damage)) > reduced;
     damage = reduced;
   }
@@ -528,7 +720,8 @@ function executeAction(
   source: BattleFamiliar,
   target: BattleFamiliar,
   rng: () => number,
-  isGuarding: (familiar: BattleFamiliar) => boolean = () => false
+  isGuarding: (familiar: BattleFamiliar) => boolean = () => false,
+  runtime: PassiveRuntime = { playerUid: '', value: () => 0, tier: () => 0 }
 ): ExecutionOutcome {
   let actualTarget: BattleFamiliar;
 
@@ -552,12 +745,20 @@ function executeAction(
       1.0,
       ScalingStat.Attack,
       rng,
-      { defenderGuarding: isGuarding(actualTarget) }
+      {
+        defenderGuarding: isGuarding(actualTarget),
+        damageMultiplier: playerDamageMultiplier(source, actualTarget, runtime),
+        guardMultiplier: guardMultiplierFor(actualTarget, runtime, isGuarding(actualTarget)),
+      }
     );
     const maxMp = source.familiarData.stats.maxMp;
+    const restoreFraction =
+      source.uid === runtime.playerUid && runtime.value('manaSpring') > 0
+        ? runtime.value('manaSpring')
+        : BALANCE.attackMpRestore;
     const restoredMp = Math.min(
       Math.max(0, maxMp - source.currentMp),
-      Math.max(1, Math.round(maxMp * BALANCE.attackMpRestore))
+      Math.max(1, Math.round(maxMp * restoreFraction))
     );
     const mpNote = restoredMp > 0 ? ` (+${restoredMp} MP)` : '';
     return {
@@ -591,7 +792,8 @@ function executeAction(
         gainedCharge: false,
       };
     }
-    if (source.currentMp < ability.mpCost) {
+    const relayDiscount = source.uid === runtime.playerUid ? (source.relayDiscount ?? 0) : 0;
+    if (source.currentMp < effectiveAbilityCost(ability, relayDiscount)) {
       return {
         result: {
           effectType: EffectType.Damage,
@@ -605,7 +807,7 @@ function executeAction(
       };
     }
     return {
-      result: executeAbility(ability, source, actualTarget, rng, isGuarding),
+      result: executeAbility(ability, source, actualTarget, rng, isGuarding, runtime),
       // Only a direct damaging ability spends the charge; buffs, heals and
       // DoT-setting abilities leave it intact.
       consumedCharge: ability.effectType === EffectType.Damage && source.charged === true,
@@ -677,7 +879,7 @@ function executeAction(
     }
 
     return {
-      result: applyItemEffects(item, source, target, isGuarding),
+      result: applyItemEffects(item, source, target, isGuarding, runtime),
       consumedCharge: false,
       gainedCharge: false,
     };
@@ -713,8 +915,26 @@ function executeAbility(
   source: BattleFamiliar,
   target: BattleFamiliar,
   rng: () => number,
-  isGuarding: (familiar: BattleFamiliar) => boolean = () => false
+  isGuarding: (familiar: BattleFamiliar) => boolean = () => false,
+  runtime: PassiveRuntime = { playerUid: '', value: () => 0, tier: () => 0 }
 ): ActionResult {
+  const scaleStatuses = (effectType = ability.statusEffect?.type) =>
+    ability.statusEffect
+      ? [
+          scaleAppliedStatus(
+            {
+              abilityId: ability.id,
+              type: effectType ?? ability.statusEffect.type,
+              stat: ability.statusEffect.stat,
+              value: ability.statusEffect.value,
+              turnsRemaining: ability.statusEffect.duration,
+            },
+            source,
+            runtime
+          ),
+        ]
+      : undefined;
+
   if (ability.effectType === EffectType.Damage) {
     const { damage, isCritical, effectiveness, guarded } = rollDamage(
       source,
@@ -722,20 +942,14 @@ function executeAbility(
       effectiveAbilityMultiplier(ability, source),
       ability.scalingStat,
       rng,
-      { defenderGuarding: isGuarding(target) }
+      {
+        defenderGuarding: isGuarding(target),
+        damageMultiplier: playerDamageMultiplier(source, target, runtime, ability),
+        guardMultiplier: guardMultiplierFor(target, runtime, isGuarding(target)),
+      }
     );
 
-    const statusEffects = ability.statusEffect
-      ? [
-          {
-            abilityId: ability.id,
-            type: ability.statusEffect.type,
-            stat: ability.statusEffect.stat,
-            value: ability.statusEffect.value,
-            turnsRemaining: ability.statusEffect.duration,
-          },
-        ]
-      : undefined;
+    const statusEffects = scaleStatuses();
 
     // Below half HP the low-HP bonus is worth calling out in the log.
     const hpRatio = source.familiarData.stats.maxHp > 0 ? source.currentHp / source.familiarData.stats.maxHp : 0;
@@ -758,19 +972,10 @@ function executeAbility(
     // Bosses have several times a normal familiar's HP, so a %-of-max heal
     // would undo whole turns of the player's work; scale theirs down.
     const healScale = source.familiarData.isBoss ? BALANCE.bossHealScale : 1;
-    const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier * healScale);
+    const tidecaller = source.uid === runtime.playerUid ? runtime.value('tidecaller') : 0;
+    const healAmount = Math.round(target.familiarData.stats.maxHp * ability.multiplier * healScale * (1 + tidecaller));
 
-    const statusEffects = ability.statusEffect
-      ? [
-          {
-            abilityId: ability.id,
-            type: ability.statusEffect.type,
-            stat: ability.statusEffect.stat,
-            value: ability.statusEffect.value,
-            turnsRemaining: ability.statusEffect.duration,
-          },
-        ]
-      : undefined;
+    const statusEffects = scaleStatuses();
 
     return {
       effectType: EffectType.Heal,
@@ -783,17 +988,7 @@ function executeAbility(
   }
 
   if (ability.effectType === EffectType.Buff) {
-    const statusEffects = ability.statusEffect
-      ? [
-          {
-            abilityId: ability.id,
-            type: ability.statusEffect.type,
-            stat: ability.statusEffect.stat,
-            value: ability.statusEffect.value,
-            turnsRemaining: ability.statusEffect.duration,
-          },
-        ]
-      : undefined;
+    const statusEffects = scaleStatuses();
 
     return {
       effectType: EffectType.Buff,
@@ -806,17 +1001,7 @@ function executeAbility(
   }
 
   if (ability.effectType === EffectType.Debuff) {
-    const statusEffects = ability.statusEffect
-      ? [
-          {
-            abilityId: ability.id,
-            type: ability.statusEffect.type,
-            stat: ability.statusEffect.stat,
-            value: ability.statusEffect.value,
-            turnsRemaining: ability.statusEffect.duration,
-          },
-        ]
-      : undefined;
+    const statusEffects = scaleStatuses();
 
     return {
       effectType: EffectType.Debuff,
@@ -829,17 +1014,7 @@ function executeAbility(
   }
 
   if (ability.effectType === EffectType.Dot) {
-    const statusEffects = ability.statusEffect
-      ? [
-          {
-            abilityId: ability.id,
-            type: EffectType.Dot,
-            stat: ability.statusEffect.stat,
-            value: ability.statusEffect.value,
-            turnsRemaining: ability.statusEffect.duration,
-          },
-        ]
-      : undefined;
+    const statusEffects = scaleStatuses(EffectType.Dot);
 
     return {
       effectType: EffectType.Dot,

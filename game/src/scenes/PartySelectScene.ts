@@ -7,6 +7,11 @@ import {
   learnSchedule,
   Affinity,
   AREAS,
+  BALANCE,
+  PASSIVES,
+  passiveTier,
+  passiveTierRoman,
+  passiveCombos,
   validateParty,
   scaleFamiliarStats,
 } from '@arcane-familiars/game-logic';
@@ -65,6 +70,7 @@ const LAYOUT = {
   ABILITIES_LABEL_OFFSET_Y: 165,
   ABILITIES_TEXT_OFFSET_Y: 180,
   NEXT_ABILITY_OFFSET_Y: 204,
+  PASSIVE_OFFSET_Y: 216,
   CARD_BORDER_WIDTH: 2,
   CARD_STROKE_WIDTH: 1,
 } as const;
@@ -85,6 +91,8 @@ const COLORS = {
   ERROR: '#EF4444',
   NEW_TAG: 0xf472b6,
   NEW_TAG_TEXT: '#F472B6',
+  PASSIVE_UNLOCKED: '#2DD4BF',
+  PASSIVE_COMBO: '#F472B6',
 } as const;
 
 const MAX_SAVE_ATTEMPTS = 3;
@@ -139,6 +147,7 @@ export class PartySelectScene extends Phaser.Scene {
   private confirmBg!: Phaser.GameObjects.Rectangle;
   private backText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private comboText?: Phaser.GameObjects.Text;
   private retryTimer: Phaser.Time.TimerEvent | null = null;
   private isSaving = false;
   private saveRetryCount = 0;
@@ -237,6 +246,17 @@ export class PartySelectScene extends Phaser.Scene {
         color: COLORS.TEXT_DISABLED,
       })
       .setOrigin(0.5);
+
+    this.comboText = this.add
+      .text(this.layout.x(400), confirmY - this.layout.s(46), '', {
+        fontSize: this.layout.font(10),
+        fontFamily: 'DM Sans',
+        color: COLORS.PASSIVE_COMBO,
+        align: 'center',
+        wordWrap: { width: this.layout.s(520) },
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
 
     this.backText = this.add
       .text(this.layout.x(LAYOUT.BACK_MARGIN), confirmY, '< Back', {
@@ -577,6 +597,24 @@ export class PartySelectScene extends Phaser.Scene {
             .setOrigin(0.5, 0)
         : undefined;
 
+      const passive = familiar.passive ? PASSIVES[familiar.passive] : undefined;
+      const tier = passiveTier(level);
+      const passiveLabel = passive
+        ? tier > 0
+          ? `Passive: ${passive.name} ${passiveTierRoman(tier as 1 | 2 | 3 | 4)}`
+          : `Passive: ${passive.name} at Lv ${BALANCE.passiveTierLevels[0]}`
+        : undefined;
+      const passiveText = passiveLabel
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.PASSIVE_OFFSET_Y), passiveLabel, {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              color: tier > 0 ? COLORS.PASSIVE_UNLOCKED : COLORS.LABEL,
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
+
       container.add([
         portrait,
         levelBadgeBg,
@@ -589,6 +627,7 @@ export class PartySelectScene extends Phaser.Scene {
         abilitiesLabel,
         abilitiesText,
         ...(nextAbilityText ? [nextAbilityText] : []),
+        ...(passiveText ? [passiveText] : []),
         ring,
         orderBadgeBg,
         orderBadge,
@@ -687,6 +726,28 @@ export class PartySelectScene extends Phaser.Scene {
     if (this.confirmBg.input) {
       this.confirmBg.input.enabled = ready;
     }
+
+    this.updatePassiveCombos();
+  }
+
+  /** Party-select combo hints: partner-only passive boosts for the chosen pair. */
+  private updatePassiveCombos(): void {
+    if (!this.comboText) return;
+
+    if (this.selectedIds.length !== MAX_PARTY_SIZE) {
+      this.comboText.setText('').setVisible(false);
+      return;
+    }
+
+    const [first, second] = this.selectedIds.map((id) => FAMILIARS[id]);
+    const levels = this.selectedIds.map((id) => this.fullGameState?.familiarLevels?.[id] ?? 1);
+    if (!first || !second) {
+      this.comboText.setText('').setVisible(false);
+      return;
+    }
+
+    const combos = passiveCombos(first, levels[0], second, levels[1]).slice(0, 2);
+    this.comboText.setText(combos.join('\n')).setVisible(combos.length > 0);
   }
 
   private async confirmParty(): Promise<void> {

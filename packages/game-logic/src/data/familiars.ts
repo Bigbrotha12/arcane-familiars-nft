@@ -1,3 +1,5 @@
+import type { PassiveId } from '@/data/passives';
+
 export enum Affinity {
   Light,
   Dark,
@@ -34,6 +36,8 @@ export interface FamiliarData {
   affinity: Affinity;
   rarity: Rarity;
   isBoss?: boolean;
+  /** Party passive species ability (non-boss familiars only). */
+  passive?: PassiveId;
   sprite?: string;
 }
 
@@ -43,6 +47,7 @@ const whiteDog: FamiliarData = {
   description: 'A loyal companion with balanced stats and defensive capabilities',
   stats: { hp: 120, maxHp: 120, mp: 80, maxMp: 80, attack: 55, defense: 70, arcane: 45, speed: 60 },
   abilities: ['brave', 'sturdy'],
+  passive: 'secondWind',
   affinity: Affinity.Light,
   rarity: Rarity.Common,
 };
@@ -53,6 +58,7 @@ const yellowFighter: FamiliarData = {
   description: 'A fierce warrior with high attack power',
   stats: { hp: 140, maxHp: 140, mp: 60, maxMp: 60, attack: 80, defense: 45, arcane: 35, speed: 75 },
   abilities: ['brave'],
+  passive: 'battleCry',
   affinity: Affinity.Fire,
   rarity: Rarity.Common,
 };
@@ -63,6 +69,7 @@ const aquaSprite: FamiliarData = {
   description: 'A mystical water creature with strong healing and magic',
   stats: { hp: 90, maxHp: 90, mp: 100, maxMp: 100, attack: 40, defense: 50, arcane: 80, speed: 55 },
   abilities: ['healpulse', 'sturdy'],
+  passive: 'tidecaller',
   affinity: Affinity.Water,
   rarity: Rarity.Common,
 };
@@ -73,6 +80,7 @@ const leafBunny: FamiliarData = {
   description: 'A gentle earth creature with solid defenses',
   stats: { hp: 110, maxHp: 110, mp: 70, maxMp: 70, attack: 50, defense: 80, arcane: 40, speed: 65 },
   abilities: ['sturdy', 'brave'],
+  passive: 'bedrock',
   affinity: Affinity.Earth,
   rarity: Rarity.Common,
 };
@@ -83,6 +91,7 @@ const sparkMouse: FamiliarData = {
   description: 'A swift wind creature with lightning reflexes',
   stats: { hp: 75, maxHp: 75, mp: 60, maxMp: 60, attack: 60, defense: 35, arcane: 65, speed: 90 },
   abilities: ['brave', 'quickstep'],
+  passive: 'tailwind',
   affinity: Affinity.Wind,
   rarity: Rarity.Common,
 };
@@ -93,6 +102,7 @@ const tideTurtle: FamiliarData = {
   description: 'A sturdy aquatic creature with balanced stats',
   stats: { hp: 130, maxHp: 130, mp: 70, maxMp: 70, attack: 50, defense: 75, arcane: 50, speed: 40 },
   abilities: ['sturdy', 'healpulse'],
+  passive: 'tidecaller',
   affinity: Affinity.Water,
   rarity: Rarity.Uncommon,
 };
@@ -103,6 +113,7 @@ const shadowCat: FamiliarData = {
   description: 'A stealthy dark creature with powerful strikes',
   stats: { hp: 100, maxHp: 100, mp: 90, maxMp: 90, attack: 70, defense: 45, arcane: 75, speed: 85 },
   abilities: ['shadowstrike', 'quickstep'],
+  passive: 'umbralHunger',
   affinity: Affinity.Dark,
   rarity: Rarity.Uncommon,
 };
@@ -113,6 +124,7 @@ const honeyBear: FamiliarData = {
   description: 'A warm-hearted bruiser that protects its allies',
   stats: { hp: 150, maxHp: 150, mp: 60, maxMp: 60, attack: 55, defense: 85, arcane: 35, speed: 45 },
   abilities: ['sturdy', 'rally', 'ironbash'],
+  passive: 'battleCry',
   affinity: Affinity.Earth,
   rarity: Rarity.Uncommon,
 };
@@ -123,6 +135,7 @@ const petalWisp: FamiliarData = {
   description: 'A gentle light spirit that mends wounds',
   stats: { hp: 85, maxHp: 85, mp: 100, maxMp: 100, attack: 35, defense: 45, arcane: 85, speed: 70 },
   abilities: ['healpulse', 'purify', 'focus'],
+  passive: 'radiance',
   affinity: Affinity.Light,
   rarity: Rarity.Common,
 };
@@ -133,6 +146,7 @@ const crystalMole: FamiliarData = {
   description: 'A burrowing tank with crystal-hard hide',
   stats: { hp: 135, maxHp: 135, mp: 55, maxMp: 55, attack: 75, defense: 90, arcane: 40, speed: 35 },
   abilities: ['ironbash', 'thornCoat'],
+  passive: 'bedrock',
   affinity: Affinity.Earth,
   rarity: Rarity.Uncommon,
 };
@@ -143,6 +157,7 @@ const echoBat: FamiliarData = {
   description: 'A swift cave dweller that strikes before it is seen',
   stats: { hp: 80, maxHp: 80, mp: 80, maxMp: 80, attack: 55, defense: 35, arcane: 75, speed: 100 },
   abilities: ['quickstep', 'windWard', 'thunderclap'],
+  passive: 'tailwind',
   affinity: Affinity.Wind,
   rarity: Rarity.Uncommon,
 };
@@ -153,6 +168,7 @@ const thornWolf: FamiliarData = {
   description: 'A feral guardian wrapped in living thorns',
   stats: { hp: 115, maxHp: 115, mp: 65, maxMp: 65, attack: 85, defense: 55, arcane: 45, speed: 80 },
   abilities: ['brave', 'thornCoat', 'rootSnare'],
+  passive: 'relayInstinct',
   affinity: Affinity.Earth,
   rarity: Rarity.Rare,
 };
@@ -163,6 +179,7 @@ const moonMoth: FamiliarData = {
   description: 'A nocturnal caster that curses from the shadows',
   stats: { hp: 95, maxHp: 95, mp: 110, maxMp: 110, attack: 40, defense: 45, arcane: 95, speed: 75 },
   abilities: ['nightTerror', 'hex', 'focus'],
+  passive: 'umbralHunger',
   affinity: Affinity.Dark,
   rarity: Rarity.Rare,
 };
@@ -173,6 +190,7 @@ const emberFox: FamiliarData = {
   description: 'A cunning fire mage with a burning tail',
   stats: { hp: 100, maxHp: 100, mp: 110, maxMp: 110, attack: 45, defense: 45, arcane: 100, speed: 70 },
   abilities: ['fireball', 'flameLash', 'cinderCloak'],
+  passive: 'kindling',
   affinity: Affinity.Fire,
   rarity: Rarity.Rare,
 };
@@ -183,6 +201,7 @@ const magmaHound: FamiliarData = {
   description: 'A relentless hound with molten armor',
   stats: { hp: 145, maxHp: 145, mp: 70, maxMp: 70, attack: 74, defense: 70, arcane: 50, speed: 55 },
   abilities: ['brave', 'magmaArmor', 'flameLash'],
+  passive: 'kindling',
   affinity: Affinity.Fire,
   rarity: Rarity.Rare,
 };
@@ -193,6 +212,7 @@ const frostHare: FamiliarData = {
   description: 'A quick-footed hare that leaves frost in its wake',
   stats: { hp: 90, maxHp: 90, mp: 90, maxMp: 90, attack: 60, defense: 45, arcane: 70, speed: 95 },
   abilities: ['quickstep', 'frostbite'],
+  passive: 'relayInstinct',
   affinity: Affinity.Water,
   rarity: Rarity.Uncommon,
 };
@@ -203,6 +223,7 @@ const glacierOwl: FamiliarData = {
   description: 'A patient guardian of the high peaks',
   stats: { hp: 120, maxHp: 120, mp: 120, maxMp: 120, attack: 45, defense: 65, arcane: 100, speed: 60 },
   abilities: ['frozenTide', 'glacialWard', 'healpulse'],
+  passive: 'manaSpring',
   affinity: Affinity.Water,
   rarity: Rarity.Rare,
 };
@@ -213,6 +234,7 @@ const inkSerpent: FamiliarData = {
   description: 'A drowned scholar that poisons with forbidden ink',
   stats: { hp: 110, maxHp: 110, mp: 115, maxMp: 115, attack: 50, defense: 55, arcane: 95, speed: 65 },
   abilities: ['hex', 'siphon', 'lifedrain'],
+  passive: 'umbralHunger',
   affinity: Affinity.Water,
   rarity: Rarity.Rare,
 };
@@ -223,6 +245,7 @@ const runeGolem: FamiliarData = {
   description: 'An ancient stone construct covered in runes',
   stats: { hp: 180, maxHp: 180, mp: 90, maxMp: 90, attack: 60, defense: 130, arcane: 55, speed: 30 },
   abilities: ['runeShield', 'ironbash', 'sturdy'],
+  passive: 'secondWind',
   affinity: Affinity.Earth,
   rarity: Rarity.Rare,
 };

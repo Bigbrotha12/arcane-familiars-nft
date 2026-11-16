@@ -1,4 +1,12 @@
-import { Affinity, FAMILIARS, Rarity, getAbility, learnSchedule } from '@arcane-familiars/game-logic';
+import {
+  Affinity,
+  FAMILIARS,
+  PASSIVES,
+  Rarity,
+  getAbility,
+  learnSchedule,
+  passiveDescription,
+} from '@arcane-familiars/game-logic';
 import type { FamiliarData } from '@arcane-familiars/game-logic';
 import type { CatalogFamiliar } from '@/lib/collection';
 
@@ -22,6 +30,8 @@ export interface CollectionEntry {
   stats: FamiliarStats;
   /** Compact learn schedule, e.g. "Lv 1 Brave · Lv 3 Sturdy · Lv 9 Sunburst · Lv 12 Rank II". */
   learnset?: string;
+  /** Party passive summary, when the species has one. */
+  passive?: { name: string; description: string; maxDescription: string };
 }
 
 const EMPTY_STATS: FamiliarStats = { hp: 0, mp: 0, attack: 0, defense: 0, arcane: 0, speed: 0 };
@@ -72,6 +82,17 @@ export function portraitPath(id: string): string {
   return `/assets/sprites/familiars/${id}/${id}_portrait.png`;
 }
 
+/** Species passive summary for the codex card (tier I and tier IV text). */
+function passiveSummary(species?: FamiliarData): CollectionEntry['passive'] {
+  if (!species?.passive) return undefined;
+  const passive = PASSIVES[species.passive];
+  return {
+    name: passive.name,
+    description: passiveDescription(passive, 1),
+    maxDescription: passiveDescription(passive, 4),
+  };
+}
+
 /** Map a D1 catalog row (`GET /api/collection`) into a display entry. */
 export function catalogEntry(row: CatalogFamiliar): CollectionEntry {
   const species = localSpeciesForName(row.name);
@@ -91,6 +112,7 @@ export function catalogEntry(row: CatalogFamiliar): CollectionEntry {
       speed: row.speed,
     },
     learnset: species ? learnsetLabel(species) : undefined,
+    passive: passiveSummary(species),
   };
 }
 
@@ -131,5 +153,6 @@ export function speciesEntry(id: string): CollectionEntry {
       speed: data.stats.speed,
     },
     learnset: learnsetLabel(data),
+    passive: passiveSummary(data),
   };
 }

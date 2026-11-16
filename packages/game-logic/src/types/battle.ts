@@ -1,5 +1,6 @@
 import type { StatName, EffectType } from '@/data/abilities';
 import type { FamiliarData } from '@/data/familiars';
+import type { ActivePassive } from '@/data/passives';
 import type { Inventory } from '@/types/gameState';
 
 export interface BattleFamiliar {
@@ -15,6 +16,11 @@ export interface BattleFamiliar {
   /** Set by ActionType.Charge and spent by the next damaging action
    *  (boss telegraphed heavy attack). Persisted with the battle JSON. */
   charged?: boolean;
+  /** Second Wind already fired for this combatant in this battle. */
+  secondWindUsed?: boolean;
+  /** Relay Instinct: MP fraction discounted from this combatant's next ability
+   *  (0..1, 1 = free). Set when it swaps in; cleared by the first ability. */
+  relayDiscount?: number;
 }
 
 export interface StatusEffect {
@@ -146,6 +152,14 @@ export interface BattleRewards {
     abilityId: string;
     abilityName: string;
   }[];
+  /** Passive tiers unlocked by level-ups earned in this battle. */
+  passiveUnlocks?: {
+    familiarId: string;
+    familiarName: string;
+    passiveId: string;
+    passiveName: string;
+    tier: number;
+  }[];
 }
 
 export enum BattleResult {
@@ -170,4 +184,13 @@ export interface BattleState {
   status: BattleResult;
   swapsThisTurn?: number;
   seed?: number;
+  /** Party-wide passives active for the whole battle (player side only).
+   *  Optional so battles persisted before passives existed still load. */
+  playerPassives?: ActivePassive[];
+  /**
+   * Species ids that have spent a once-per-battle passive effect. Kept on the
+   * battle, not the combatant, so swapping out and back in cannot reset Second
+   * Wind or re-grant the Relay Instinct discount.
+   */
+  passiveUses?: { secondWind: string[]; relay: string[] };
 }

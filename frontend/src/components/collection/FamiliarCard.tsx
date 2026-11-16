@@ -3,6 +3,7 @@ import Badge from '@/components/ui/Badge';
 import Card, { CardBody } from '@/components/ui/Card';
 import type { CollectionEntry } from '@/components/collection/entries';
 import { rarityLabel, toBadgeVariant } from '@/components/collection/rarity';
+import { BALANCE } from '@arcane-familiars/game-logic';
 
 interface FamiliarCardProps {
   entry: CollectionEntry;
@@ -74,6 +75,14 @@ export default function FamiliarCard({ entry }: FamiliarCardProps): JSX.Element 
           <p className="mt-sm text-xs font-body leading-snug text-text-muted">
             <span className="text-text-secondary">Learnset: </span>
             {entry.learnset}
+          </p>
+        )}
+
+        {entry.passive && (
+          <p className="mt-sm text-xs font-body leading-snug text-text-muted">
+            <span className="text-text-secondary">Passive: </span>
+            {entry.passive.name} — {entry.passive.description} (Lv {BALANCE.passiveTierLevels[0]}) →{' '}
+            {entry.passive.maxDescription} (Lv {BALANCE.passiveTierLevels[3]})
           </p>
         )}
       </CardBody>
