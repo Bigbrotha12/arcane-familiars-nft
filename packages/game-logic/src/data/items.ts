@@ -254,14 +254,14 @@ export function getItem(id: string): ItemData | undefined {
 }
 
 /**
- * Rarity derived from the item's treasure-pool weight:
- * dropWeight >= 8 common, 4-7 uncommon, <= 3 rare. Items that never drop
- * (no dropWeight) are treated as rare.
+ * Rarity derived from the item's treasure-pool weight. Pool weights run 1-10,
+ * so the bands split it roughly into thirds: >= 5 common (basic potions),
+ * 2-4 uncommon, 1 rare. Items that never drop (no dropWeight) are rare.
  */
 export function itemRarity(item: ItemData): ItemRarity {
   const weight = item.dropWeight ?? 0;
-  if (weight >= 8) return 'common';
-  if (weight >= 4) return 'uncommon';
+  if (weight >= 5) return 'common';
+  if (weight >= 2) return 'uncommon';
   return 'rare';
 }
 
