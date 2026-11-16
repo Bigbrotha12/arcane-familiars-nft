@@ -82,10 +82,12 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   rooms['room_0'] = startRoom;
   roomIds.push('room_0');
 
-  // Create normal rooms. Longer dungeons swap one main-path room for a rest
-  // shrine so an attrition run has a single breather and a routing decision.
+  // Create normal rooms. Longer dungeons swap the last main-path room for a
+  // rest shrine: the chain is linear, so the shrine is the room players pass
+  // through on their way into the boss chamber, giving an attrition run one
+  // guaranteed breather before the fight that actually ends it.
   const normalCount = area.roomCount - 2;
-  const restIndex = area.roomCount >= 6 ? Math.round(normalCount * 0.6) : -1;
+  const restIndex = area.roomCount >= 6 ? normalCount - 1 : -1;
   for (let i = 0; i < normalCount; i++) {
     const nameIdx = randomInRange(rng, 0, ROOM_NAMES.length - 1);
     const descIdx = randomInRange(rng, 0, ROOM_DESCRIPTIONS.length - 1);

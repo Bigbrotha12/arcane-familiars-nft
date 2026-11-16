@@ -27,8 +27,11 @@ export const BALANCE = {
   bossXpMultiplier: 2.5,
   /** XP share for the party member who did not land the winning blow. */
   benchXpShare: 0.5,
-  /** Fraction of level-scaled max HP/MP restored by a rest shrine. */
-  restHealFraction: 0.4,
+  /**
+   * Fraction of level-scaled max HP/MP restored by a rest shrine. The shrine is
+   * the last room before a boss, so this is what the party takes into the fight.
+   */
+  restHealFraction: 0.6,
   // Bosses have several times a normal familiar's HP, so their %-of-max heals
   // are scaled down or they would undo whole turns of the player's work.
   bossHealScale: 0.4,

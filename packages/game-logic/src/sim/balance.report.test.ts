@@ -57,6 +57,14 @@ describe('balance curve', () => {
           expect(bossMed, `median boss win, ${where}`).toBeLessThanOrEqual(0.95);
           // A well-chosen team should be clearly rewarded.
           expect(bossBest, `best-pair boss win, ${where}`).toBeGreaterThanOrEqual(0.8);
+          // Clearing a whole run at the top of the band should be the normal
+          // outcome for a party that picked its pair on purpose. The median
+          // across every pair stays low on purpose: half the roster is made of
+          // low-attack support kits (starters included) that cannot finish a
+          // late enemy, which is a content problem tracked separately. Sunken
+          // Archive is the worst case (~5%) because its runs are the longest.
+          expect(best.r.runClear, `best-pair run clear, ${where}`).toBeGreaterThanOrEqual(0.6);
+          expect(median(reports.map((x) => x.r.runClear)), `median run clear, ${where}`).toBeGreaterThanOrEqual(0.05);
         }
       }
     }

@@ -14,7 +14,7 @@ import { selectEnemyAction } from '@/utils/enemyAI';
 import { scaleEnemy } from '@/utils/dungeonEngine';
 import { scaleFamiliarStats } from '@/utils/progression';
 import { seededRandom, randomInRange } from '@/utils/mathUtils';
-import { affinityMultiplier } from '@/data/balance';
+import { BALANCE, affinityMultiplier } from '@/data/balance';
 
 export interface PartyMember {
   id: string;
@@ -200,11 +200,11 @@ export function reportArea(areaId: string, partyIds: string[], partyLevel: numbe
     if (simulateBattle(freshParty(partyIds, partyLevel), area.bossId, bossLevel, true, seed()).won) bossWins++;
 
     // A run: encounters, a potion between fights when hurt (one per fight —
-    // roughly what battle rewards pay for), the shrine at ~60% depth in
-    // dungeons that have one, then the boss.
+    // roughly what battle rewards pay for), the shrine (the last normal room in
+    // dungeons that have one, i.e. immediately before the boss), then the boss.
     const party = freshParty(partyIds, partyLevel);
     const maxOf = (m: PartyMember) => scaleFamiliarStats(getFamiliar(m.id)!.stats, m.level);
-    const shrineAfter = area.roomCount >= 6 ? Math.round(expectedEncounters * 0.6) : -1;
+    const shrineAfter = area.roomCount >= 6 ? expectedEncounters : -1;
     let alive = true;
     for (let e = 0; e < expectedEncounters && alive; e++) {
       alive = simulateBattle(party, pick(), level(), false, seed()).won;
@@ -217,8 +217,8 @@ export function reportArea(areaId: string, partyIds: string[], partyLevel: numbe
         for (const m of party) {
           if (m.hp <= 0) continue;
           const max = maxOf(m);
-          m.hp = Math.min(max.maxHp, m.hp + Math.round(max.maxHp * 0.4));
-          m.mp = Math.min(max.maxMp, m.mp + Math.round(max.maxMp * 0.4));
+          m.hp = Math.min(max.maxHp, m.hp + Math.round(max.maxHp * BALANCE.restHealFraction));
+          m.mp = Math.min(max.maxMp, m.mp + Math.round(max.maxMp * BALANCE.restHealFraction));
         }
       }
     }

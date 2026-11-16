@@ -109,11 +109,22 @@ describe('rest shrine generation', () => {
     }
   });
 
-  it('sits at the documented index on the main path', () => {
-    const area = AREAS.shadowForest; // roomCount 7 -> 5 normal rooms
-    const normalCount = area.roomCount - 2;
-    const expectedId = `room_${Math.round(normalCount * 0.6) + 1}`;
-    expect(restRooms(generateDungeon(area, 42))[0].id).toBe(expectedId);
+  it('sits in the last normal room, immediately before the boss', () => {
+    for (const area of Object.values(AREAS)) {
+      const dungeon = generateDungeon(area, 42);
+      const shrine = restRooms(dungeon)[0];
+      if (area.roomCount < 6) {
+        expect(shrine).toBeUndefined();
+        continue;
+      }
+      const boss = Object.values(dungeon.rooms).find((room) => room.type === RoomType.Boss);
+      const bossExitRooms = Object.values(dungeon.rooms).filter((room) =>
+        room.exits.some((exit) => exit.roomId === boss?.id)
+      );
+      expect(shrine).toBeDefined();
+      // The chain is linear, so the shrine is the room that leads into the boss.
+      expect(bossExitRooms.map((room) => room.id)).toContain(shrine.id);
+    }
   });
 
   it('keeps every room reachable from the entrance', () => {

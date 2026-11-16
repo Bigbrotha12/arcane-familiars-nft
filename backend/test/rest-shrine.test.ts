@@ -122,15 +122,15 @@ describe('rest shrine exploration', () => {
     const body = await explore(anonId, 'room_2', '10.9.0.1');
 
     // White Dog is near max (only +20 HP/+20 MP fit); Yellow Fighter gets the
-    // full 40% of its level-1 max (56 HP / 24 MP).
+    // full 60% of its level-1 max (84 HP / 36 MP).
     expect(body.rest?.healed).toEqual({
       whiteDog: { hp: 20, mp: 20 },
-      yellowFighter: { hp: 56, mp: 24 },
+      yellowFighter: { hp: 84, mp: 36 },
     });
 
     const state = await readState(anonId);
-    expect(state.dungeon?.partyHp).toEqual({ whiteDog: 120, yellowFighter: 86 });
-    expect(state.dungeon?.partyMp).toEqual({ whiteDog: 80, yellowFighter: 24 });
+    expect(state.dungeon?.partyHp).toEqual({ whiteDog: 120, yellowFighter: 114 });
+    expect(state.dungeon?.partyMp).toEqual({ whiteDog: 80, yellowFighter: 36 });
     expect(state.dungeon?.rooms['room_2'].rested).toBe(true);
   });
 
@@ -160,7 +160,8 @@ describe('rest shrine exploration', () => {
 
     const body = await explore(anonId, 'room_2', '10.9.0.5');
 
-    expect(body.rest?.healed.whiteDog).toEqual({ hp: 48, mp: 32 });
+    // 60% of White Dog's level-1 max: 72 HP / 48 MP.
+    expect(body.rest?.healed.whiteDog).toEqual({ hp: 72, mp: 48 });
     expect(body.rest?.healed.yellowFighter).toBeUndefined();
 
     const state = await readState(anonId);
