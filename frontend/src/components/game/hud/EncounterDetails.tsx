@@ -52,7 +52,8 @@ function EncounterDetails({ encounter, party = [], activeId, recruitBond, ownedF
   const [imageFailed, setImageFailed] = useState(false);
 
   const enemy = FAMILIARS[encounter.enemyId];
-  const name = enemy?.name ?? humanizeId(encounter.enemyId);
+  const baseName = enemy?.name ?? humanizeId(encounter.enemyId);
+  const name = encounter.elite?.name ?? baseName;
   const affinity = enemy ? Affinity[enemy.affinity] : undefined;
   const affinityColor = affinity ? (AFFINITY_COLORS[affinity] ?? '#A5A3C4') : undefined;
 
@@ -93,6 +94,14 @@ function EncounterDetails({ encounter, party = [], activeId, recruitBond, ownedF
                 Boss
               </span>
             )}
+            {encounter.elite && (
+              <span
+                title={encounter.elite.description}
+                className="shrink-0 rounded-full border border-pink/60 bg-pink/20 px-1.5 py-px font-display text-[9px] font-semibold uppercase tracking-wider text-pink max-sm:px-2 max-sm:text-[15px]"
+              >
+                Elite
+              </span>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <span className="font-mono text-xs tabular-nums text-[#B8B5E0] max-sm:text-[20px]">
@@ -111,6 +120,9 @@ function EncounterDetails({ encounter, party = [], activeId, recruitBond, ownedF
               </span>
             )}
           </div>
+          {encounter.elite && (
+            <p className="font-body text-[11px] text-pink max-sm:text-[18px]">{encounter.elite.description}</p>
+          )}
           {showRecruit && (
             <p className="font-mono text-[11px] tabular-nums text-pink max-sm:text-[18px]">
               Recruitable · Bond {bond}/{needed}
@@ -118,6 +130,12 @@ function EncounterDetails({ encounter, party = [], activeId, recruitBond, ownedF
           )}
         </div>
       </div>
+
+      {encounter.elite && (
+        <p className="font-body text-xs text-[#B8B5E0] max-sm:text-[20px]">
+          <span className="text-[#A5A3C4]">Spoils:</span> rare chest · double coins
+        </p>
+      )}
 
       {matchups.length > 0 && (
         <ul className="flex flex-col gap-0.5 border-t border-[#3B3870] pt-sm">

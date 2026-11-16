@@ -425,6 +425,39 @@ export class BattleUI {
     }
   }
 
+  /**
+   * Boss phase-two transition: one short red flash. Called on the same beat as
+   * the step feedback, after which the sprite returns to its normal tint.
+   */
+  playEnrageFlash(side: BattleSide): void {
+    if (this.destroyed) return;
+    const sprite = this.sprite(side);
+    if (!sprite || this.fainted[side] || prefersReducedMotion()) return;
+
+    const clear = () => {
+      if (!sprite.active) return;
+      sprite.clearTint();
+      sprite.setTintMode(Phaser.TintModes.MULTIPLY);
+      sprite.setAlpha(1);
+    };
+
+    sprite.setTint(0xef4444).setTintMode(Phaser.TintModes.FILL);
+    this.track(
+      this.scene.tweens.add({
+        targets: sprite,
+        alpha: { from: 1, to: 0.45 },
+        duration: MOTION.micro,
+        yoyo: true,
+        repeat: 1,
+        ease: 'Quad.easeOut',
+        onComplete: clear,
+        onStop: clear,
+      })
+    );
+    // Fallback in case the tween is interrupted by another display update.
+    this.after(MOTION.short * 2, clear);
+  }
+
   /** Persistent callout line ("<Name> is gathering power — Guard!"). */
   showCallout(text: string, color = '#F59E0B'): void {
     if (this.destroyed) return;

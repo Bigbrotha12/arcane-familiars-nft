@@ -4,6 +4,7 @@
 // active familiar's point of view) and the boss charge telegraph.
 
 import { useEffect, useRef, useState } from 'react';
+import { ELITES } from '@arcane-familiars/game-logic';
 import type { FamiliarState } from '@/game';
 import AffinityChip from './AffinityChip';
 import type { Matchup } from '@/components/game/affinity';
@@ -36,6 +37,7 @@ function FamiliarStatusCompact({
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
   const hpColor = hpRatio > 0.5 ? 'bg-teal' : hpRatio > 0.25 ? 'bg-warning' : 'bg-error';
   const matchupStyle = matchup === 'neutral' ? null : MATCHUP_STYLES[matchup];
+  const elite = familiar.elite ? ELITES[familiar.elite] : undefined;
 
   // Flash the HP bar when it takes damage (instant state change, so it stays
   // even under prefers-reduced-motion; only the fade is shortened by CSS).
@@ -69,11 +71,27 @@ function FamiliarStatusCompact({
             </span>
           ) : null}
         </span>
-        <span className="flex shrink-0 items-center gap-1">
+        <span className="flex shrink-0 flex-wrap items-center justify-end gap-1">
           <AffinityChip affinity={familiar.affinity} />
           {isBoss && (
             <span className="rounded-sm bg-error/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-error max-sm:px-2 max-sm:text-[15px]">
               Boss
+            </span>
+          )}
+          {elite && (
+            <span
+              title={elite.description}
+              className="rounded-sm border border-pink/60 bg-pink/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-pink max-sm:px-2 max-sm:text-[15px]"
+            >
+              Elite
+            </span>
+          )}
+          {familiar.phaseTwo && (
+            <span
+              title="Enraged: attack raised, debuffs cleansed"
+              className="rounded-sm border border-pink/60 bg-pink/20 px-1.5 py-px font-display text-[10px] font-semibold uppercase tracking-wider text-pink max-sm:px-2 max-sm:text-[15px]"
+            >
+              Enraged
             </span>
           )}
         </span>

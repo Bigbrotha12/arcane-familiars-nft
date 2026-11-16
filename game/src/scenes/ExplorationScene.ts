@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
-import type { CurioResponse, DungeonState, Area, Room, RestHeal } from '@arcane-familiars/game-logic';
+import type { CurioResponse, DungeonState, Area, Room, RestHeal, EliteId } from '@arcane-familiars/game-logic';
 import {
   AREAS,
   CURIOS,
+  ELITES,
+  eliteName,
   RoomType,
   getFamiliar,
   getItem,
@@ -235,6 +237,7 @@ export class ExplorationScene extends Phaser.Scene {
         } else if (currentRoom.pendingEncounter && !currentRoom.pendingEncounter.resolved) {
           this.pendingEnemyId = currentRoom.pendingEncounter.enemyId;
           this.encounterActive = true;
+          this.logEliteReveal(currentRoom.pendingEncounter.enemyId, currentRoom.pendingEncounter.elite);
         } else if (this.pendingTreasureItemId) {
           this.treasureActive = true;
         }
@@ -315,10 +318,16 @@ export class ExplorationScene extends Phaser.Scene {
       } else if (result.encounter && result.enemy) {
         if (result.treasure) {
           this.pendingTreasureItemId = result.treasureItem;
-          const enemyName = getFamiliar(result.enemy)?.name ?? 'enemy';
+          const enemyName = result.eliteName ?? getFamiliar(result.enemy)?.name ?? 'enemy';
           this.explorationUI.addLogMessage(`A chest sits behind the ${enemyName}…`);
         }
-        this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
+        if (result.elite) {
+          const eliteDisplay =
+            result.eliteName ?? eliteName(getFamiliar(result.enemy)?.name ?? result.enemy, result.elite);
+          this.explorationUI.addLogMessage(`An elite ${eliteDisplay} blocks the way!`);
+        } else {
+          this.explorationUI.addLogMessage(`An enemy appears in ${result.room.name}!`);
+        }
         this.timers.push(
           this.time.delayedCall(this.ENCOUNTER_DELAY_MS, () => {
             this.encounterActive = true;
@@ -518,6 +527,7 @@ export class ExplorationScene extends Phaser.Scene {
           chest: looted ? undefined : room.chest,
           hasTreasure: Boolean(room.pendingTreasure && !room.pendingTreasure.looted),
           hasCurio: Boolean(room.curio && !room.curio.used),
+          elite: room.pendingEncounter && !room.pendingEncounter.resolved ? room.pendingEncounter.elite : undefined,
           exits: room.exits
             .filter((e) => {
               if (seen.has(e.roomId)) return false;
@@ -578,7 +588,22 @@ export class ExplorationScene extends Phaser.Scene {
     const level = isBoss
       ? (this.area?.levelRange[1] ?? room?.pendingEncounter?.level ?? 1)
       : (room?.pendingEncounter?.level ?? this.area?.levelRange[0] ?? 1);
-    return { enemyId: this.pendingEnemyId, level, isBoss };
+    const eliteId = room?.pendingEncounter && !room.pendingEncounter.resolved ? room.pendingEncounter.elite : undefined;
+    const elite = eliteId
+      ? {
+          id: eliteId,
+          name: eliteName(base?.name ?? this.pendingEnemyId, eliteId),
+          description: ELITES[eliteId].description,
+        }
+      : undefined;
+    return { enemyId: this.pendingEnemyId, level, isBoss, ...(elite ? { elite } : {}) };
+  }
+
+  /** Log the reveal line for an elite encounter, if one is pending. */
+  private logEliteReveal(enemyId: string, eliteId?: EliteId): void {
+    if (!eliteId) return;
+    const baseName = getFamiliar(enemyId)?.name ?? enemyId;
+    this.explorationUI.addLogMessage(`An elite ${eliteName(baseName, eliteId)} blocks the way!`);
   }
 
   /**

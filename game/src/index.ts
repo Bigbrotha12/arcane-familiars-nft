@@ -17,6 +17,7 @@ export type {
   DungeonSnapshot,
   DungeonRoomSnapshot,
   EncounterSnapshot,
+  EliteSnapshot,
   CurioSnapshot,
   CurioOptionSnapshot,
   CurioResultSnapshot,

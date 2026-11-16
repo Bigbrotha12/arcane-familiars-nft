@@ -795,6 +795,12 @@ export class BattleScene extends Phaser.Scene {
 
     if (unleashed) this.battleUI.setCharged(false);
 
+    // Boss phase two: flash the boss red on the step it turns enraged, in the
+    // same beat as the other step feedback.
+    if (enemyBefore.phaseTwo !== true && step.enemyAfter.phaseTwo === true) {
+      this.battleUI.playEnrageFlash('enemy');
+    }
+
     // Faints: HP falling to zero this step triggers the drop-and-fade before
     // the relay message or the outcome screen appears.
     if (before.playerFamiliar.currentHp > 0 && step.playerAfter.currentHp <= 0) {
@@ -828,6 +834,7 @@ export class BattleScene extends Phaser.Scene {
             currency: rewards.currency,
             items: rewards.items,
             bossChest: rewards.bossChest,
+            eliteChest: rewards.eliteChest,
             xp: rewards.xp,
             levelUp: rewards.levelUp,
             activeFamiliarName: this.battleState?.playerFamiliar.familiarData.name,
@@ -938,6 +945,8 @@ export class BattleScene extends Phaser.Scene {
       affinity: Affinity[f.familiarData.affinity] ?? String(f.familiarData.affinity),
       level,
       charged: f.charged === true,
+      ...(f.elite ? { elite: f.elite } : {}),
+      ...(f.phaseTwo ? { phaseTwo: true } : {}),
       statusEffects: this.toStatusViews(f),
     };
   }
