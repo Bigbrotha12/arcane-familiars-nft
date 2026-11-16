@@ -54,7 +54,8 @@ const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>(
 
 // Anti-farming: max completed battles (win or loss) per UTC calendar day per
 // account (WS4 step 18). Fleeing does not count.
-const MAX_BATTLES_PER_DAY = 20;
+// Raised from 20 to 100 (2026-11-16): 20 cut sessions short now that runs are longer.
+const MAX_BATTLES_PER_DAY = 100;
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);

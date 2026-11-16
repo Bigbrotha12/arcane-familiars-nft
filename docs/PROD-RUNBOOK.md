@@ -84,7 +84,7 @@ The incident-SLA link still applies — create the rule **once, before** relying
 
 ## Anti-farming — daily battle cap (WS4 step 18, R18)
 
-- **Decision:** daily battle cap implemented — max **20 completed battles (win or loss) per UTC calendar day per account**, enforced server-side at `POST /api/game/battle/start` (403 + Retry-After to UTC midnight) and incremented in `battle/action` on Win/Loss; fleeing does not count. The counter lives in `state_json` (`battlesToday`/`battlesDayUtc`, `YYYY-MM-DD` UTC day) and resets automatically when the UTC day changes.
+- **Decision:** daily battle cap implemented — max **100 completed battles (win or loss) per UTC calendar day per account**, enforced server-side at `POST /api/game/battle/start` (403 + Retry-After to UTC midnight) and incremented in `battle/action` on Win/Loss; fleeing does not count. The counter lives in `state_json` (`battlesToday`/`battlesDayUtc`, `YYYY-MM-DD` UTC day) and resets automatically when the UTC day changes.
 - **Enforcement boundary / accepted risk:** hard per-account cap for authenticated users; **per-browser-profile for guests** — clearing site data resets the anonymous id and grants a fresh cap the same day (accepted; identity is client-generated for guests). The guest purge (24h inactivity cron) also resets the cap for guests.
 - **Owner:** Bigbrotha12 (repo owner).
 - **Re-review:** revisit the cap value (20) and the guest-bypass acceptance before any monetization; suggested re-review date: at monetization planning.

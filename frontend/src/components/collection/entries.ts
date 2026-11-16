@@ -8,7 +8,6 @@ import {
   passiveDescription,
 } from '@arcane-familiars/game-logic';
 import type { FamiliarData } from '@arcane-familiars/game-logic';
-import type { CatalogFamiliar } from '@/lib/collection';
 
 export interface FamiliarStats {
   hp: number;
@@ -40,21 +39,6 @@ const EMPTY_STATS: FamiliarStats = { hp: 0, mp: 0, attack: 0, defense: 0, arcane
 function humanizeId(id: string): string {
   const spaced = id.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
-}
-
-/** Compare display names across the D1 catalog and the local species table. */
-function normalizeName(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
-
-/**
- * The D1 catalog stores abilities as display strings and numeric ids, so it
- * cannot be used to build a learn schedule. Match the row to the local species
- * by display name instead ("WhiteDog" ↔ "White Dog").
- */
-function localSpeciesForName(name: string): FamiliarData | undefined {
-  const target = normalizeName(name);
-  return Object.values(FAMILIARS).find((familiar) => normalizeName(familiar.name) === target);
 }
 
 /** Group a species' unlocks into one compact "Lv n A / B" segment per level. */
@@ -90,29 +74,6 @@ function passiveSummary(species?: FamiliarData): CollectionEntry['passive'] {
     name: passive.name,
     description: passiveDescription(passive, 1),
     maxDescription: passiveDescription(passive, 4),
-  };
-}
-
-/** Map a D1 catalog row (`GET /api/collection`) into a display entry. */
-export function catalogEntry(row: CatalogFamiliar): CollectionEntry {
-  const species = localSpeciesForName(row.name);
-  return {
-    id: `catalog-${row.familiar_id}`,
-    name: row.name,
-    description: row.description,
-    rarity: row.rarity,
-    affinity: row.affinity,
-    image: row.image,
-    stats: {
-      hp: row.hp,
-      mp: row.mp,
-      attack: row.attack,
-      defense: row.defense,
-      arcane: row.arcane,
-      speed: row.speed,
-    },
-    learnset: species ? learnsetLabel(species) : undefined,
-    passive: passiveSummary(species),
   };
 }
 

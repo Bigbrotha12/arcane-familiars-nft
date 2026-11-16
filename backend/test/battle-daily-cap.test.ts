@@ -17,7 +17,7 @@ import {
 /**
  * Coverage for the daily battle cap (WS4 step 18):
  * - POST /api/game/battle/start returns 403 + Retry-After when the account has
- *   already completed MAX_BATTLES_PER_DAY (20) battles on today's UTC day, and
+ *   already completed MAX_BATTLES_PER_DAY (100) battles on today's UTC day, and
  *   that check fires before any dungeon/party/encounter validation.
  * - POST /api/game/battle/action counts a completed battle (Win OR Loss) via
  *   countCompletedBattle, rolling the UTC day (stale battlesDayUtc resets the
@@ -212,7 +212,7 @@ describe('daily battle cap', () => {
     const today = new Date().toISOString().slice(0, 10);
     // Full dungeon with an unresolved encounter (would otherwise pass the start
     // guard): the cap must still short-circuit before validation.
-    await seedState(anonId, makeState(anonId, { battlesToday: 20, battlesDayUtc: today }));
+    await seedState(anonId, makeState(anonId, { battlesToday: 100, battlesDayUtc: today }));
 
     const res = await fetchApp(post('/api/game/battle/start', startBody(anonId), ip));
     expect(res.status).toBe(403);
@@ -232,7 +232,7 @@ describe('daily battle cap', () => {
     const today = new Date().toISOString().slice(0, 10);
     // Minimal state with NO dungeon and a full counter: the cap check runs
     // before the 'No active dungeon' guard, so this must be 403.
-    await seedState(anonId, makeState(anonId, { withDungeon: false, battlesToday: 20, battlesDayUtc: today }));
+    await seedState(anonId, makeState(anonId, { withDungeon: false, battlesToday: 100, battlesDayUtc: today }));
 
     const res = await fetchApp(post('/api/game/battle/start', startBody(anonId), ip));
     expect(res.status).toBe(403);
@@ -246,7 +246,7 @@ describe('daily battle cap', () => {
     const anonId = 'b8d68015-0de0-49bf-84ac-0dfa1e9dc3f0';
     const ip = '1.0.0.12';
     const today = new Date().toISOString().slice(0, 10);
-    await seedState(anonId, makeState(anonId, { battlesToday: 19, battlesDayUtc: today }));
+    await seedState(anonId, makeState(anonId, { battlesToday: 99, battlesDayUtc: today }));
 
     const res = await fetchApp(post('/api/game/battle/start', startBody(anonId), ip));
     expect(res.status).toBe(200);
@@ -260,8 +260,8 @@ describe('daily battle cap', () => {
     const ip = '1.0.0.13';
     const today = new Date().toISOString().slice(0, 10);
     // battlesDayUtc is a stale day, so the start cap check sees usedToday = 0
-    // even though the raw counter is 20.
-    await seedState(anonId, makeState(anonId, { battlesToday: 20, battlesDayUtc: '2020-01-01' }));
+    // even though the raw counter is 100.
+    await seedState(anonId, makeState(anonId, { battlesToday: 100, battlesDayUtc: '2020-01-01' }));
 
     const start = await fetchApp(post('/api/game/battle/start', startBody(anonId), ip));
     expect(start.status).toBe(200);
@@ -302,7 +302,7 @@ describe('daily battle cap', () => {
         partyHp: { yellowFighter: 1 },
         partyMp: { yellowFighter: 60 },
         enemyId: 'yellowFighter',
-        battlesToday: 19,
+        battlesToday: 99,
         battlesDayUtc: today,
       })
     );
@@ -317,7 +317,7 @@ describe('daily battle cap', () => {
     expect(turn.turnResult.battleOutcome).toBe(Outcome.Loss);
 
     const persisted = await readState(anonId);
-    expect(persisted.battlesToday).toBe(20);
+    expect(persisted.battlesToday).toBe(100);
     expect(persisted.battlesDayUtc).toBe(today);
 
     const blocked = await fetchApp(post('/api/game/battle/start', startBody(anonId, 'yellowFighter'), ip));
@@ -329,7 +329,7 @@ describe('daily battle cap', () => {
     const anonId = 'ed4b5eb0-b678-48c3-8c40-2c8e52d3f71b';
     const ip = '1.0.0.15';
     const today = new Date().toISOString().slice(0, 10);
-    await seedState(anonId, makeState(anonId, { battlesToday: 19, battlesDayUtc: today }));
+    await seedState(anonId, makeState(anonId, { battlesToday: 99, battlesDayUtc: today }));
 
     const start = await fetchApp(post('/api/game/battle/start', startBody(anonId), ip));
     expect(start.status).toBe(200);
@@ -339,7 +339,7 @@ describe('daily battle cap', () => {
     expect(flee.status).toBe(200);
 
     const persisted = await readState(anonId);
-    expect(persisted.battlesToday).toBe(19);
+    expect(persisted.battlesToday).toBe(99);
     expect(persisted.battlesDayUtc).toBe(today);
 
     // Flee leaves the room encounter pending, so a new start is allowed.
@@ -353,7 +353,7 @@ describe('daily battle cap', () => {
     const today = new Date().toISOString().slice(0, 10);
     // No dungeon: the boss battle is seeded directly so this isolates the boss
     // Win branch of the action route.
-    await seedState(anonId, makeState(anonId, { withDungeon: false, battlesToday: 19, battlesDayUtc: today }));
+    await seedState(anonId, makeState(anonId, { withDungeon: false, battlesToday: 99, battlesDayUtc: today }));
 
     const battleId = 'battle-boss-win-counts';
     const battle: BattleState = {
@@ -376,7 +376,7 @@ describe('daily battle cap', () => {
     expect(turn.turnResult.battleOutcome).toBe(Outcome.Win);
 
     const persisted = await readState(anonId);
-    expect(persisted.battlesToday).toBe(20);
+    expect(persisted.battlesToday).toBe(100);
     expect(persisted.battlesDayUtc).toBe(today);
   });
 });
