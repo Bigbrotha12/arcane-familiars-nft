@@ -4,6 +4,7 @@
 
 import Button from '@/components/ui/Button';
 import { RARITY_TEXT_CLASS } from './rarityStyles';
+import { charmModsLabel, charmName } from '@arcane-familiars/game-logic';
 import type { GameStateSnapshot } from '@/game';
 
 type TreasureView = NonNullable<GameStateSnapshot['treasure']>;
@@ -61,6 +62,15 @@ function TreasureOverlay({ treasure, onTake, onLeave }: TreasureOverlayProps) {
               </li>
             ))}
           </ul>
+        )}
+
+        {treasure?.charm && (
+          <div className="mb-md flex flex-col rounded-md border border-[#3B3870] bg-[#2D2A5E]/60 p-2">
+            <span className={`font-display text-sm font-semibold ${RARITY_TEXT_CLASS[treasure.charm.rarity]}`}>
+              ◆ {charmName(treasure.charm)}
+            </span>
+            <span className="font-mono text-xs tabular-nums text-[#A5A3C4]">{charmModsLabel(treasure.charm)}</span>
+          </div>
         )}
 
         {currency > 0 && <p className="mb-md font-mono text-sm tabular-nums text-yellow">+{currency} coins</p>}

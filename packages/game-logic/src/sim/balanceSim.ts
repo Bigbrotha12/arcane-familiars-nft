@@ -13,6 +13,8 @@ import { resolveTurn, checkBattleOutcome, updateCooldowns } from '@/utils/battle
 import { selectEnemyAction } from '@/utils/enemyAI';
 import { scaleEnemy } from '@/utils/dungeonEngine';
 import { scaleFamiliarStats } from '@/utils/progression';
+import { applyCharm } from '@/utils/charms';
+import type { CharmStat } from '@/data/charms';
 import { abilitiesAtLevel } from '@/utils/learnset';
 import { partyPassives } from '@/utils/passives';
 import { seededRandom, randomInRange } from '@/utils/mathUtils';
@@ -25,12 +27,26 @@ export interface PartyMember {
   mp: number;
 }
 
-function makeCombatant(id: string, level: number, isAlly: boolean, asEnemy = false): BattleFamiliar {
+/** Percentage mods a simulation gives every player familiar (no charm = undefined). */
+export type SimCharmPercents = Partial<Record<CharmStat, number>>;
+
+function makeCombatant(
+  id: string,
+  level: number,
+  isAlly: boolean,
+  asEnemy = false,
+  charm?: SimCharmPercents
+): BattleFamiliar {
   const base = getFamiliar(id);
   if (!base) throw new Error(`Unknown familiar ${id}`);
+  const mods = Object.entries(charm ?? {}).map(([stat, pct]) => ({ stat: stat as CharmStat, pct: pct as number }));
   const data = asEnemy
     ? scaleEnemy(base, level)
-    : { ...base, abilities: abilitiesAtLevel(base, level), stats: scaleFamiliarStats(base.stats, level) };
+    : {
+        ...base,
+        abilities: abilitiesAtLevel(base, level),
+        stats: applyCharm(scaleFamiliarStats(base.stats, level), { mods }),
+      };
   return {
     uid: `${isAlly ? 'ally' : 'enemy'}-${id}`,
     familiarData: data,
@@ -88,6 +104,7 @@ export function simulateBattle(
   enemyLevel: number,
   isBoss: boolean,
   seed: number,
+  charm?: SimCharmPercents,
   maxTurns = 200
 ): BattleSimResult {
   // Same enemy construction as the backend battle/start route.
@@ -96,7 +113,7 @@ export function simulateBattle(
   const relayDiscount = playerPassives.find((p) => p.id === 'relayInstinct')?.value;
 
   const enter = (member: PartyMember): BattleFamiliar => {
-    const c = makeCombatant(member.id, member.level, true);
+    const c = makeCombatant(member.id, member.level, true, false, charm);
     c.currentHp = Math.min(member.hp, c.familiarData.stats.maxHp);
     c.currentMp = Math.min(member.mp, c.familiarData.stats.maxMp);
     return c;
@@ -177,7 +194,13 @@ export interface AreaReport {
   runClear: number;
 }
 
-export function reportArea(areaId: string, partyIds: string[], partyLevel: number, trials = 400): AreaReport {
+export function reportArea(
+  areaId: string,
+  partyIds: string[],
+  partyLevel: number,
+  trials = 400,
+  charm?: SimCharmPercents
+): AreaReport {
   const area = AREAS[areaId];
   if (!area) throw new Error(`Unknown area ${areaId}`);
   // Expected encounters on the main path: avg encounter chance is ~0.45 per normal room.
@@ -202,14 +225,14 @@ export function reportArea(areaId: string, partyIds: string[], partyLevel: numbe
     const seed = () => Math.floor(rng() * 0xffffffff);
 
     const singleParty = freshParty(partyIds, partyLevel);
-    const single = simulateBattle(singleParty, pick(), level(), false, seed());
+    const single = simulateBattle(singleParty, pick(), level(), false, seed(), charm);
     if (single.won) {
       encWins++;
       hpLeft += singleParty.reduce((sum, m) => sum + m.hp, 0) / maxPartyHp;
     }
     encTurns += single.turns;
 
-    if (simulateBattle(freshParty(partyIds, partyLevel), area.bossId, bossLevel, true, seed()).won) bossWins++;
+    if (simulateBattle(freshParty(partyIds, partyLevel), area.bossId, bossLevel, true, seed(), charm).won) bossWins++;
 
     // A run: encounters, a potion between fights when hurt (one per fight —
     // roughly what battle rewards pay for), the shrine (the last normal room in
@@ -219,7 +242,7 @@ export function reportArea(areaId: string, partyIds: string[], partyLevel: numbe
     const shrineAfter = area.roomCount >= 6 ? expectedEncounters : -1;
     let alive = true;
     for (let e = 0; e < expectedEncounters && alive; e++) {
-      alive = simulateBattle(party, pick(), level(), false, seed()).won;
+      alive = simulateBattle(party, pick(), level(), false, seed(), charm).won;
       if (!alive) break;
       const hurt = party
         .filter((m) => m.hp > 0 && m.hp < maxOf(m).maxHp * 0.6)
@@ -234,7 +257,7 @@ export function reportArea(areaId: string, partyIds: string[], partyLevel: numbe
         }
       }
     }
-    if (alive && simulateBattle(party, area.bossId, bossLevel, true, seed()).won) clears++;
+    if (alive && simulateBattle(party, area.bossId, bossLevel, true, seed(), charm).won) clears++;
   }
 
   return {

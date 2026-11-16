@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import type { ChestTier, CurioGains, GameState } from '@arcane-familiars/game-logic';
+import type { CharmInstance, ChestTier, CurioGains, GameState } from '@arcane-familiars/game-logic';
 import {
   AREAS,
   BALANCE,
@@ -34,6 +34,7 @@ import {
 import type { Bindings, Variables } from '../types';
 import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
+import { generateId } from '../utils/uuid';
 import { sanitizeDungeonForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const explorationRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
@@ -209,6 +210,7 @@ explorationRouter.post('/game/dungeon/explore', async (c) => {
           tier: rolled.tier,
           items: rolled.items,
           currency: rolled.currency,
+          ...(rolled.charm ? { charm: rolled.charm } : {}),
         };
       }
     }
@@ -298,12 +300,20 @@ explorationRouter.post('/game/dungeon/collect-treasure', async (c) => {
     }
     runLoot.currency += pending.currency ?? 0;
 
+    // The charm rolled with the chest joins the run's separate charm ledger;
+    // it banks or is lost with the rest of the run loot.
+    let charm: CharmInstance | undefined;
+    if (pending.charm) {
+      charm = { ...pending.charm, uid: generateId() };
+      (state.dungeon.runCharms ??= []).push(charm);
+    }
+
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, inventory: state.inventory, runLoot });
+    return c.json({ success: true, inventory: state.inventory, runLoot, ...(charm ? { charm } : {}) });
   } catch (error: unknown) {
     return internalError(c, error, 'Collect treasure');
   }
@@ -448,6 +458,10 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
         runLoot.currency += chest.currency;
         gains.items = chest.items;
         gains.currency = chest.currency;
+        if (chest.charm) {
+          (dungeon.runCharms ??= []).push({ ...chest.charm, uid: generateId() });
+          gains.charms = [chest.charm];
+        }
         break;
       }
       case 'coins': {
@@ -677,7 +691,7 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
     }
 
     // Leaving banks everything found this run.
-    bankRunLoot(state);
+    const banked = bankRunLoot(state);
     state.dungeon = null;
 
     const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
@@ -685,7 +699,7 @@ explorationRouter.post('/game/dungeon/exit', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true });
+    return c.json({ success: true, banked });
   } catch (error: unknown) {
     return internalError(c, error, 'Exit dungeon');
   }

@@ -5,7 +5,7 @@ import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
 import { GameEvent } from '../events';
-import type { GameStateSnapshot } from '../events';
+import type { GameStateSnapshot, CharmsPayload, CharmEquipPayload, CharmSalvagePayload } from '../events';
 import { Layout } from '../ui/layout';
 import { MOTION } from '../ui/motion';
 import { fadeIn, fadeToScene } from '../ui/transitions';
@@ -97,6 +97,8 @@ export class WorldMapScene extends Phaser.Scene {
     // Wire EventBus for save/exit
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.on(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.on(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
+    gameEventBus.on(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
     this.layout = new Layout(this);
@@ -172,6 +174,22 @@ export class WorldMapScene extends Phaser.Scene {
     });
     shopText.on('pointerover', () => shopText.setColor('#A78BFA'));
     shopText.on('pointerout', () => shopText.setColor('#7C5CFC'));
+
+    const charmsText = this.add
+      .text(this.layout.x(620), this.layout.y(558), '◆ Charms', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        fontStyle: '500',
+        color: '#7C5CFC',
+      })
+      .setOrigin(1, 0.5)
+      .setInteractive({ useHandCursor: true });
+    charmsText.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.emitOpenCharms();
+    });
+    charmsText.on('pointerover', () => charmsText.setColor('#A78BFA'));
+    charmsText.on('pointerout', () => charmsText.setColor('#7C5CFC'));
 
     this.setupKeyboardNavigation();
 
@@ -432,6 +450,54 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
   }
 
+  /** Snapshot the owned familiars/charms for the React Charms modal. */
+  private charmPayload(): CharmsPayload {
+    const state = this.fullGameState;
+    return {
+      charms: state?.charms ?? [],
+      familiars: (state?.playerFamiliars ?? []).map((id) => ({
+        id,
+        name: FAMILIARS[id]?.name ?? id,
+        level: state?.familiarLevels?.[id] ?? 1,
+      })),
+    };
+  }
+
+  private emitOpenCharms(): void {
+    gameEventBus.emit(GameEvent.OPEN_CHARMS, this.charmPayload());
+  }
+
+  private handleCharmEquip = async (payload: CharmEquipPayload): Promise<void> => {
+    if (!payload?.charmUid) return;
+    try {
+      const result = await gameApiClient.equipCharm(payload.charmUid, payload.familiarId ?? null);
+      if (this.fullGameState) this.fullGameState.charms = result.charms;
+      this.emitOpenCharms();
+      this.emitStateUpdate();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to equip charm';
+      this.showMessage(message);
+    }
+  };
+
+  private handleCharmSalvage = async (payload: CharmSalvagePayload): Promise<void> => {
+    if (!payload?.charmUid) return;
+    try {
+      const result = await gameApiClient.salvageCharm(payload.charmUid);
+      if (this.fullGameState) {
+        this.fullGameState.charms = result.charms;
+        if (this.fullGameState.inventory) {
+          this.fullGameState.inventory.currency = result.currency;
+        }
+      }
+      this.emitOpenCharms();
+      this.emitStateUpdate();
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to salvage charm';
+      this.showMessage(message);
+    }
+  };
+
   private handleSave = async (): Promise<void> => {
     // The server owns game state; nothing client-side to persist here.
     gameEventBus.emit(GameEvent.SAVE_COMPLETE, { success: true });
@@ -461,6 +527,8 @@ export class WorldMapScene extends Phaser.Scene {
     this.keyboardCleanup = null;
     gameEventBus.off(GameEvent.SAVE_GAME, this.handleSave);
     gameEventBus.off(GameEvent.EXIT_GAME, this.handleExit);
+    gameEventBus.off(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
+    gameEventBus.off(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
     this.ariaLiveElement?.remove();
     this.ariaLiveElement = null;
   }

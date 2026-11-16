@@ -1,4 +1,5 @@
 import type { Directions } from '@/utils/dungeonEngine';
+import type { CharmInstance, CharmRoll } from '@/data/charms';
 import type { Inventory } from '@/types/gameState';
 
 export interface Area {
@@ -38,6 +39,8 @@ export interface PendingTreasure {
   /** Every item in the chest. Older saves omit this and hold only itemId. */
   items?: string[];
   currency?: number;
+  /** Charm rolled into this chest, shown before Take. */
+  charm?: CharmRoll;
 }
 
 export interface Room {
@@ -100,6 +103,8 @@ export interface DungeonState {
   seed?: number;
   /** Loot found during this run; banked on exit/victory, lost on defeat. */
   runLoot?: Inventory;
+  /** Charms found during this run; banked on exit/victory, lost on defeat. */
+  runCharms?: CharmInstance[];
   /**
    * Species recruited during this run that may still be swapped into the
    * party once (from the victory screen). Limits the swap to fresh recruits so

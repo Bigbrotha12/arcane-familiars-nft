@@ -1,3 +1,4 @@
+import type { CharmInstance } from '@/data/charms';
 import type { DungeonState } from '@/types/exploration';
 
 export interface Inventory {
@@ -22,6 +23,8 @@ export interface GameState {
   /** Per-species wins against it while unowned; optional so old saves load. */
   recruitBond?: Record<string, number>;
   inventory: Inventory;
+  /** Owned charms, equipped ones included. Optional so old saves still load. */
+  charms?: CharmInstance[];
   dungeon: DungeonState | null;
   unlockedAreas: string[];
   defeatedBosses: string[];

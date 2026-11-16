@@ -8,6 +8,7 @@ import type {
   ForcedSwapInfo,
   GameState,
   ItemData,
+  CharmRoll,
 } from '@arcane-familiars/game-logic';
 import {
   AREAS,
@@ -24,6 +25,8 @@ import {
   applyFamiliarXp,
   applyRecruitWin,
   scaleFamiliarStats,
+  applyCharm,
+  equippedCharm,
   abilitiesAtLevel,
   newlyLearned,
   newPassiveTiers,
@@ -94,10 +97,10 @@ function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 
-function createBattleFamiliar(familiarId: string, level = 1): BattleFamiliar {
+function createBattleFamiliar(familiarId: string, level = 1, charm?: CharmRoll): BattleFamiliar {
   const data = getFamiliar(familiarId);
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
-  const stats = scaleFamiliarStats(data.stats, level);
+  const stats = applyCharm(scaleFamiliarStats(data.stats, level), charm);
 
   return {
     uid: generateId(),
@@ -148,8 +151,13 @@ function persistCombatantResources(dungeon: GameState['dungeon'], familiar: Batt
  * resources persisted in the dungeon state. Shared by battle start, voluntary
  * swap-in, and the involuntary KO relay.
  */
-function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string, level = 1): BattleFamiliar {
-  const familiar = createBattleFamiliar(familiarId, level);
+function buildIncomingCombatant(
+  dungeon: GameState['dungeon'],
+  familiarId: string,
+  level = 1,
+  charm?: CharmRoll
+): BattleFamiliar {
+  const familiar = createBattleFamiliar(familiarId, level, charm);
   const resources = getPersistedResources(dungeon, familiarId, familiar);
   familiar.currentHp = resources.currentHp;
   familiar.currentMp = resources.currentMp;
@@ -230,7 +238,12 @@ function swapInCombatant(battle: BattleState, state: GameState, familiarId: stri
     uses.secondWind.push(outgoing.familiarData.id);
   }
 
-  const incoming = buildIncomingCombatant(state.dungeon, familiarId, state.familiarLevels?.[familiarId] ?? 1);
+  const incoming = buildIncomingCombatant(
+    state.dungeon,
+    familiarId,
+    state.familiarLevels?.[familiarId] ?? 1,
+    equippedCharm(state, familiarId)
+  );
   if (uses.secondWind.includes(familiarId)) incoming.secondWindUsed = true;
 
   const discount = relayInstinctDiscount(battle.playerPassives ?? []);
@@ -312,7 +325,8 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     const playerFamiliar = buildIncomingCombatant(
       dungeon,
       playerFamiliarId,
-      state.familiarLevels?.[playerFamiliarId] ?? 1
+      state.familiarLevels?.[playerFamiliarId] ?? 1,
+      equippedCharm(state, playerFamiliarId)
     );
     if (playerFamiliar.currentHp <= 0) {
       return c.json(
@@ -655,6 +669,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             }
             for (const itemId of bossChest.items) {
               addInventoryItem(runLoot, itemId);
+            }
+            if (bossChest.charm && state.dungeon) {
+              (state.dungeon.runCharms ??= []).push({ ...bossChest.charm, uid: generateId() });
             }
             rewards = {
               currency: area.bossReward.currency,
