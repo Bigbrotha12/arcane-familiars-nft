@@ -11,7 +11,7 @@ interface GuidedHintCardProps {
   /** Battle cards sit bottom-left over the battle log (same as TipCard). */
   battle?: boolean;
   /** Explicit position (container pixels), copied from GamePage's TipCard. */
-  anchor?: { top: number; left: number; width: number };
+  anchor?: { top?: number; bottom?: number; left?: number; right?: number; width: number };
   onGotIt: () => void;
   onSkip: () => void;
 }
@@ -33,7 +33,7 @@ export default function GuidedHintCard({ hint, battle = false, anchor, onGotIt, 
       }
       style={anchor}
     >
-      <div className="tip-in hud-frame rounded-md p-2 sm:p-3">
+      <div className="tip-in hud-frame rounded-md p-1.5 sm:p-2">
         <h2 className="font-display text-[13px] font-semibold leading-tight text-pink sm:text-sm">{hint.title}</h2>
         <p className="mt-0.5 font-body text-[11px] leading-snug text-[#F0EFFF] sm:mt-1 sm:text-xs sm:leading-relaxed">
           {hint.body}

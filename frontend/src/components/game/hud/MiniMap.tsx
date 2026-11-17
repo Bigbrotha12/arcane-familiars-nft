@@ -3,6 +3,7 @@
 // highlighted; visited/start/boss/unvisited rooms use distinct colors. Includes
 // a legend row. Anchored top-left; non-interactive chrome.
 
+import { useState } from 'react';
 import type { DungeonSnapshot, DungeonRoomSnapshot } from '@/game';
 
 interface MiniMapProps {
@@ -261,6 +262,7 @@ const LEGEND: { key: string; label: string }[] = [
 ];
 
 function MiniMap({ dungeon }: MiniMapProps) {
+  const [showLegend, setShowLegend] = useState(false);
   const { positions, edges, viewX, viewY, width, height } = computeLayout(dungeon.rooms);
   const rooms = dungeon.rooms;
 
@@ -269,9 +271,19 @@ function MiniMap({ dungeon }: MiniMapProps) {
   const nodeRadius = Math.max(1.1, Math.min(2.4, Math.min(width, height) / 9));
 
   return (
-    <div className="hud-frame pointer-events-none flex w-[168px] flex-col gap-1 rounded-md p-[6px] sm:w-[200px] max-sm:w-[300px] max-sm:gap-2 max-sm:p-sm">
+    <div className="hud-frame pointer-events-none relative flex w-[168px] flex-col gap-1 rounded-md p-[6px] sm:w-[200px] max-sm:w-[300px] max-sm:gap-2 max-sm:p-1.5">
       {/* Fixed footprint: the whole graph is scaled to fit inside this box, so it
           can never grow over the room card or get cropped by the canvas edge. */}
+      <button
+        type="button"
+        aria-label="Map legend"
+        aria-expanded={showLegend}
+        onClick={() => setShowLegend((value) => !value)}
+        className="pointer-events-auto absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-[#3B3870] bg-[#1E1B4B]/90 font-mono text-[10px] font-bold text-[#B8B5E0] transition-colors hover:text-[#F0EFFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent max-sm:h-8 max-sm:w-8 max-sm:text-[18px]"
+      >
+        ?
+      </button>
+
       <div className="h-[96px] w-full sm:h-[118px] max-sm:h-[200px]">
         {rooms.length > 0 && (
           <svg
@@ -426,24 +438,26 @@ function MiniMap({ dungeon }: MiniMapProps) {
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 border-t border-[#3B3870] pt-1">
-        {LEGEND.map(({ key, label }) => {
-          const color = NODE_COLORS[key];
-          return (
-            <span key={key} className="flex items-center gap-0.5">
-              <span
-                className={`inline-block h-1.5 w-1.5 border ${
-                  key === 'rest' ? 'rotate-45 rounded-[1px]' : key === 'chest' ? 'rounded-[1px]' : 'rounded-full'
-                }`}
-                style={{ backgroundColor: color.fill, borderColor: color.stroke }}
-              />
-              <span className="font-mono text-[7px] uppercase tracking-wide text-[#A5A3C4] max-sm:text-[16px]">
-                {label}
+      {showLegend && (
+        <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 border-t border-white/10 pt-1">
+          {LEGEND.map(({ key, label }) => {
+            const color = NODE_COLORS[key];
+            return (
+              <span key={key} className="flex items-center gap-0.5">
+                <span
+                  className={`inline-block h-1.5 w-1.5 border ${
+                    key === 'rest' ? 'rotate-45 rounded-[1px]' : key === 'chest' ? 'rounded-[1px]' : 'rounded-full'
+                  }`}
+                  style={{ backgroundColor: color.fill, borderColor: color.stroke }}
+                />
+                <span className="font-mono text-[9px] uppercase tracking-wide text-[#A5A3C4] max-sm:text-[18px]">
+                  {label}
+                </span>
               </span>
-            </span>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

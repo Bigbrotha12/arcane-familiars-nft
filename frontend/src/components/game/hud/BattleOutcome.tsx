@@ -204,7 +204,7 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-10 flex items-center justify-center bg-black/60 backdrop-blur-sm">
-      <div className="hud-frame flex w-full max-w-[300px] flex-col items-center gap-4 rounded-md p-lg text-center">
+      <div className="hud-frame flex w-full max-w-[300px] flex-col items-center gap-4 rounded-md p-4 text-center">
         <h2 className={`font-display text-2xl font-semibold ${titleColor}`}>{title}</h2>
 
         <div className="flex w-full flex-col items-center gap-1.5">

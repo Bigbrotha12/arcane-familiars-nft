@@ -27,7 +27,7 @@ function CurioOverlay({ curio, result, onChoose, onLeave, onContinue }: CurioOve
         role="dialog"
         aria-modal="true"
         aria-labelledby="curio-overlay-title"
-        className="hud-frame w-full max-w-sm rounded-lg p-lg"
+        className="hud-frame w-full max-w-sm rounded-lg p-4"
       >
         {result ? (
           <>

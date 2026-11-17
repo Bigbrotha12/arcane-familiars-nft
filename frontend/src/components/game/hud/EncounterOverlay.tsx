@@ -54,7 +54,7 @@ function EncounterOverlay({
         role="dialog"
         aria-modal="true"
         aria-labelledby="encounter-overlay-title"
-        className="hud-frame max-w-sm rounded-lg p-lg max-sm:max-w-[620px] max-sm:p-xl"
+        className="hud-frame max-w-sm rounded-lg p-4 max-sm:max-w-[620px] max-sm:p-xl"
       >
         <h2
           id="encounter-overlay-title"

@@ -52,7 +52,7 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
           type so the in-game panels stay readable at 390px wide. */}
       <div
         className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
-          compact ? 'max-w-[300px] p-md' : 'max-w-md p-lg'
+          compact ? 'max-w-[300px] p-2.5' : hud ? 'max-w-md p-md' : 'max-w-md p-lg'
         } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'} ${
           compact ? 'max-sm:max-w-[600px] max-sm:p-lg max-sm:[&_p]:text-[19px] max-sm:[&_button]:text-[20px]' : ''
         }`}

@@ -42,7 +42,7 @@ function ActionBar({ items }: ActionBarProps) {
   if (items.length === 0) return null;
 
   return (
-    <div className="hud-frame pointer-events-auto flex flex-wrap items-stretch justify-center gap-1.5 rounded-md px-2 py-1.5 max-sm:gap-2 max-sm:px-2 max-sm:py-2">
+    <div className="pointer-events-auto flex flex-wrap items-stretch justify-center gap-1.5 px-2 py-1 max-sm:gap-2 max-sm:px-2 max-sm:py-1.5">
       {items.map(
         ({ key, label, icon, primary = false, disabled = false, hint, disabledReason, highlight = false, onClick }) => {
           const subline = disabled && disabledReason ? disabledReason : hint;
@@ -54,7 +54,7 @@ function ActionBar({ items }: ActionBarProps) {
               disabled={disabled}
               onClick={onClick}
               title={disabled && disabledReason ? disabledReason : hint}
-              className={`flex-1 flex-col gap-0 ${MIN_BUTTON_WIDTH} px-2 py-1 text-xs max-sm:px-3 max-sm:py-2 max-sm:text-[22px] ${
+              className={`flex-1 flex-col !gap-0 ${MIN_BUTTON_WIDTH} !px-2 !py-0.5 text-xs max-sm:!px-3 max-sm:!py-1.5 max-sm:text-[22px] ${
                 highlight ? 'guided-highlight' : ''
               }`}
             >
@@ -68,7 +68,7 @@ function ActionBar({ items }: ActionBarProps) {
               </span>
               {subline && (
                 <span
-                  className={`whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight max-sm:hidden ${
+                  className={`max-w-full truncate whitespace-nowrap font-mono text-[8px] leading-tight tracking-tight max-sm:hidden ${
                     disabled && disabledReason ? 'text-warning' : 'opacity-70'
                   }`}
                 >

@@ -11,8 +11,9 @@ import type {
   RunSummaryPayload,
 } from '@/game';
 import type { gameEventBus, GameEvent, BattleSpeed } from '@/game';
-import GameToolbar from '@/components/game/GameToolbar';
+import GameToolbar, { type SaveStatus } from '@/components/game/GameToolbar';
 import ExitModal from '@/components/game/ExitModal';
+import LogoMark from '@/components/layout/LogoMark';
 import CharmsModal from '@/components/game/hud/CharmsModal';
 import RunSummaryModal from '@/components/game/hud/RunSummaryModal';
 import ToastContainer, { toast } from '@/components/game/Toast';
@@ -39,23 +40,26 @@ type GameModule = {
 
 /** Shared with game/src/settings/battleSpeed.ts, which reads it on load. */
 const BATTLE_SPEED_STORAGE_KEY = 'af_battle_speed';
-const BATTLE_SPEED_ORDER: BattleSpeed[] = ['slow', 'medium', 'fast'];
 
 export default function GamePage() {
   const navigate = useNavigate();
   // Guest state lives in the play layout so the toolbar can surface it outside
   // the canvas (it used to float over the bottom HUD and cover controls).
-  const { signedIn, onAuthChange } = useOutletContext<PlayLayoutContext>();
+  const { onAuthChange } = useOutletContext<PlayLayoutContext>();
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<PhaserGame | null>(null);
   const gameModuleRef = useRef<GameModule | null>(null);
   const [gameState, setGameState] = useState<GameStateSnapshot | null>(null);
   const gameStateRef = useRef<GameStateSnapshot | null>(null);
+  // Battle snapshots omit area/room, but the bar keeps showing the dungeon
+  // location during a fight, so remember the last exploration location.
+  const lastLocationRef = useRef<{ areaName?: string; roomName?: string }>({});
   const [battleOutcome, setBattleOutcome] = useState<BattleEndedPayload | null>(null);
   const [charmsModal, setCharmsModal] = useState<CharmsPayload | null>(null);
   const [runSummary, setRunSummary] = useState<RunSummaryPayload | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+  const saving = saveStatus === 'saving';
   const [initError, setInitError] = useState<string | null>(null);
   const [gameReady, setGameReady] = useState(false);
   const [muted, setMuted] = useState<boolean>(() => {
@@ -82,12 +86,14 @@ export default function GamePage() {
   const handleSave = useCallback(() => {
     if (!gameModuleRef.current) return;
     playUiSfx('click');
-    setSaving(true);
+    setSaveStatus('saving');
     gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME);
   }, [playUiSfx]);
 
   const autoSave = useCallback(() => {
-    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME);
+    if (!gameModuleRef.current) return;
+    setSaveStatus('saving');
+    gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.SAVE_GAME);
   }, []);
 
   // During battles the server owns state writes — a client autosave would
@@ -216,17 +222,19 @@ export default function GamePage() {
     setRunSummary(null);
   }, [playUiSfx]);
 
-  const handleCycleBattleSpeed = useCallback(() => {
-    playUiSfx('click');
-    const next = BATTLE_SPEED_ORDER[(BATTLE_SPEED_ORDER.indexOf(battleSpeed) + 1) % BATTLE_SPEED_ORDER.length];
-    setBattleSpeed(next);
-    try {
-      localStorage.setItem(BATTLE_SPEED_STORAGE_KEY, next);
-    } catch {
-      // Storage can be unavailable; the game still gets the event below.
-    }
-    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SET_BATTLE_SPEED, { speed: next });
-  }, [battleSpeed, playUiSfx]);
+  const handleSetBattleSpeed = useCallback(
+    (next: BattleSpeed) => {
+      playUiSfx('click');
+      setBattleSpeed(next);
+      try {
+        localStorage.setItem(BATTLE_SPEED_STORAGE_KEY, next);
+      } catch {
+        // Storage can be unavailable; the game still gets the event below.
+      }
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.SET_BATTLE_SPEED, { speed: next });
+    },
+    [playUiSfx]
+  );
 
   const handleOpenExit = useCallback(() => {
     playUiSfx('click');
@@ -256,7 +264,7 @@ export default function GamePage() {
   }, []);
 
   const handleSaveAndExit = useCallback((): Promise<void> => {
-    setSaving(true);
+    setSaveStatus('saving');
 
     return new Promise<void>((resolve) => {
       const mod = gameModuleRef.current;
@@ -331,9 +339,31 @@ export default function GamePage() {
   const canvasRect = useCanvasRect(containerRef, gameState);
   const guide = useGuidedBattle(gameState);
   const tips = useFirstTimeTips(gameState, { paused: guide.running });
-  // The canvas is letterboxed and centered, so the gap below it equals
-  // canvasRect.top. On tall phones that gap fits a tip without covering the game.
-  const tipBelowCanvas = Boolean(canvasRect && canvasRect.top >= 140);
+  // The canvas is top-aligned (Scale.CENTER_HORIZONTALLY), so on tall phones
+  // the free space sits below it. Move tips there when it is deep enough to
+  // fit a card without covering the game.
+  const containerHeight = containerRef.current?.clientHeight ?? 0;
+  const spaceBelowCanvas = canvasRect ? containerHeight - (canvasRect.top + canvasRect.height) : 0;
+  const tipBelowCanvas = Boolean(canvasRect && spaceBelowCanvas >= 140);
+  // Battle snapshots have no area/room; keep the dungeon location in the bar
+  // for that scene only (world map / shops keep their own names).
+  const toolbarState: GameStateSnapshot | null = gameState
+    ? gameState.currentScene === 'battle' && !gameState.areaName
+      ? { ...gameState, ...lastLocationRef.current }
+      : gameState
+    : null;
+  // Clamp in-canvas tip/guide cards at least 8px inside the rendered canvas.
+  const overCanvasWidth = canvasRect ? Math.max(160, Math.min(320, canvasRect.width - 16)) : 320;
+  const battleTipAnchor = canvasRect ? { left: 8, bottom: 8, width: overCanvasWidth } : undefined;
+  // Non-battle tips sit on the right edge just below the mini-map / room card
+  // row (which ends at ~23% of the canvas height), so they never cover the card.
+  const cornerTipAnchor = canvasRect
+    ? {
+        left: Math.max(8, canvasRect.width - overCanvasWidth - 8),
+        top: Math.round(canvasRect.height * 0.26),
+        width: overCanvasWidth,
+      }
+    : undefined;
 
   const handleCancelExit = useCallback(() => {
     playUiSfx('cancel');
@@ -351,9 +381,9 @@ export default function GamePage() {
       return;
     }
 
-    setSaving(true);
-    await saveGame();
-    setSaving(false);
+    setSaveStatus('saving');
+    const saved = await saveGame();
+    setSaveStatus(saved ? 'saved' : 'error');
     setShowExitModal(false);
     if (gameModuleRef.current) {
       gameModuleRef.current.gameEventBus.emit(gameModuleRef.current.GameEvent.EXIT_GAME);
@@ -394,11 +424,14 @@ export default function GamePage() {
 
         const onStateUpdate = (state: GameStateSnapshot) => {
           gameStateRef.current = state;
+          if (state.areaName) {
+            lastLocationRef.current = { areaName: state.areaName, roomName: state.roomName };
+          }
           setGameReady(true);
           setGameState(state);
         };
         const onSaveComplete = (result: { success: boolean }) => {
-          setSaving(false);
+          setSaveStatus(result.success ? 'saved' : 'error');
           if (result.success) {
             toast.success('Game saved!');
           } else {
@@ -517,26 +550,24 @@ export default function GamePage() {
   return (
     <div className="relative flex-1 flex flex-col min-h-0 bg-[#0A0A0F]">
       <GameToolbar
-        gameState={gameState}
+        gameState={toolbarState}
+        saveStatus={saveStatus}
         onSave={handleSave}
         onExit={handleOpenExit}
         onToggleMute={handleToggleMute}
         muted={muted}
         battleSpeed={battleSpeed}
-        onCycleBattleSpeed={handleCycleBattleSpeed}
+        onSetBattleSpeed={handleSetBattleSpeed}
         tipsEnabled={tips.enabled}
         onToggleTips={tips.toggleEnabled}
-        saving={saving}
-        signedIn={signedIn}
         onAuthChange={onAuthChange}
       />
 
       <div ref={containerRef} id="game-container" className="flex-1 relative min-h-0 overflow-hidden">
         {!gameReady && !initError && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-            <div className="rounded-md border border-border bg-surface-card/95 px-lg py-md shadow-card">
-              <p className="animate-pulse font-body text-sm text-text-secondary">Loading game…</p>
-            </div>
+          <div className="pointer-events-none absolute inset-0 z-20 flex flex-col items-center justify-center gap-3">
+            <LogoMark className="h-10 w-10 animate-pulse motion-reduce:animate-none" />
+            <p className="animate-pulse font-body text-sm text-[#B8B5E0] motion-reduce:animate-none">Loading…</p>
           </div>
         )}
         {gameState && (
@@ -569,12 +600,14 @@ export default function GamePage() {
                   tip={tips.currentTip}
                   visible={tips.visible}
                   battle={gameState.currentScene === 'battle'}
+                  anchor={gameState.currentScene === 'battle' ? battleTipAnchor : cornerTipAnchor}
                   onDismiss={tips.dismiss}
                   onDisable={() => tips.setEnabled(false)}
                 />
                 <GuidedHintCard
                   hint={guide.hint}
                   battle={gameState.currentScene === 'battle'}
+                  anchor={gameState.currentScene === 'battle' ? battleTipAnchor : cornerTipAnchor}
                   onGotIt={guide.gotIt}
                   onSkip={guide.skip}
                 />
