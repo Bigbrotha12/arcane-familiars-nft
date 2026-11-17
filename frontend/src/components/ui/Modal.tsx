@@ -21,9 +21,11 @@ interface ModalProps {
   /** Dense in-game sizing (narrow width, tighter padding/type) for modals
       that live inside the 800x600 design-space HUD stage. */
   compact?: boolean;
+  /** Wider HUD panel (max-w 640px) for two-column content such as Team. */
+  wide?: boolean;
 }
 
-function Modal({ open, onClose, title, children, hud = false, compact = false }: ModalProps) {
+function Modal({ open, onClose, title, children, hud = false, compact = false, wide = false }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
@@ -52,7 +54,7 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
           type so the in-game panels stay readable at 390px wide. */}
       <div
         className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
-          compact ? 'max-w-[300px] p-2.5' : hud ? 'max-w-md p-md' : 'max-w-md p-lg'
+          compact ? 'max-w-[300px] p-2.5' : hud ? (wide ? 'max-w-[640px] p-md' : 'max-w-md p-md') : 'max-w-md p-lg'
         } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'} ${
           compact ? 'max-sm:max-w-[600px] max-sm:p-lg max-sm:[&_p]:text-[19px] max-sm:[&_button]:text-[20px]' : ''
         }`}
@@ -60,9 +62,9 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
         {title && (
           <div className={`flex items-center justify-between ${compact ? 'mb-sm' : 'mb-md'}`}>
             <h2
-              className={`font-display font-semibold ${compact ? 'text-sm max-sm:text-[28px]' : 'text-xl'} ${
-                hud ? 'text-[#F0EFFF]' : 'text-text-primary'
-              }`}
+              className={`font-display font-semibold ${
+                compact ? 'text-sm max-sm:text-[28px]' : `text-xl ${wide ? 'max-sm:text-[30px]' : ''}`
+              } ${hud ? 'text-[#F0EFFF]' : 'text-text-primary'}`}
             >
               {title}
             </h2>

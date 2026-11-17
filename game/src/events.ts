@@ -1,6 +1,7 @@
 import type {
   ChestTier,
   ItemRarity,
+  CharmMod,
   CharmRoll,
   CharmInstance,
   EliteId,
@@ -35,6 +36,37 @@ export enum GameEvent {
   CHARM_SALVAGE = 'game:charmSalvage', // React → Phaser: salvage an unequipped charm
   SHOW_RUN_SUMMARY = 'game:showRunSummary', // Phaser → React: open the end-of-run summary
   RUN_SUMMARY_ACK = 'game:runSummaryAck', // React → Phaser: summary dismissed, clear it server-side
+  WORLD_ACTION = 'game:worldAction', // React → Phaser: world-map dock action (shop/charms/daily)
+}
+
+/** Secondary actions available from the world-map dock. */
+export type WorldAction = 'shop' | 'charms' | 'daily';
+
+export interface WorldActionPayload {
+  action: WorldAction;
+}
+
+/** Today's Daily Expedition area and whether its bonus was already claimed. */
+export interface WorldMapDaily {
+  areaName: string;
+  cleared: boolean;
+}
+
+/** A charm worn by a roster familiar, with everything `applyCharm` needs. */
+export interface RosterCharm {
+  name: string;
+  modsLabel: string;
+  mods: CharmMod[];
+}
+
+/** One owned familiar, for the read-only Team modal on the world map. */
+export interface RosterEntry {
+  id: string;
+  level: number;
+  xp: number;
+  /** True when the species is in the current `activeParty`. */
+  inParty: boolean;
+  charm?: RosterCharm;
 }
 
 export type BattleSpeed = 'slow' | 'medium' | 'fast';
@@ -124,6 +156,10 @@ export interface GameStateSnapshot {
   passives?: PassiveView[];
   /** True while exploring today's Daily Expedition. */
   daily?: boolean;
+  /** World map only: today's Daily Expedition area and whether it was cleared. */
+  worldDaily?: WorldMapDaily;
+  /** Owned familiars with level/XP/party/charm, for the world-map Team modal. */
+  roster?: RosterEntry[];
   /** Set on the single snapshot emitted when a KO relay swaps in a backup. */
   forcedSwap?: boolean;
   /** Outcome and rewards while the battle outcome screen is open. */

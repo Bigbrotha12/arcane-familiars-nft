@@ -1,6 +1,13 @@
 import Phaser from 'phaser';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { AREAS, FAMILIARS, dailyExpedition } from '@arcane-familiars/game-logic';
+import {
+  AREAS,
+  FAMILIARS,
+  charmModsLabel,
+  charmName,
+  dailyExpedition,
+  equippedCharm,
+} from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
@@ -11,6 +18,8 @@ import type {
   CharmEquipPayload,
   CharmSalvagePayload,
   RunSummaryPayload,
+  RosterEntry,
+  WorldActionPayload,
 } from '../events';
 import { Layout } from '../ui/layout';
 import { MOTION } from '../ui/motion';
@@ -38,12 +47,18 @@ const AREA_ART: Record<string, string> = {
 
 const CARD = {
   WIDTH: 340,
-  HEIGHT: 140,
+  // 3 rows end at START_Y + 3*HEIGHT + 2*GAP_Y = 486 design px, which leaves
+  // room for the transient message line and the React dock (top edge 514 on
+  // phones, where its stats stack above the buttons, and 548 on desktop).
+  HEIGHT: 132,
   GAP_X: 10,
   GAP_Y: 8,
   COLUMNS: 2,
-  START_Y: 92,
+  START_Y: 74,
 } as const;
+
+/** Design-pixel y of the transient red message, clear of the cards and dock. */
+const MESSAGE_Y = 499;
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -54,9 +69,7 @@ export class WorldMapScene extends Phaser.Scene {
   private layout!: Layout;
   private cards: AreaCard[] = [];
   private loadingText!: Phaser.GameObjects.Text;
-  private statsText!: Phaser.GameObjects.Text;
   private messageText!: Phaser.GameObjects.Text;
-  private dailyText!: Phaser.GameObjects.Text;
   private dailyAreaId?: string;
   private dailyCleared = false;
   private timers: Phaser.Time.TimerEvent[] = [];
@@ -113,14 +126,15 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
     gameEventBus.on(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
     gameEventBus.on(GameEvent.RUN_SUMMARY_ACK, this.handleRunSummaryAck);
+    gameEventBus.on(GameEvent.WORLD_ACTION, this.handleWorldAction);
     gameEventBus.emit(GameEvent.SCENE_CHANGED, { scene: 'world_map' });
     const gen = this._sceneGeneration;
     this.layout = new Layout(this);
     fadeIn(this);
 
     this.add
-      .text(this.layout.x(400), this.layout.y(35), 'Arcane Familiars', {
-        fontSize: this.layout.font(32),
+      .text(this.layout.x(400), this.layout.y(30), 'Arcane Familiars', {
+        fontSize: this.layout.font(30),
         fontFamily: 'Fredoka',
         fontStyle: '600',
         color: '#7C5CFC',
@@ -128,8 +142,8 @@ export class WorldMapScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.add
-      .text(this.layout.x(400), this.layout.y(70), 'Choose a Dungeon', {
-        fontSize: this.layout.font(15),
+      .text(this.layout.x(400), this.layout.y(62), 'Choose a Dungeon', {
+        fontSize: this.layout.font(14),
         fontFamily: 'DM Sans',
         fontStyle: '500',
         color: '#A5A3C4',
@@ -146,86 +160,14 @@ export class WorldMapScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     this.messageText = this.add
-      .text(this.layout.x(400), this.layout.y(546), '', {
-        fontSize: this.layout.font(14),
+      .text(this.layout.x(400), this.layout.y(MESSAGE_Y), '', {
+        fontSize: this.layout.font(13),
         fontFamily: 'DM Sans',
         fontStyle: '400',
         color: '#EF4444',
       })
       .setOrigin(0.5)
       .setAlpha(0);
-
-    const statsBg = this.add.rectangle(
-      this.layout.x(400),
-      this.layout.y(582),
-      this.layout.s(760),
-      this.layout.s(36),
-      0x1e1b4b
-    );
-    statsBg.setStrokeStyle(1, 0x3b3870);
-
-    this.statsText = this.add
-      .text(this.layout.x(400), this.layout.y(582), '', {
-        fontSize: this.layout.font(12),
-        fontFamily: 'JetBrains Mono',
-        fontStyle: '500',
-        color: '#A5A3C4',
-      })
-      .setOrigin(0.5);
-
-    const shopText = this.add
-      .text(this.layout.x(720), this.layout.y(558), '🛒 Shop', {
-        fontSize: this.layout.font(13),
-        fontFamily: 'DM Sans',
-        fontStyle: '500',
-        color: '#7C5CFC',
-      })
-      .setOrigin(1, 0.5)
-      .setInteractive({ useHandCursor: true });
-    shopText.on('pointerdown', () => {
-      audioManager.playSfx('ui_click');
-      fadeToScene(this, SCENE_KEYS.SHOP);
-    });
-    shopText.on('pointerover', () => shopText.setColor('#A78BFA'));
-    shopText.on('pointerout', () => shopText.setColor('#7C5CFC'));
-
-    const charmsText = this.add
-      .text(this.layout.x(620), this.layout.y(558), '◆ Charms', {
-        fontSize: this.layout.font(13),
-        fontFamily: 'DM Sans',
-        fontStyle: '500',
-        color: '#7C5CFC',
-      })
-      .setOrigin(1, 0.5)
-      .setInteractive({ useHandCursor: true });
-    charmsText.on('pointerdown', () => {
-      audioManager.playSfx('ui_click');
-      this.emitOpenCharms();
-    });
-    charmsText.on('pointerover', () => charmsText.setColor('#A78BFA'));
-    charmsText.on('pointerout', () => charmsText.setColor('#7C5CFC'));
-
-    // Daily Expedition: same text-button treatment as Shop, on the left so the
-    // two never overlap.
-    this.dailyText = this.add
-      .text(this.layout.x(80), this.layout.y(558), '☀ Daily Expedition', {
-        fontSize: this.layout.font(13),
-        fontFamily: 'DM Sans',
-        fontStyle: '500',
-        color: '#7C5CFC',
-      })
-      .setOrigin(0, 0.5)
-      .setInteractive({ useHandCursor: true });
-    this.dailyText.on('pointerdown', () => {
-      audioManager.playSfx('ui_click');
-      this.openDailyExpedition();
-    });
-    this.dailyText.on('pointerover', () => {
-      if (!this.dailyCleared) this.dailyText.setColor('#A78BFA');
-    });
-    this.dailyText.on('pointerout', () => {
-      this.dailyText.setColor(this.dailyCleared ? '#A5A3C4' : '#7C5CFC');
-    });
 
     this.setupKeyboardNavigation();
 
@@ -235,10 +177,6 @@ export class WorldMapScene extends Phaser.Scene {
 
       const state = result.state;
       this.fullGameState = state;
-
-      this.statsText.setText(
-        `Battles: ${state.battleCount}  |  Wins: ${state.winCount}  |  Currency: ${state.inventory?.currency ?? 0}`
-      );
 
       const unlockedAreas = state.unlockedAreas?.length ? state.unlockedAreas : ['verdantMeadow'];
       this.updateDailyButton(unlockedAreas, state.dailyClearedDay);
@@ -257,7 +195,6 @@ export class WorldMapScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
       console.error('WorldMapScene: failed to load game state:', err);
 
-      this.statsText.setText('Battles: 0  |  Wins: 0  |  Currency: 0');
       this.updateDailyButton(['verdantMeadow']);
       this.createAreaCards(['verdantMeadow'], []);
       this.loadingText.setAlpha(0);
@@ -486,14 +423,45 @@ export class WorldMapScene extends Phaser.Scene {
   }
 
   private emitStateUpdate(): void {
+    const state = this.fullGameState;
     const snapshot: GameStateSnapshot = {
       familiars: [],
-      currency: this.fullGameState?.inventory?.currency ?? 0,
-      battleCount: this.fullGameState?.battleCount ?? 0,
-      wins: this.fullGameState?.winCount ?? 0,
+      currency: state?.inventory?.currency ?? 0,
+      battleCount: state?.battleCount ?? 0,
+      wins: state?.winCount ?? 0,
       currentScene: 'world_map',
+      worldDaily: this.dailyAreaId
+        ? {
+            areaName: AREAS[this.dailyAreaId]?.name ?? this.dailyAreaId,
+            cleared: this.dailyCleared,
+          }
+        : undefined,
+      roster: this.rosterSnapshot(),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
+  }
+
+  /** Owned familiars + equipped charm data for the React Team modal. */
+  private rosterSnapshot(): RosterEntry[] {
+    const state = this.fullGameState;
+    return (state?.playerFamiliars ?? []).map((id) => {
+      const charm = equippedCharm(state, id);
+      return {
+        id,
+        level: state?.familiarLevels?.[id] ?? 1,
+        xp: state?.familiarXp?.[id] ?? 0,
+        inParty: (state?.activeParty ?? []).includes(id),
+        ...(charm
+          ? {
+              charm: {
+                name: charmName(charm),
+                modsLabel: charmModsLabel(charm),
+                mods: charm.mods,
+              },
+            }
+          : {}),
+      };
+    });
   }
 
   /** Snapshot the owned familiars/charms for the React Charms modal. */
@@ -512,6 +480,21 @@ export class WorldMapScene extends Phaser.Scene {
   private emitOpenCharms(): void {
     gameEventBus.emit(GameEvent.OPEN_CHARMS, this.charmPayload());
   }
+
+  /** Dock button pressed in React; same handlers the old Phaser links used. */
+  private handleWorldAction = (payload: WorldActionPayload): void => {
+    switch (payload?.action) {
+      case 'shop':
+        fadeToScene(this, SCENE_KEYS.SHOP);
+        break;
+      case 'charms':
+        this.emitOpenCharms();
+        break;
+      case 'daily':
+        this.openDailyExpedition();
+        break;
+    }
+  };
 
   private handleCharmEquip = async (payload: CharmEquipPayload): Promise<void> => {
     if (!payload?.charmUid) return;
@@ -548,6 +531,7 @@ export class WorldMapScene extends Phaser.Scene {
     try {
       await gameApiClient.ackRunSummary();
       if (this.fullGameState) this.fullGameState.lastRunSummary = undefined;
+      this.emitStateUpdate();
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to dismiss the run summary';
       this.showMessage(message);
@@ -579,11 +563,6 @@ export class WorldMapScene extends Phaser.Scene {
     const expedition = dailyExpedition(today, unlockedAreas);
     this.dailyAreaId = expedition.areaId;
     this.dailyCleared = dailyClearedDay === today;
-
-    const areaName = AREAS[expedition.areaId]?.name ?? expedition.areaId;
-    const cleared = this.dailyCleared ? ' · ✓ Cleared today' : '';
-    this.dailyText.setText(`☀ Daily Expedition · ${areaName}${cleared}`);
-    this.dailyText.setColor(this.dailyCleared ? '#A5A3C4' : '#7C5CFC');
   }
 
   private openDailyExpedition(): void {
@@ -604,6 +583,7 @@ export class WorldMapScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.CHARM_EQUIP, this.handleCharmEquip);
     gameEventBus.off(GameEvent.CHARM_SALVAGE, this.handleCharmSalvage);
     gameEventBus.off(GameEvent.RUN_SUMMARY_ACK, this.handleRunSummaryAck);
+    gameEventBus.off(GameEvent.WORLD_ACTION, this.handleWorldAction);
     this.ariaLiveElement?.remove();
     this.ariaLiveElement = null;
   }
