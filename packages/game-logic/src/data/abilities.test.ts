@@ -48,6 +48,32 @@ describe('rank-II ability variants', () => {
   });
 });
 
+describe('early caster damage abilities', () => {
+  it('defines Water Jet and Petal Flurry as cheap arcane damage', () => {
+    for (const id of ['waterJet', 'petalFlurry']) {
+      const ability = getAbility(id);
+      expect(ability, id).toBeDefined();
+      expect(ability!.effectType).toBe(EffectType.Damage);
+      expect(ability!.mpCost).toBe(7);
+      expect(ability!.cooldown).toBe(1);
+      expect(ability!.multiplier).toBe(1.1);
+      expect(ability!.description).toBe('Deal 1.1x arcane damage');
+    }
+    expect(getAbility('waterJet')!.name).toBe('Water Jet');
+    expect(getAbility('petalFlurry')!.name).toBe('Petal Flurry');
+  });
+
+  it('generates rank-II variants with the usual damage bump', () => {
+    for (const id of ['waterJet', 'petalFlurry']) {
+      const variant = getAbility(`${id}_2`);
+      expect(variant, `${id}_2`).toBeDefined();
+      expect(variant!.multiplier).toBe(1.32);
+      expect(variant!.description).toContain('1.32x');
+      expect(variant!.description).toContain('Rank II');
+    }
+  });
+});
+
 describe('affinity signature abilities', () => {
   const EXPECTED: Record<Affinity, { id: string; name: string; mpCost: number; cooldown: number; multiplier: number }> =
     {

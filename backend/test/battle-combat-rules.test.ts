@@ -5,6 +5,7 @@ import { app } from '../src/index';
 import type { Bindings } from '../src/types';
 import {
   ActionType,
+  BALANCE,
   BattleResult,
   Outcome,
   RoomType,
@@ -259,6 +260,45 @@ describe('battle rewards XP', () => {
     expect(state.familiarXp?.whiteDog).toBe(xp);
     expect(state.familiarLevels?.yellowFighter).toBe(1);
     expect(state.familiarXp?.yellowFighter).toBe(Math.round(xp * 0.5));
+  });
+
+  it('boosts an under-levelled active familiar by the catch-up multiplier', async () => {
+    const anonId = crypto.randomUUID();
+    const state = makeState(anonId);
+    // The active familiar is two levels below the party's highest.
+    state.familiarLevels = { whiteDog: 1, yellowFighter: 3 };
+    const battle = makeBattle(crypto.randomUUID(), { enemyId: 'tideTurtle', enemyLevel: 4 });
+    await seed(anonId, state, battle);
+
+    const { rewards, state: saved } = await actAndReadRewards(anonId, battle);
+    const baseXp = battleXp(4, false);
+    const expectedXp = Math.round(baseXp * BALANCE.catchUpXpMultiplier);
+
+    expect(rewards?.xp).toBe(expectedXp);
+    expect(rewards?.xpCatchUp).toBe(true);
+    expect(rewards?.benchXp).toBe(Math.round(baseXp * 0.5));
+    expect(rewards?.benchXpCatchUp).toBeUndefined();
+
+    const progress = applyFamiliarXp(1, 0, expectedXp);
+    expect(saved.familiarLevels?.whiteDog).toBe(progress.level);
+    expect(saved.familiarXp?.whiteDog).toBe(progress.xp);
+  });
+
+  it('boosts an under-levelled bench share by the catch-up multiplier', async () => {
+    const anonId = crypto.randomUUID();
+    const state = makeState(anonId);
+    state.familiarLevels = { whiteDog: 5, yellowFighter: 1 };
+    const battle = makeBattle(crypto.randomUUID(), { enemyId: 'tideTurtle', enemyLevel: 4 });
+    await seed(anonId, state, battle);
+
+    const { rewards } = await actAndReadRewards(anonId, battle);
+    const baseXp = battleXp(4, false);
+    const expectedBenchXp = Math.round(Math.round(baseXp * 0.5) * BALANCE.catchUpXpMultiplier);
+
+    expect(rewards?.xp).toBe(baseXp);
+    expect(rewards?.xpCatchUp).toBeUndefined();
+    expect(rewards?.benchXp).toBe(expectedBenchXp);
+    expect(rewards?.benchXpCatchUp).toBe(true);
   });
 
   it('applies the boss XP multiplier', async () => {

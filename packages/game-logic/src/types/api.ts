@@ -91,7 +91,16 @@ export interface CurioGains {
   /** Charm found inside a chest outcome. */
   charms?: CharmRoll[];
   xp?: number;
-  levels?: { familiarId: string; name: string; level: number; levelsGained: number }[];
+  levels?: {
+    familiarId: string;
+    name: string;
+    level: number;
+    levelsGained: number;
+    /** XP actually awarded to this familiar in this outcome. */
+    xp?: number;
+    /** This familiar's award was boosted by the catch-up multiplier. */
+    catchUp?: boolean;
+  }[];
   learned?: { familiarId: string; familiarName: string; abilityId: string; abilityName: string }[];
   passiveUnlocks?: { familiarId: string; familiarName: string; passiveId: string; passiveName: string; tier: number }[];
   bond?: { speciesId: string; name: string; bond: number; needed: number };

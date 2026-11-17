@@ -53,6 +53,11 @@ export const BALANCE = {
   /** XP share for the party member who did not land the winning blow. */
   benchXpShare: 0.5,
   /**
+   * XP multiplier for a familiar at least two levels below the highest level
+   * among the player's owned familiars, so under-levelled party members catch up.
+   */
+  catchUpXpMultiplier: 1.5,
+  /**
    * Fraction of level-scaled max HP/MP restored by a rest shrine. The shrine is
    * the last room before a boss, so this is what the party takes into the fight.
    */

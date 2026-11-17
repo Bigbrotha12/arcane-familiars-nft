@@ -33,6 +33,7 @@ import {
   findOwnedItem,
   consumeOwnedItem,
   applyFamiliarXp,
+  catchUpXpMultiplier,
   newlyLearned,
   newPassiveTiers,
   resolveCurioOption,
@@ -551,21 +552,26 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
         const levels: NonNullable<CurioGains['levels']> = [];
         const learned: NonNullable<CurioGains['learned']> = [];
         const passiveUnlocks: NonNullable<CurioGains['passiveUnlocks']> = [];
+        const highestLevel = Math.max(1, ...(state.playerFamiliars ?? []).map((id) => state.familiarLevels?.[id] ?? 1));
 
         for (const familiarId of living) {
           const base = getFamiliar(familiarId);
           if (!base) continue;
           const levelBefore = state.familiarLevels[familiarId] ?? 1;
-          const progress = applyFamiliarXp(levelBefore, state.familiarXp[familiarId] ?? 0, outcome.amount);
+          const multiplier = catchUpXpMultiplier(levelBefore, highestLevel);
+          const xpAmount = Math.round(outcome.amount * multiplier);
+          const progress = applyFamiliarXp(levelBefore, state.familiarXp[familiarId] ?? 0, xpAmount);
           state.familiarLevels[familiarId] = progress.level;
           state.familiarXp[familiarId] = progress.xp;
-          runStats.xpByFamiliar[familiarId] = (runStats.xpByFamiliar[familiarId] ?? 0) + outcome.amount;
+          runStats.xpByFamiliar[familiarId] = (runStats.xpByFamiliar[familiarId] ?? 0) + xpAmount;
           runStats.levelsByFamiliar[familiarId] = (runStats.levelsByFamiliar[familiarId] ?? 0) + progress.levelsGained;
           levels.push({
             familiarId,
             name: base.name,
             level: progress.level,
             levelsGained: progress.levelsGained,
+            xp: xpAmount,
+            ...(multiplier > 1 ? { catchUp: true } : {}),
           });
 
           if (progress.levelsGained > 0) {

@@ -262,11 +262,15 @@ export interface BattleEndedPayload {
     /** First Daily Expedition clear of the day. */
     dailyBonus?: { currency: number; items: string[]; charm?: CharmRoll };
     xp?: number;
+    /** The active familiar's XP was boosted by the catch-up multiplier. */
+    xpCatchUp?: boolean;
     levelUp?: number;
     /** Display name of the familiar that landed the winning blow. */
     activeFamiliarName?: string;
     /** XP share for the party member that did not land the winning blow. */
     benchXp?: number;
+    /** The bench party member's XP was boosted by the catch-up multiplier. */
+    benchXpCatchUp?: boolean;
     benchFamiliarId?: string;
     /** Display name of that bench party member. */
     benchFamiliarName?: string;

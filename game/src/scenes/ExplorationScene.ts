@@ -796,9 +796,16 @@ export class ExplorationScene extends Phaser.Scene {
     if (gains.currency) lines.push(`+${gains.currency} coins`);
 
     if (gains.xp) {
-      const names = (gains.levels ?? []).map((level) => level.name);
-      lines.push(names.length > 0 ? `+${gains.xp} XP · ${names.join(', ')}` : `+${gains.xp} XP`);
-      for (const level of gains.levels ?? []) {
+      const levels = gains.levels ?? [];
+      if (levels.length > 0) {
+        for (const level of levels) {
+          const amount = level.xp ?? gains.xp;
+          lines.push(`+${amount} XP · ${level.name}${level.catchUp ? ' (catch-up)' : ''}`);
+        }
+      } else {
+        lines.push(`+${gains.xp} XP`);
+      }
+      for (const level of levels) {
         if (level.levelsGained > 0) lines.push(`${level.name} reached Lv ${level.level}`);
       }
     }

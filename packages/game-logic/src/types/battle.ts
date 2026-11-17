@@ -74,6 +74,12 @@ export interface ActionResult {
   effectiveness?: 'strong' | 'weak';
   /** True when the target's Defend guard reduced this result's damage. */
   guarded?: boolean;
+  /**
+   * Fraction of the backup familiar's max HP healed by a party heal (Heal Pulse).
+   * The engine stays pure: the backend applies this to the living non-fighting
+   * party member's dungeon HP.
+   */
+  benchHealFraction?: number;
 }
 
 export enum Outcome {
@@ -125,6 +131,8 @@ export interface BattleTurnResult {
   /** Set when the active familiar was KO'd and a living party member
    *  involuntarily took its place (battleOutcome is then Continue). */
   forcedSwap?: ForcedSwapInfo;
+  /** Bench member healed by the player's Heal Pulse this turn (if any). */
+  benchHealed?: { familiarId: string; name: string; amount: number };
 }
 
 export interface BattleRewards {
@@ -138,10 +146,14 @@ export interface BattleRewards {
   dailyBonus?: { currency: number; items: string[]; charm?: CharmRoll };
   /** XP awarded to the active familiar. */
   xp?: number;
+  /** The active familiar's XP was boosted by the catch-up multiplier. */
+  xpCatchUp?: boolean;
   /** Number of levels gained by the active familiar. */
   levelUp?: number;
   /** XP awarded to the party member who did not land the winning blow. */
   benchXp?: number;
+  /** The bench party member's XP was boosted by the catch-up multiplier. */
+  benchXpCatchUp?: boolean;
   /** Species id of that bench party member. */
   benchFamiliarId?: string;
   /** Number of levels gained by the bench party member. */

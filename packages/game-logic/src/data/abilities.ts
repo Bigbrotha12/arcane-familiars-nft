@@ -117,13 +117,37 @@ const quickstep: AbilityData = {
 const healpulse: AbilityData = {
   id: 'healpulse',
   name: 'Heal Pulse',
-  description: 'Restore 30% of ally max HP',
+  description: 'Restore 30% of ally max HP; your backup recovers half as much',
   mpCost: 12,
   target: Target.Ally,
   effectType: EffectType.Heal,
   scalingStat: ScalingStat.Arcane,
   multiplier: 0.3,
   cooldown: 3,
+};
+
+const waterJet: AbilityData = {
+  id: 'waterJet',
+  name: 'Water Jet',
+  description: 'Deal 1.1x arcane damage',
+  mpCost: 7,
+  target: Target.Enemy,
+  effectType: EffectType.Damage,
+  scalingStat: ScalingStat.Arcane,
+  multiplier: 1.1,
+  cooldown: 1,
+};
+
+const petalFlurry: AbilityData = {
+  id: 'petalFlurry',
+  name: 'Petal Flurry',
+  description: 'Deal 1.1x arcane damage',
+  mpCost: 7,
+  target: Target.Enemy,
+  effectType: EffectType.Damage,
+  scalingStat: ScalingStat.Arcane,
+  multiplier: 1.1,
+  cooldown: 1,
 };
 
 const shadowstrike: AbilityData = {
@@ -504,6 +528,8 @@ const BASE_ABILITIES: Record<string, AbilityData> = {
   fireball,
   quickstep,
   healpulse,
+  waterJet,
+  petalFlurry,
   shadowstrike,
   ironbash,
   naturabless,
