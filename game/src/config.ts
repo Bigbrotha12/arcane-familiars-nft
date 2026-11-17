@@ -16,7 +16,9 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   backgroundColor: '#0A0A0F',
   scale: {
     mode: Phaser.Scale.FIT,
-    autoCenter: Phaser.Scale.CENTER_BOTH,
+    // Centre horizontally but pin to the top: on portrait phones the freed
+    // space below the canvas is where tip/guide cards go.
+    autoCenter: Phaser.Scale.CENTER_HORIZONTALLY,
     autoRound: true,
   },
   scene: [BootScene, BattleScene, ExplorationScene, WorldMapScene, PartySelectScene, ShopScene, DungeonFailScene],

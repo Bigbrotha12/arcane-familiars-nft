@@ -27,7 +27,7 @@ function TreasureOverlay({ treasure, onTake, onLeave }: TreasureOverlayProps) {
 
   return (
     <div className="pointer-events-auto absolute inset-0 z-20 flex items-center justify-center bg-black/40">
-      <div className="hud-frame w-full max-w-sm rounded-lg p-lg">
+      <div className="hud-frame w-full max-w-sm rounded-lg p-4">
         <h2 className="mb-md font-display text-xl font-bold text-[#F0EFFF]">
           {TIER_TITLES[treasure?.tier ?? 'common']}
         </h2>

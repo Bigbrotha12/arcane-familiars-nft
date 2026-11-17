@@ -10,7 +10,7 @@ interface TipCardProps {
   /**
    * Battle cards sit bottom-left over the battle log, the only area that hides
    * neither combatant, their status cards nor the action bar. Other scenes
-   * use the top-right corner.
+   * use the top-right corner (GamePage anchors it below the room card).
    */
   battle?: boolean;
   /**
@@ -18,7 +18,7 @@ interface TipCardProps {
    * the letterboxed canvas leaves room below it: the tip goes there and covers
    * nothing in the game.
    */
-  anchor?: { top: number; left: number; width: number };
+  anchor?: { top?: number; bottom?: number; left?: number; right?: number; width: number };
   onDismiss: () => void;
   onDisable: () => void;
 }
@@ -40,7 +40,7 @@ export default function TipCard({ tip, visible, battle = false, anchor, onDismis
       }
       style={anchor}
     >
-      <div className="tip-in hud-frame rounded-md p-2 sm:p-3">
+      <div className="tip-in hud-frame rounded-md p-1.5 sm:p-2">
         <h2 className="font-display text-[13px] font-semibold leading-tight text-pink sm:text-sm">{tip.title}</h2>
         <p className="mt-0.5 font-body text-[11px] leading-snug text-[#F0EFFF] sm:mt-1 sm:text-xs sm:leading-relaxed">
           {tip.body}

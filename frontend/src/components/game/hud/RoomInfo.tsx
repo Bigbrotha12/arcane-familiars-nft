@@ -23,7 +23,7 @@ function RoomInfo({ snapshot }: RoomInfoProps) {
   const typeStyle = ROOM_TYPE_STYLES[roomType] ?? ROOM_TYPE_STYLES.Normal;
 
   return (
-    <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-md py-sm max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-lg max-sm:py-md">
+    <div className="hud-frame pointer-events-none flex w-[300px] flex-col items-center gap-1 rounded-md px-3 py-1.5 max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-lg max-sm:py-md">
       {(snapshot.areaName || snapshot.daily) && (
         <div className="flex max-w-full items-center gap-1.5">
           {snapshot.areaName && (

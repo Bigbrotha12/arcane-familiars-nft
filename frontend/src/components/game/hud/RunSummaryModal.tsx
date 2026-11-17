@@ -47,6 +47,14 @@ function StatCell({ label, value }: { label: string; value: number }) {
   );
 }
 
+const STAT_COLUMNS: Record<number, string> = {
+  1: 'grid-cols-1',
+  2: 'grid-cols-2',
+  3: 'grid-cols-3',
+  4: 'grid-cols-4',
+  5: 'grid-cols-5',
+};
+
 function RunSummaryModal({ open, payload, onClose }: RunSummaryModalProps) {
   if (!payload) return null;
 
@@ -79,6 +87,15 @@ function RunSummaryModal({ open, payload, onClose }: RunSummaryModalProps) {
   const bestHit = stats.bestHit;
   const bestHitName = bestHit ? (getFamiliar(bestHit.familiarId)?.name ?? bestHit.familiarId) : '';
 
+  // Empty counters are noise on a short run; show only what actually happened.
+  const statTiles = [
+    { label: 'Battles', value: stats.battlesWon },
+    { label: 'Elites', value: stats.elitesWon },
+    { label: 'Rooms', value: stats.roomsExplored },
+    { label: 'Chests', value: stats.chestsOpened },
+    { label: 'Curios', value: stats.curiosUsed },
+  ].filter((tile) => tile.value > 0);
+
   return (
     <Modal open={open} onClose={onClose} hud>
       <div className="flex max-h-[75vh] flex-col gap-3 overflow-y-auto pr-1">
@@ -87,13 +104,15 @@ function RunSummaryModal({ open, payload, onClose }: RunSummaryModalProps) {
           <p className="font-body text-xs text-[#B8B5E0]">{summary.areaName}</p>
         </div>
 
-        <div className="grid grid-cols-5 gap-1.5">
-          <StatCell label="Battles" value={stats.battlesWon} />
-          <StatCell label="Elites" value={stats.elitesWon} />
-          <StatCell label="Rooms" value={stats.roomsExplored} />
-          <StatCell label="Chests" value={stats.chestsOpened} />
-          <StatCell label="Curios" value={stats.curiosUsed} />
-        </div>
+        {statTiles.length > 0 ? (
+          <div className={`grid gap-1.5 ${STAT_COLUMNS[statTiles.length] ?? 'grid-cols-5'}`}>
+            {statTiles.map((tile) => (
+              <StatCell key={tile.label} label={tile.label} value={tile.value} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-center font-body text-xs text-[#B8B5E0]">A quick trip — nothing gained this time.</p>
+        )}
 
         {xpLines.length > 0 && (
           <div className="flex flex-col gap-0.5">

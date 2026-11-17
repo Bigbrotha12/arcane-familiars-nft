@@ -59,7 +59,7 @@ function FamiliarStatusCompact({
   }, [familiar.hp]);
 
   return (
-    <div className="pointer-events-none flex w-[280px] flex-col gap-1 rounded-md border-4 border-double border-[#3B3870] bg-[#1E1B4B] px-2 py-1.5 shadow-lg max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-3 max-sm:py-2">
+    <div className="hud-frame pointer-events-none flex w-[280px] flex-col gap-1 rounded-md px-2 py-1 max-sm:w-[420px] max-sm:gap-1.5 max-sm:px-3 max-sm:py-1.5">
       <div className="flex items-center justify-between gap-1.5">
         <span className="flex min-w-0 items-center gap-1.5">
           <span className="truncate font-body text-sm font-semibold text-[#F0EFFF] max-sm:text-[22px]">
@@ -147,27 +147,33 @@ function FamiliarStatusCompact({
         </span>
       </div>
 
-      <div className="grid grid-cols-10 gap-0.5 border-t-2 border-[#3B3870] pt-1">
-        {Array.from({ length: MAX_STATUS_SLOTS }).map((_, i) => {
-          const effect = statusEffects[i];
-          return (
-            <div key={effect?.id ?? `empty-${i}`} className="relative flex h-[18px] w-full items-center justify-center">
-              {effect && (
-                <>
-                  <div className="flex h-full w-full items-center justify-center rounded-md bg-[#2D2A5E] text-[11px]">
-                    {effect.icon}
-                  </div>
-                  {effect.duration !== undefined && (
-                    <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-[#1E1B4B] px-0.5 font-mono text-[8px] text-[#A5A3C4]">
-                      {effect.duration}
-                    </span>
-                  )}
-                </>
-              )}
-            </div>
-          );
-        })}
-      </div>
+      {/* Only reserve the status band when there is something in it. */}
+      {statusEffects.length > 0 && (
+        <div className="grid grid-cols-10 gap-0.5 border-t border-white/10 pt-1">
+          {Array.from({ length: MAX_STATUS_SLOTS }).map((_, i) => {
+            const effect = statusEffects[i];
+            return (
+              <div
+                key={effect?.id ?? `empty-${i}`}
+                className="relative flex h-[18px] w-full items-center justify-center"
+              >
+                {effect && (
+                  <>
+                    <div className="flex h-full w-full items-center justify-center rounded-md bg-[#2D2A5E] text-[11px]">
+                      {effect.icon}
+                    </div>
+                    {effect.duration !== undefined && (
+                      <span className="absolute -bottom-0.5 -right-0.5 rounded-full bg-[#1E1B4B] px-0.5 font-mono text-[8px] text-[#A5A3C4]">
+                        {effect.duration}
+                      </span>
+                    )}
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

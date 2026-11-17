@@ -40,7 +40,7 @@ function BossOverlay({ onEnter, onRetreat, encounter, party, activeId }: BossOve
         role="dialog"
         aria-modal="true"
         aria-labelledby="boss-overlay-title"
-        className="hud-frame max-w-sm rounded-lg p-lg max-sm:max-w-[620px] max-sm:p-xl"
+        className="hud-frame max-w-sm rounded-lg p-4 max-sm:max-w-[620px] max-sm:p-xl"
       >
         <h2
           id="boss-overlay-title"

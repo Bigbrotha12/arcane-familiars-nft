@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import Button from '@/components/ui/Button';
 import Modal from '@/components/ui/Modal';
+import Popover from '@/components/ui/Popover';
 import { gameApiClient } from '@arcane-familiars/game/api-client';
 import { adoptGuestGame, getCurrentUser, login, logout, register, type AuthUser } from '@/lib/auth';
 
@@ -82,8 +83,48 @@ export default function AuthForm({ onAuthChange, compact = false }: AuthFormProp
   if (!ready) return null;
 
   if (user) {
+    // Compact: a 32px avatar whose popover holds the email and sign-out, so the
+    // slim game bar never has to show the address inline.
+    if (compact) {
+      return (
+        <Popover
+          label="Account"
+          align="right"
+          trigger={(triggerProps) => (
+            <button
+              {...triggerProps}
+              type="button"
+              className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent font-display text-sm font-semibold leading-none text-white shadow-btn transition-colors hover:bg-accent-hover focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2"
+            >
+              {user.email.trim().charAt(0).toUpperCase() || '?'}
+            </button>
+          )}
+        >
+          <div className="flex flex-col gap-2 p-1.5">
+            <span className="truncate font-body text-xs text-text-secondary" title={user.email}>
+              {user.email}
+            </span>
+            {error && (
+              <span role="alert" className="font-body text-xs text-error">
+                {error}
+              </span>
+            )}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => void handleLogout()}
+              disabled={busy}
+              className="w-full rounded-sm px-2 py-1.5 text-left font-body text-sm font-medium text-text-primary transition-colors hover:bg-surface-alt focus:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {busy ? 'Signing out…' : 'Sign out'}
+            </button>
+          </div>
+        </Popover>
+      );
+    }
+
     return (
-      <div className={`flex items-center gap-2 ${compact ? 'text-xs' : 'text-sm'}`}>
+      <div className="flex items-center gap-2 text-sm">
         <span className="max-w-[18rem] truncate font-body text-text-secondary" title={user.email}>
           {user.email}
         </span>
@@ -97,9 +138,23 @@ export default function AuthForm({ onAuthChange, compact = false }: AuthFormProp
 
   return (
     <>
-      <Button variant="secondary" size="sm" onClick={() => setOpen(true)}>
-        <span className="hidden sm:inline">Sign in / Create account</span>
-        <span className="sm:hidden">Sign in</span>
+      <Button
+        variant="secondary"
+        size="sm"
+        className={`min-w-0 whitespace-nowrap ${compact ? '!px-2' : ''}`}
+        onClick={() => setOpen(true)}
+      >
+        {compact ? (
+          <>
+            <span className="hidden min-w-0 truncate sm:inline-block">Guest · Sign in</span>
+            <span className="sm:hidden">Sign in</span>
+          </>
+        ) : (
+          <>
+            <span className="hidden sm:inline">Sign in / Create account</span>
+            <span className="sm:hidden">Sign in</span>
+          </>
+        )}
       </Button>
 
       <Modal open={open} onClose={() => setOpen(false)} title={mode === 'login' ? 'Sign in' : 'Create account'} hud>
@@ -159,7 +214,7 @@ export default function AuthForm({ onAuthChange, compact = false }: AuthFormProp
           </button>
 
           <p className="font-body text-[11px] text-text-muted">
-            Accounts save your progress across devices. Guests can still play without signing in.
+            Guest progress is saved in this browser. Sign in to keep it across devices.
           </p>
         </form>
       </Modal>
