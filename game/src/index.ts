@@ -14,6 +14,8 @@ export type {
   BattleEndedPayload,
   AbilityOption,
   ItemOption,
+  FieldItemSnapshot,
+  FieldUseItemPayload,
   DungeonSnapshot,
   DungeonRoomSnapshot,
   EncounterSnapshot,

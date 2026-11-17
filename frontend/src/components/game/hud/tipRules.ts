@@ -48,7 +48,7 @@ export const TIPS: readonly TipDefinition[] = [
   {
     id: 'explore',
     title: 'Exploring',
-    body: 'Pick an exit to move. Rooms marked with a chest are side detours worth taking; the red room is the boss.',
+    body: 'Pick an exit to move. Rooms marked with a chest are side detours worth taking; the red room is the boss. Return to the entrance to leave with your loot.',
     triggered: (snapshot) => snapshot.currentScene === 'exploration' && Boolean(snapshot.dungeon),
   },
   {
