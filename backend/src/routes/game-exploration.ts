@@ -32,6 +32,9 @@ import {
   bankRunLoot,
   findOwnedItem,
   consumeOwnedItem,
+  isFieldUsableItem,
+  computeItemHeal,
+  reviveFaintedParty,
   applyFamiliarXp,
   catchUpXpMultiplier,
   newlyLearned,
@@ -673,6 +676,118 @@ explorationRouter.post('/game/dungeon/curio', async (c) => {
     });
   } catch (error: unknown) {
     return internalError(c, error, 'Use curio');
+  }
+});
+
+explorationRouter.post('/game/dungeon/use-item', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string; itemId: string; familiarId?: string }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { anonymousId, itemId, familiarId } = body;
+    if (!anonymousId || !itemId) {
+      return c.json({ error: 'Missing required fields: anonymousId, itemId' }, 400);
+    }
+
+    const isGuest = c.get('isGuest') ?? false;
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+
+    const state = loaded.state;
+
+    if (await hasActiveBattle(c.env.DB, anonymousId)) {
+      return c.json({ error: ACTIVE_BATTLE_ERROR }, 409);
+    }
+
+    const dungeon = state.dungeon;
+    if (!dungeon) {
+      return c.json({ error: 'No active dungeon' }, 409);
+    }
+
+    const item = getItem(itemId);
+    if (!item) {
+      return c.json({ error: 'Unknown item' }, 400);
+    }
+    if (!isFieldUsableItem(item)) {
+      return c.json({ error: 'This item can only be used in battle' }, 400);
+    }
+    // Run loot is spent before the bank.
+    if (!findOwnedItem(state, itemId)) {
+      return c.json({ error: 'You do not own this item' }, 400);
+    }
+
+    const reviveEffect = item.effects.find((effect) => effect.kind === 'revive_party');
+    let text: string;
+
+    if (reviveEffect) {
+      // Revive items ignore familiarId and mend every fallen party member.
+      const fainted = dungeon.party.filter((id) => (dungeon.partyHp[id] ?? 0) <= 0);
+      if (fainted.length === 0) {
+        return c.json({ error: 'No fainted party members to revive' }, 400);
+      }
+      if (!consumeOwnedItem(state, itemId)) {
+        return c.json({ error: 'You do not own this item' }, 400);
+      }
+      const revived = reviveFaintedParty(dungeon, state.familiarLevels, reviveEffect.percentage);
+      const names = (revived.length > 0 ? revived.map((entry) => entry.familiarId) : fainted).map(
+        (id) => getFamiliar(id)?.name ?? id
+      );
+      text = `${item.name} revives ${names.join(', ')}`;
+    } else {
+      if (!familiarId) {
+        return c.json({ error: 'Missing required field: familiarId' }, 400);
+      }
+      if (!dungeon.party.includes(familiarId)) {
+        return c.json({ error: 'That familiar is not in your dungeon party' }, 400);
+      }
+      const familiar = getFamiliar(familiarId);
+      if (!familiar) {
+        return c.json({ error: 'Invalid familiar id' }, 400);
+      }
+
+      const currentHp = dungeon.partyHp[familiarId] ?? 0;
+      if (currentHp <= 0) {
+        return c.json({ error: 'That familiar has fainted' }, 400);
+      }
+      const currentMp = dungeon.partyMp[familiarId] ?? 0;
+      const stats = scaleFamiliarStats(familiar.stats, state.familiarLevels?.[familiarId] ?? 1);
+      const heal = computeItemHeal(
+        item.effects,
+        { hp: currentHp, mp: currentMp },
+        { hp: stats.maxHp, mp: stats.maxMp }
+      );
+      if (heal.hp <= 0 && heal.mp <= 0) {
+        return c.json({ error: 'Item would have no effect' }, 400);
+      }
+      if (!consumeOwnedItem(state, itemId)) {
+        return c.json({ error: 'You do not own this item' }, 400);
+      }
+
+      dungeon.partyHp[familiarId] = Math.min(stats.maxHp, currentHp + heal.hp);
+      dungeon.partyMp[familiarId] = Math.min(stats.maxMp, currentMp + heal.mp);
+
+      const parts: string[] = [];
+      if (heal.hp > 0) parts.push(`${heal.hp} HP`);
+      if (heal.mp > 0) parts.push(`${heal.mp} MP`);
+      text = `${familiar.name} recovers ${parts.join(' and ')}`;
+    }
+
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
+    if (!saved) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({
+      success: true,
+      partyHp: dungeon.partyHp,
+      partyMp: dungeon.partyMp,
+      runLoot: getRunLoot(dungeon),
+      inventory: state.inventory,
+      text,
+    });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Use field item');
   }
 });
 

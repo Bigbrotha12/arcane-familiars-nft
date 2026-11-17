@@ -11,6 +11,7 @@ import {
   describeItem,
   itemRarity,
   getRunLoot,
+  isFieldUsableItem,
   passiveTierRoman,
   Directions,
   charmName,
@@ -27,6 +28,7 @@ import type {
   FamiliarState,
   NavigateRoomPayload,
   PartySwapPayload,
+  FieldUseItemPayload,
   RecruitSwap,
   DungeonRoomSnapshot,
   EncounterSnapshot,
@@ -164,6 +166,8 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.on(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.on(GameEvent.START_BATTLE, this.handleStartBattle);
     gameEventBus.on(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
+    gameEventBus.on(GameEvent.FIELD_USE_ITEM, this.handleFieldUseItem);
+    gameEventBus.on(GameEvent.LEAVE_DUNGEON, this.handleLeaveDungeon);
     gameEventBus.on(GameEvent.CURIO_CHOICE, this.handleCurioChoice);
     gameEventBus.on(GameEvent.CURIO_LEAVE, this.handleCurioLeave);
 
@@ -586,8 +590,32 @@ export class ExplorationScene extends Phaser.Scene {
       bossRoom: this.bossActive,
       runLootCurrency: getRunLoot(this.dungeon).currency,
       runLootItemCount: getRunLoot(this.dungeon).items.reduce((sum, item) => sum + item.quantity, 0),
+      fieldItems: this.buildFieldItems(),
     };
     gameEventBus.emit(GameEvent.STATE_UPDATED, snapshot);
+  }
+
+  /** Field-usable items in run loot + bank, grouped with a combined count. */
+  private buildFieldItems(): GameStateSnapshot['fieldItems'] {
+    const counts = new Map<string, number>();
+    for (const entry of [...getRunLoot(this.dungeon).items, ...(this.fullGameState?.inventory?.items ?? [])]) {
+      counts.set(entry.itemId, (counts.get(entry.itemId) ?? 0) + entry.quantity);
+    }
+
+    const items: NonNullable<GameStateSnapshot['fieldItems']> = [];
+    for (const [itemId, quantity] of counts) {
+      const item = getItem(itemId);
+      if (quantity <= 0 || !item || !isFieldUsableItem(item)) continue;
+      items.push({
+        id: item.id,
+        name: item.name,
+        description: describeItem(item),
+        icon: item.icon,
+        quantity,
+      });
+    }
+
+    return items.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   private buildPendingEncounter(room?: Room): EncounterSnapshot | undefined {
@@ -911,6 +939,47 @@ export class ExplorationScene extends Phaser.Scene {
     this.startBattle(this.pendingEnemyId);
   };
 
+  private handleFieldUseItem = (payload: FieldUseItemPayload): void => {
+    if (this.isProcessing || !this.dungeon || !payload?.itemId) return;
+    this.useFieldItem(payload.itemId, payload.familiarId).catch((err) => {
+      console.error('Field item error:', err);
+      this.isProcessing = false;
+    });
+  };
+
+  /** Leave from the entrance only; the HUD hides the button elsewhere. */
+  private handleLeaveDungeon = (): void => {
+    if (this.isProcessing || !this.dungeon) return;
+    const room = this.dungeon.rooms[this.dungeon.currentRoomId];
+    if (room?.type !== RoomType.Start) return;
+    this.exitDungeon();
+  };
+
+  private async useFieldItem(itemId: string, familiarId?: string): Promise<void> {
+    if (!this.dungeon) return;
+    this.isProcessing = true;
+
+    try {
+      const result = await this.gameApi.useFieldItem(itemId, familiarId);
+      if (this.explorationUI?.isDestroyed()) return;
+
+      this.dungeon.partyHp = result.partyHp;
+      this.dungeon.partyMp = result.partyMp;
+      this.dungeon.runLoot = result.runLoot;
+      if (this.fullGameState) this.fullGameState.inventory = result.inventory;
+
+      this.explorationUI.addLogMessage(result.text);
+      audioManager.playSfx('heal');
+    } catch (err) {
+      audioManager.playSfx('ui_error');
+      const message = err instanceof Error ? err.message : 'Failed to use the item';
+      if (!this.explorationUI?.isDestroyed()) this.explorationUI.addLogMessage(message);
+    } finally {
+      this.isProcessing = false;
+      if (!this.explorationUI?.isDestroyed()) this.emitStateUpdate();
+    }
+  }
+
   private handlePartySwapRequest = (payload: PartySwapPayload): void => {
     if (this.isSwapping || !this.dungeon) return;
     const familiarId = payload?.familiarId;
@@ -1000,6 +1069,8 @@ export class ExplorationScene extends Phaser.Scene {
     gameEventBus.off(GameEvent.FLEE_ENCOUNTER, this.handleFleeEncounter);
     gameEventBus.off(GameEvent.START_BATTLE, this.handleStartBattle);
     gameEventBus.off(GameEvent.PARTY_SWAP_REQUESTED, this.handlePartySwapRequest);
+    gameEventBus.off(GameEvent.FIELD_USE_ITEM, this.handleFieldUseItem);
+    gameEventBus.off(GameEvent.LEAVE_DUNGEON, this.handleLeaveDungeon);
     gameEventBus.off(GameEvent.CURIO_CHOICE, this.handleCurioChoice);
     gameEventBus.off(GameEvent.CURIO_LEAVE, this.handleCurioLeave);
   }

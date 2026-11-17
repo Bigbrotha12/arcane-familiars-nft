@@ -5,6 +5,7 @@ import { getFamiliar } from '../../data/familiars';
 import { ActionType } from '../../types/battle';
 import { EffectType, StatName } from '../../data/abilities';
 import { getItem, describeItem, ITEMS, type ItemData } from '../../data/items';
+import { computeItemHeal, isFieldUsableItem } from '../items';
 import type { BattleFamiliar, BattleAction } from '../../types/battle';
 
 function makeRng(seed = 42): () => number {
@@ -100,6 +101,60 @@ describe('item data registry', () => {
   it('only drops items with a positive dropWeight into the treasure pool', () => {
     // lucky_coin has no dropWeight and must never drop.
     expect(getItem('lucky_coin')!.dropWeight).toBeUndefined();
+  });
+});
+
+describe('field-usable items', () => {
+  it('allows only pure healing and revive items', () => {
+    for (const id of [
+      'potion_small',
+      'potion_medium',
+      'potion_large',
+      'ether_small',
+      'elixir',
+      'mega_elixir',
+      'mana_dew',
+    ]) {
+      expect(isFieldUsableItem(getItem(id)!)).toBe(true);
+    }
+    expect(isFieldUsableItem(getItem('phoenix_feather')!)).toBe(true);
+
+    for (const id of [
+      'fire_bomb',
+      'frost_bomb',
+      'shock_bomb',
+      'tonic',
+      'antidote',
+      'greater_tonic',
+      'regen_draught',
+      'venom_flask',
+      'ward_scroll',
+      'focus_charm',
+      'lucky_coin',
+    ]) {
+      expect(isFieldUsableItem(getItem(id)!)).toBe(false);
+    }
+  });
+
+  it('rejects items with no effects', () => {
+    expect(isFieldUsableItem({ ...getItem('potion_small')!, effects: [] })).toBe(false);
+  });
+
+  it('computes field heals with the same per-effect math and caps', () => {
+    expect(computeItemHeal(getItem('potion_small')!.effects, { hp: 100, mp: 0 }, { hp: 120, mp: 0 })).toEqual({
+      hp: 20,
+      mp: 0,
+    });
+
+    expect(computeItemHeal(getItem('elixir')!.effects, { hp: 10, mp: 70 }, { hp: 120, mp: 80 })).toEqual({
+      hp: 40,
+      mp: 10,
+    });
+
+    expect(computeItemHeal(getItem('mega_elixir')!.effects, { hp: 100, mp: 40 }, { hp: 120, mp: 80 })).toEqual({
+      hp: 20,
+      mp: 40,
+    });
   });
 });
 

@@ -26,6 +26,7 @@ export * from '@/utils/activeRun';
 export * from '@/utils/progression';
 export * from '@/utils/learnset';
 export * from '@/utils/passives';
+export * from '@/utils/items';
 export * from '@/utils/runLoot';
 export * from '@/utils/runStats';
 export * from '@/utils/runSummary';

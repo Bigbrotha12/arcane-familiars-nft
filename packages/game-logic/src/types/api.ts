@@ -121,6 +121,23 @@ export interface CurioResponse {
   enemy?: string;
 }
 
+export interface UseFieldItemRequest {
+  anonymousId: string;
+  itemId: string;
+  /** Target for heal items; ignored by revive_party items. */
+  familiarId?: string;
+}
+
+export interface UseFieldItemResponse {
+  success: boolean;
+  partyHp: Record<string, number>;
+  partyMp: Record<string, number>;
+  runLoot: Inventory;
+  inventory: Inventory;
+  /** Human-readable result, e.g. "White Dog recovers 50 HP". */
+  text: string;
+}
+
 export interface ExitDungeonRequest {
   anonymousId: string;
 }

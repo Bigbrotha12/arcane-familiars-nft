@@ -25,6 +25,8 @@ export enum GameEvent {
   OVERLAY_MODE_CHANGED = 'game:overlayModeChanged',
   BATTLE_CONTINUE = 'game:battleContinue', // React → Phaser: user dismissed outcome, continue
   PARTY_SWAP_REQUESTED = 'game:partySwapRequested', // React → Phaser: promote familiarId to party lead (out of battle)
+  FIELD_USE_ITEM = 'game:fieldUseItem', // React → Phaser: use a field-usable item on a party familiar
+  LEAVE_DUNGEON = 'game:leaveDungeon', // React → Phaser: leave the dungeon from the entrance
   TOGGLE_MUTE = 'game:toggleMute', // React → Phaser: toggle music/SFX mute
   UI_SFX = 'game:uiSfx', // React → Phaser: play a UI sound
   SET_BATTLE_SPEED = 'game:setBattleSpeed', // React → Phaser: change battle turn playback speed
@@ -91,6 +93,8 @@ export interface GameStateSnapshot {
   battleLog?: string[];
   abilities?: AbilityOption[];
   items?: ItemOption[];
+  /** Field-usable items in run loot + bank, for the exploration item panel. */
+  fieldItems?: FieldItemSnapshot[];
   canSwap?: boolean;
   party?: FamiliarState[];
   activeId?: string;
@@ -139,6 +143,22 @@ export interface EliteSnapshot {
   name: string;
   /** What the affix does ("Defense ×1.5"). */
   description: string;
+}
+
+/** An item usable while exploring, with its combined run-loot + bank count. */
+export interface FieldItemSnapshot {
+  id: string;
+  name: string;
+  description: string;
+  /** Icon file under /assets/sprites/items/ (without extension). */
+  icon?: string;
+  quantity: number;
+}
+
+/** React → Phaser: use a field item, targeting a familiar for heals. */
+export interface FieldUseItemPayload {
+  itemId: string;
+  familiarId?: string;
 }
 
 /** What the explore response knows about a pending encounter, for the HUD. */

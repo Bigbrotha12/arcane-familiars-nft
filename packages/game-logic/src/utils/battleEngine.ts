@@ -12,6 +12,7 @@ import { AbilityData, ScalingStat, StatName, EffectType, Target } from '@/data/a
 import { getAbility } from '@/data/abilities';
 import { getItem, ItemType, STAT_LABELS, type ItemData } from '@/data/items';
 import { BALANCE, affinityEffectiveness, affinityMultiplier, type AffinityEffectiveness } from '@/data/balance';
+import { itemHealAmount } from '@/utils/items';
 import type { ActivePassive, PassiveId } from '@/data/passives';
 
 export function getEffectiveStat(baseStat: number, effects: StatusEffect[], statName: StatName): number {
@@ -701,22 +702,15 @@ function applyItemEffects(
 
   for (const effect of item.effects) {
     switch (effect.kind) {
-      case 'heal_hp': {
-        const amount = Math.round(effect.value * (1 + tidecaller));
-        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, amount));
-        hpHeal += healed;
-        descriptions.push(`restores ${healed} HP`);
-        break;
-      }
+      case 'heal_hp':
       case 'heal_percentage': {
-        const amount = Math.round(((source.familiarData.stats.maxHp * effect.percentage) / 100) * (1 + tidecaller));
-        const healed = Math.max(0, Math.min(source.familiarData.stats.maxHp - source.currentHp, amount));
+        const healed = itemHealAmount(effect, source.currentHp, source.familiarData.stats.maxHp, 1 + tidecaller);
         hpHeal += healed;
         descriptions.push(`restores ${healed} HP`);
         break;
       }
       case 'heal_mp': {
-        const restored = Math.max(0, Math.min(source.familiarData.stats.maxMp - source.currentMp, effect.value));
+        const restored = itemHealAmount(effect, source.currentMp, source.familiarData.stats.maxMp);
         mpHeal += restored;
         descriptions.push(`restores ${restored} MP`);
         break;

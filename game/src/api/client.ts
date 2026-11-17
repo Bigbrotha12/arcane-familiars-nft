@@ -11,6 +11,7 @@ import type {
   CharmInstance,
   CharmRoll,
   RunSummary,
+  UseFieldItemResponse,
 } from '@arcane-familiars/game-logic';
 
 // crypto.randomUUID only exists in secure contexts (HTTPS / localhost); fall
@@ -154,6 +155,14 @@ class GameApiClient {
       anonymousId: this.anonymousId,
       roomId,
       optionId,
+    });
+  }
+
+  async useFieldItem(itemId: string, familiarId?: string): Promise<UseFieldItemResponse> {
+    return this.request('POST', '/api/game/dungeon/use-item', {
+      anonymousId: this.anonymousId,
+      itemId,
+      ...(familiarId ? { familiarId } : {}),
     });
   }
 

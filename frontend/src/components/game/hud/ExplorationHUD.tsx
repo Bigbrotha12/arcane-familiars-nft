@@ -3,6 +3,7 @@
 // (encounter/treasure/boss). Fully presentational: receives a GameStateSnapshot
 // and emits callbacks — GamePage owns event-bus wiring (Step 6).
 
+import { useEffect, useState } from 'react';
 import MiniMap from './MiniMap';
 import RoomInfo from './RoomInfo';
 import CombinedControlsPanel from './CombinedControlsPanel';
@@ -10,6 +11,9 @@ import EncounterOverlay from './EncounterOverlay';
 import TreasureOverlay from './TreasureOverlay';
 import CurioOverlay from './CurioOverlay';
 import BossOverlay from './BossOverlay';
+import FieldItemPanel from './FieldItemPanel';
+import Modal from '@/components/ui/Modal';
+import Button from '@/components/ui/Button';
 import type { ActionBarItem } from './ActionBar';
 import type { GameStateSnapshot } from '@/game';
 
@@ -38,7 +42,11 @@ interface ExplorationHUDProps {
   onCurioChoice: (optionId: string) => void;
   onCurioLeave: () => void;
   onCurioContinue: () => void;
+  onFieldUseItem: (itemId: string, familiarId?: string) => void;
+  onLeaveDungeon: () => void;
 }
+
+type ExplorationPanel = 'items' | 'leave' | null;
 
 function ExplorationHUD({
   snapshot,
@@ -50,13 +58,11 @@ function ExplorationHUD({
   onCurioChoice,
   onCurioLeave,
   onCurioContinue,
+  onFieldUseItem,
+  onLeaveDungeon,
 }: ExplorationHUDProps) {
-  if (snapshot.currentScene !== 'exploration' || !snapshot.dungeon) {
-    return null;
-  }
-
-  const dungeon = snapshot.dungeon;
-  const currentRoom = dungeon.rooms.find((r) => r.id === dungeon.currentRoomId) ?? null;
+  const [panel, setPanel] = useState<ExplorationPanel>(null);
+  const sceneKey = snapshot.currentScene;
   const overlayActive =
     snapshot.encounterActive ||
     snapshot.treasureActive ||
@@ -64,7 +70,22 @@ function ExplorationHUD({
     Boolean(snapshot.curio) ||
     Boolean(snapshot.curioResult);
 
-  const exitActions: ActionBarItem[] = (currentRoom?.exits ?? [])
+  // Panels are local to one exploration screen: leaving the scene or an
+  // overlay taking over closes them so they cannot reappear stale.
+  useEffect(() => {
+    setPanel(null);
+  }, [sceneKey, overlayActive]);
+
+  if (sceneKey !== 'exploration' || !snapshot.dungeon) {
+    return null;
+  }
+
+  const dungeon = snapshot.dungeon;
+  const currentRoom = dungeon.rooms.find((r) => r.id === dungeon.currentRoomId) ?? null;
+  const atEntrance = currentRoom?.type === 'Start';
+  const fieldItemCount = (snapshot.fieldItems ?? []).reduce((total, item) => total + item.quantity, 0);
+
+  const controls: ActionBarItem[] = (currentRoom?.exits ?? [])
     .filter((exit, index, all) => all.findIndex((e) => e.roomId === exit.roomId) === index)
     .map((exit) => ({
       key: exit.roomId,
@@ -72,6 +93,23 @@ function ExplorationHUD({
       icon: getDirectionIcon(exit.direction),
       onClick: () => onNavigate(exit.roomId),
     }));
+
+  controls.push({
+    key: 'items',
+    label: 'Items',
+    icon: '🎒',
+    hint: fieldItemCount > 0 ? `${fieldItemCount} in bag` : 'none',
+    onClick: () => setPanel('items'),
+  });
+
+  if (atEntrance) {
+    controls.push({
+      key: 'leave-dungeon',
+      label: 'Leave dungeon',
+      icon: '🚪',
+      onClick: () => setPanel('leave'),
+    });
+  }
 
   return (
     <div className="pointer-events-none absolute inset-0 z-10">
@@ -88,7 +126,7 @@ function ExplorationHUD({
       {/* Combined bottom panel */}
       {!overlayActive && (
         <CombinedControlsPanel
-          actions={exitActions}
+          actions={controls}
           logEntries={snapshot.roomLog ?? []}
           party={snapshot.familiars}
           activeId={snapshot.activeId ?? snapshot.familiars[0]?.id}
@@ -125,6 +163,42 @@ function ExplorationHUD({
           activeId={snapshot.activeId}
         />
       ) : null}
+
+      <FieldItemPanel
+        open={panel === 'items' && !overlayActive}
+        items={snapshot.fieldItems ?? []}
+        party={snapshot.familiars}
+        onUse={(itemId, familiarId) => {
+          setPanel(null);
+          onFieldUseItem(itemId, familiarId);
+        }}
+        onClose={() => setPanel(null)}
+      />
+
+      <Modal
+        open={panel === 'leave' && !overlayActive}
+        onClose={() => setPanel(null)}
+        title="Leave dungeon"
+        hud
+        compact
+      >
+        <p className="font-body text-xs text-[#B8B5E0]">Leave the dungeon? You keep everything in your run loot.</p>
+        <div className="mt-sm flex gap-2">
+          <Button
+            variant="secondary"
+            className="flex-1 px-2 py-1 text-xs"
+            onClick={() => {
+              setPanel(null);
+              onLeaveDungeon();
+            }}
+          >
+            Leave
+          </Button>
+          <Button variant="ghost" className="flex-1 px-2 py-1 text-xs" onClick={() => setPanel(null)}>
+            Stay
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }

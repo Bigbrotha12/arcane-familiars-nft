@@ -170,6 +170,22 @@ export default function GamePage() {
     [playUiSfx]
   );
 
+  const handleFieldUseItem = useCallback(
+    (itemId: string, familiarId?: string) => {
+      playUiSfx('confirm');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.FIELD_USE_ITEM, {
+        itemId,
+        ...(familiarId ? { familiarId } : {}),
+      });
+    },
+    [playUiSfx]
+  );
+
+  const handleLeaveDungeon = useCallback(() => {
+    playUiSfx('confirm');
+    gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.LEAVE_DUNGEON);
+  }, [playUiSfx]);
+
   const handleToggleMute = useCallback(() => {
     setMuted((value) => !value);
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.TOGGLE_MUTE);
@@ -492,6 +508,8 @@ export default function GamePage() {
         onCurioChoice={handleCurioChoice}
         onCurioLeave={handleCurioLeave}
         onCurioContinue={handleCurioContinue}
+        onFieldUseItem={handleFieldUseItem}
+        onLeaveDungeon={handleLeaveDungeon}
       />
     </>
   ) : null;

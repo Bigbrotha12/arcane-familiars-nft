@@ -47,6 +47,7 @@ import {
   discardRunLoot,
   findOwnedItem,
   consumeOwnedItem,
+  reviveFaintedParty,
   rollChest,
   BattleResult,
   ActionType,
@@ -533,7 +534,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // actor can be KO'd before acting under speed-ordered turns).
     let stateEffectNote: string | undefined;
     let consumedItem: ItemData | undefined;
-    let faintedPartyIds: string[] = [];
     if (action.type === ActionType.Item && action.itemId) {
       const owned = findOwnedItem(state, action.itemId);
       if (!owned) {
@@ -554,7 +554,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
 
       consumedItem = item;
-      faintedPartyIds = fainted;
     }
 
     // Derive a per-turn RNG from the battle seed so each turn gets a distinct,
@@ -613,17 +612,8 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           stateEffectNote = `gains ${effect.value} currency`;
         }
         if (effect.kind === 'revive_party' && state.dungeon) {
-          for (const id of faintedPartyIds) {
-            const data = getFamiliar(id);
-            if (data) {
-              // Scale by the familiar's own level: reviving a levelled party
-              // member to level-1 base HP would weaken it (and make the item
-              // worse the more you invested in that familiar).
-              const maxHp = scaleFamiliarStats(data.stats, state.familiarLevels?.[id] ?? 1).maxHp;
-              state.dungeon.partyHp[id] = Math.max(1, Math.floor((maxHp * effect.percentage) / 100));
-            }
-          }
-          stateEffectNote = `revives ${faintedPartyIds.length} party member${faintedPartyIds.length === 1 ? '' : 's'}`;
+          const revived = reviveFaintedParty(state.dungeon, state.familiarLevels, effect.percentage);
+          stateEffectNote = `revives ${revived.length} party member${revived.length === 1 ? '' : 's'}`;
         }
       }
     }
