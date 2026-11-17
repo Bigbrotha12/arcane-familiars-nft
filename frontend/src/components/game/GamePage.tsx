@@ -9,6 +9,7 @@ import type {
   UiSfxName,
   CharmsPayload,
   RunSummaryPayload,
+  WorldAction,
 } from '@/game';
 import type { gameEventBus, GameEvent, BattleSpeed } from '@/game';
 import GameToolbar, { type SaveStatus } from '@/components/game/GameToolbar';
@@ -22,6 +23,8 @@ import { useCanvasRect } from '@/components/game/useCanvasRect';
 import Button from '@/components/ui/Button';
 import BattleHUD from '@/components/game/hud/BattleHUD';
 import ExplorationHUD from '@/components/game/hud/ExplorationHUD';
+import WorldMapHUD from '@/components/game/hud/WorldMapHUD';
+import TeamModal from '@/components/game/hud/TeamModal';
 import TipCard from '@/components/game/hud/TipCard';
 import GuidedHintCard from '@/components/game/hud/GuidedHintCard';
 import { useFirstTimeTips } from '@/components/game/hud/useFirstTimeTips';
@@ -56,6 +59,7 @@ export default function GamePage() {
   const lastLocationRef = useRef<{ areaName?: string; roomName?: string }>({});
   const [battleOutcome, setBattleOutcome] = useState<BattleEndedPayload | null>(null);
   const [charmsModal, setCharmsModal] = useState<CharmsPayload | null>(null);
+  const [teamOpen, setTeamOpen] = useState(false);
   const [runSummary, setRunSummary] = useState<RunSummaryPayload | null>(null);
   const [showExitModal, setShowExitModal] = useState(false);
   const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
@@ -191,6 +195,14 @@ export default function GamePage() {
     playUiSfx('confirm');
     gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.LEAVE_DUNGEON);
   }, [playUiSfx]);
+
+  const handleWorldAction = useCallback(
+    (action: WorldAction) => {
+      playUiSfx('click');
+      gameModuleRef.current?.gameEventBus.emit(gameModuleRef.current.GameEvent.WORLD_ACTION, { action });
+    },
+    [playUiSfx]
+  );
 
   const handleToggleMute = useCallback(() => {
     setMuted((value) => !value);
@@ -544,6 +556,9 @@ export default function GamePage() {
         onFieldUseItem={handleFieldUseItem}
         onLeaveDungeon={handleLeaveDungeon}
       />
+      {gameState.currentScene === 'world_map' && (
+        <WorldMapHUD snapshot={gameState} onAction={handleWorldAction} onOpenTeam={() => setTeamOpen(true)} />
+      )}
     </>
   ) : null;
 
@@ -669,6 +684,12 @@ export default function GamePage() {
         onEquip={handleCharmEquip}
         onSalvage={handleCharmSalvage}
         onClose={() => setCharmsModal(null)}
+      />
+
+      <TeamModal
+        open={teamOpen && gameState?.currentScene === 'world_map'}
+        roster={gameState?.roster ?? []}
+        onClose={() => setTeamOpen(false)}
       />
 
       <RunSummaryModal open={runSummary !== null} payload={runSummary} onClose={handleRunSummaryClose} />
