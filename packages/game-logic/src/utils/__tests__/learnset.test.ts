@@ -18,6 +18,21 @@ describe('abilitiesAtLevel', () => {
     expect(abilitiesAtLevel(dog, 20)).toEqual(['brave_2', 'sturdy_2', 'sunburst_2']);
   });
 
+  it('gives casters a real damaging move before their signature', () => {
+    const aqua = species('aquaSprite');
+    expect(abilitiesAtLevel(aqua, 1)).toEqual(['waterJet']);
+    expect(abilitiesAtLevel(aqua, 3)).toEqual(['waterJet', 'healpulse']);
+    expect(abilitiesAtLevel(aqua, 6)).toEqual(['waterJet', 'healpulse', 'sturdy']);
+    expect(abilitiesAtLevel(aqua, 9)).toEqual(['waterJet', 'healpulse', 'sturdy', 'tidalCrash']);
+    expect(abilitiesAtLevel(aqua, 12)).toEqual(['waterJet_2', 'healpulse_2', 'sturdy_2', 'tidalCrash_2']);
+
+    const petal = species('petalWisp');
+    expect(abilitiesAtLevel(petal, 1)).toEqual(['petalFlurry']);
+    expect(abilitiesAtLevel(petal, 3)).toEqual(['petalFlurry', 'healpulse']);
+    expect(abilitiesAtLevel(petal, 6)).toEqual(['petalFlurry', 'healpulse', 'purify', 'focus']);
+    expect(abilitiesAtLevel(petal, 9)).toEqual(['petalFlurry', 'healpulse', 'purify', 'focus', 'sunburst']);
+  });
+
   it('handles species with one, two, three and four base abilities', () => {
     const one = species('yellowFighter'); // brave
     expect(abilitiesAtLevel(one, 1)).toEqual(['brave']);

@@ -1,5 +1,6 @@
 import type { FamiliarStats } from '@/data/familiars';
 import type { GameState } from '@/types/gameState';
+import { BALANCE } from '@/data/balance';
 
 export const MAX_FAMILIAR_LEVEL = 20;
 
@@ -15,6 +16,15 @@ export function isNewPlayer(state: Pick<GameState, 'battleCount' | 'winCount'>):
 /** XP needed to go from `level` to `level + 1`. */
 export function xpToNextLevel(level: number): number {
   return 80 + (level - 1) * 40;
+}
+
+/**
+ * XP multiplier for a familiar that is at least two levels below the highest
+ * level among the player's owned familiars. Under-levelled familiars catch up
+ * faster than the rest of the party.
+ */
+export function catchUpXpMultiplier(level: number, highestOwnedLevel: number): number {
+  return level <= highestOwnedLevel - 2 ? BALANCE.catchUpXpMultiplier : 1;
 }
 
 /** Stat multiplier at a familiar level. Level 1 is the base kit. */

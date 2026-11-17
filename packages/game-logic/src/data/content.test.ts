@@ -13,10 +13,10 @@ describe('content catalog', () => {
     expect(Object.keys(FAMILIARS)).toHaveLength(25);
   });
 
-  it('ships 32 base abilities plus a rank-II variant of each', () => {
+  it('ships 34 base abilities plus a rank-II variant of each', () => {
     const baseIds = Object.keys(ABILITIES).filter((id) => !id.endsWith('_2'));
-    expect(baseIds).toHaveLength(32);
-    expect(Object.keys(ABILITIES)).toHaveLength(64);
+    expect(baseIds).toHaveLength(34);
+    expect(Object.keys(ABILITIES)).toHaveLength(68);
     for (const id of baseIds) expect(ABILITIES[`${id}_2`], `missing rank II for ${id}`).toBeDefined();
   });
 

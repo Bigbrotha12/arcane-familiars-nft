@@ -577,6 +577,72 @@ describe('resolveTurn', () => {
     expect(result.playerResult.value).toBe(36);
   });
 
+  it('reports the bench heal fraction for Heal Pulse and its rank-II variant', () => {
+    const player = makeFamiliar();
+    const enemy = makeFamiliar();
+    const rankI = resolveTurn(
+      { type: ActionType.Ability, abilityId: 'healpulse' },
+      player,
+      enemy,
+      { type: ActionType.Defend },
+      steadyRng()
+    );
+    expect(rankI.playerResult.benchHealFraction).toBeCloseTo(0.15);
+
+    const rankII = resolveTurn(
+      { type: ActionType.Ability, abilityId: 'healpulse_2' },
+      player,
+      enemy,
+      { type: ActionType.Defend },
+      steadyRng()
+    );
+    expect(rankII.playerResult.benchHealFraction).toBeCloseTo(0.18);
+  });
+
+  it('applies Tidecaller to the bench heal fraction and never reports one for enemies', () => {
+    const player = makeFamiliar();
+    const enemy = makeFamiliar();
+    const result = resolveTurn(
+      { type: ActionType.Ability, abilityId: 'healpulse' },
+      player,
+      enemy,
+      { type: ActionType.Defend },
+      steadyRng(),
+      [{ id: 'tidecaller', tier: 1, value: 0.15, sourceFamiliarId: 'aquaSprite' }]
+    );
+    expect(result.playerResult.benchHealFraction).toBeCloseTo(0.3 * 0.5 * 1.15);
+
+    const enemyHeal = resolveTurn(
+      { type: ActionType.Attack },
+      player,
+      enemy,
+      { type: ActionType.Ability, abilityId: 'healpulse' },
+      steadyRng()
+    );
+    expect(enemyHeal.enemyResult.benchHealFraction).toBeUndefined();
+  });
+
+  it('resolves a slower player potion before the enemy can hit', () => {
+    const player = makeFamiliar({
+      familiarData: getFamiliar('aquaSprite')!, // speed 55 < leafBunny 65
+      currentHp: 20,
+      currentMp: 100,
+    });
+    const enemy = makeFamiliar({ familiarData: getFamiliar('leafBunny')!, currentHp: 110 });
+    const result = resolveTurn(
+      { type: ActionType.Item, itemId: 'potion_small' },
+      player,
+      enemy,
+      { type: ActionType.Attack },
+      steadyRng()
+    );
+    // The potion heals 20 -> 50 first, so the 33-damage hit no longer KOs.
+    expect(result.steps.map((step) => step.actorUid)).toEqual([player.uid, enemy.uid]);
+    expect(result.canceledActions).toHaveLength(0);
+    expect(result.playerResult.effectType).toBe(EffectType.Heal);
+    expect(result.updatedPlayerFamiliar.currentHp).toBe(50 - expectedDamage(50, 50, 1.0));
+  });
+
   it('applies shadowstrike debuff to the enemy via updatedEnemyFamiliar', () => {
     const rng = makeRng(42);
     const player = makeFamiliar();

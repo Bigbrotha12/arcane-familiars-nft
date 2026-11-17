@@ -310,16 +310,20 @@ export function resolveTurn(
     StatName.Speed
   );
 
-  const ordered: Array<{ who: 'player' | 'enemy'; action: BattleAction }> =
-    playerSpeed >= enemySpeed
-      ? [
-          { who: 'player', action: playerAction },
-          { who: 'enemy', action: enemyAction },
-        ]
-      : [
-          { who: 'enemy', action: enemyAction },
-          { who: 'player', action: playerAction },
-        ];
+  // Items always go first for the player, regardless of speed (like many
+  // monster RPGs): a potion must land before the blow that would have KO'd
+  // its user. Every other player action keeps speed ordering.
+  const playerActsFirst = playerAction.type === ActionType.Item || playerSpeed >= enemySpeed;
+
+  const ordered: Array<{ who: 'player' | 'enemy'; action: BattleAction }> = playerActsFirst
+    ? [
+        { who: 'player', action: playerAction },
+        { who: 'enemy', action: enemyAction },
+      ]
+    : [
+        { who: 'enemy', action: enemyAction },
+        { who: 'player', action: playerAction },
+      ];
 
   // Defend is a stance for the WHOLE turn, decided before initiative is
   // resolved: a guard applies even to a hit that lands before the guarding
@@ -1121,6 +1125,14 @@ function executeAbility(
 
     const statusEffects = scaleStatuses();
 
+    // Heal Pulse also mends the bench. The engine does not know the backup's
+    // identity or level-scaled max HP, so it reports the fraction the backend
+    // should apply to the living non-fighting party member: half the heal the
+    // ability computes for that member (15% at rank I).
+    const isHealPulse = ability.id === 'healpulse' || ability.id === 'healpulse_2';
+    const benchHealFraction =
+      isHealPulse && source.uid === runtime.playerUid ? ability.multiplier * 0.5 * (1 + tidecaller) : undefined;
+
     return {
       effectType: EffectType.Heal,
       targetId: target.uid,
@@ -1128,6 +1140,7 @@ function executeAbility(
       isCritical: false,
       description: `${source.familiarData.name} uses ${ability.name} to restore ${healAmount} HP`,
       appliedEffects: statusEffects,
+      ...(benchHealFraction !== undefined ? { benchHealFraction } : {}),
     };
   }
 

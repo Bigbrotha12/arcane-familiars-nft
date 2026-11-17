@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest';
 import {
   MAX_FAMILIAR_LEVEL,
   applyFamiliarXp,
+  catchUpXpMultiplier,
   familiarLevelMultiplier,
   scaleFamiliarStats,
   xpToNextLevel,
 } from '../progression';
 import { getFamiliar } from '../../data/familiars';
+import { BALANCE } from '../../data/balance';
 
 describe('familiar progression', () => {
   it('levels up when enough XP is awarded', () => {
@@ -40,5 +42,18 @@ describe('familiar progression', () => {
     const scaled = scaleFamiliarStats(base, 10);
     expect(scaled.hp).toBeGreaterThan(base.hp);
     expect(scaled.attack).toBeGreaterThan(base.attack);
+  });
+});
+
+describe('catch-up XP', () => {
+  it('boosts a familiar at least two levels below the highest owned level', () => {
+    expect(catchUpXpMultiplier(1, 3)).toBe(BALANCE.catchUpXpMultiplier);
+    expect(catchUpXpMultiplier(4, 6)).toBe(BALANCE.catchUpXpMultiplier);
+  });
+
+  it('does not boost a familiar within one level of the highest', () => {
+    expect(catchUpXpMultiplier(2, 3)).toBe(1);
+    expect(catchUpXpMultiplier(3, 3)).toBe(1);
+    expect(catchUpXpMultiplier(4, 5)).toBe(1);
   });
 });

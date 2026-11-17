@@ -243,11 +243,13 @@ function BattleOutcome({ outcome, party = [], onContinue, onRecruitSwap }: Battl
               {rewards.xp ? (
                 <RewardLine index={lineIndex++} entered={entered} className="text-accent">
                   +{rewards.xp} XP · {rewards.activeFamiliarName ?? 'Active familiar'}
+                  {rewards.xpCatchUp ? ' (catch-up)' : ''}
                 </RewardLine>
               ) : null}
               {rewards.benchXp ? (
                 <RewardLine index={lineIndex++} entered={entered} className="text-[#B8B5E0]">
                   +{rewards.benchXp} XP · {rewards.benchFamiliarName ?? rewards.benchFamiliarId ?? 'Bench'} (bench)
+                  {rewards.benchXpCatchUp ? ' (catch-up)' : ''}
                 </RewardLine>
               ) : null}
               {levelUps.map((entry) => (

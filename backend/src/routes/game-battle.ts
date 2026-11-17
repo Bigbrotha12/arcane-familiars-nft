@@ -38,6 +38,7 @@ import {
   MAX_FAMILIAR_LEVEL,
   applyElite,
   isNewPlayer,
+  catchUpXpMultiplier,
   getRunLoot,
   getRunStats,
   buildRunSummary,
@@ -260,6 +261,15 @@ function battlePassives(state: GameState) {
 
 function relayInstinctDiscount(passives: ReturnType<typeof battlePassives>): number | undefined {
   return passives.find((passive) => passive.id === 'relayInstinct')?.value;
+}
+
+/** Highest familiar level among everything the player owns (minimum 1). */
+function highestOwnedLevel(state: GameState): number {
+  let highest = 1;
+  for (const id of state.playerFamiliars ?? []) {
+    highest = Math.max(highest, state.familiarLevels?.[id] ?? 1);
+  }
+  return highest;
 }
 
 /**
@@ -618,6 +628,44 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
+    // Heal Pulse also mends the bench. The engine reports only the fraction;
+    // apply it to the living non-fighting party member using that member's own
+    // level-scaled max HP, then mirror the recovery as its own log step right
+    // after the heal (like other extra effects).
+    let benchHealed: BattleTurnResult['benchHealed'];
+    if (state.dungeon && playerActed) {
+      const healStep = turnSteps.find(
+        (step) => step.actorUid === actingPlayerUid && (step.result.benchHealFraction ?? 0) > 0
+      );
+      const fraction = healStep?.result.benchHealFraction ?? 0;
+      if (healStep && fraction > 0) {
+        const partyIds = state.dungeon.party?.length ? state.dungeon.party : (state.activeParty ?? []);
+        const benchId = partyIds.find((id) => id !== actingFamiliarId && (state.dungeon?.partyHp[id] ?? 0) > 0);
+        const currentHp = benchId ? state.dungeon.partyHp[benchId] : undefined;
+        const base = benchId ? getFamiliar(benchId) : undefined;
+        if (benchId && base && typeof currentHp === 'number') {
+          const maxHp = scaleFamiliarStats(base.stats, state.familiarLevels?.[benchId] ?? 1).maxHp;
+          const amount = Math.max(0, Math.min(Math.round(maxHp * fraction), maxHp - currentHp));
+          if (amount > 0) {
+            state.dungeon.partyHp[benchId] = currentHp + amount;
+            benchHealed = { familiarId: benchId, name: base.name, amount };
+            turnSteps.splice(turnSteps.indexOf(healStep) + 1, 0, {
+              actorUid: healStep.actorUid,
+              result: {
+                effectType: EffectType.Heal,
+                targetId: healStep.result.targetId,
+                value: 0,
+                isCritical: false,
+                description: `${base.name} recovers ${amount} HP`,
+              },
+              playerAfter: healStep.playerAfter,
+              enemyAfter: healStep.enemyAfter,
+            });
+          }
+        }
+      }
+    }
+
     battle.playerFamiliar = updateCooldowns(
       updatedPlayerFamiliar,
       playerActed && action.type === ActionType.Ability ? action.abilityId : undefined
@@ -667,8 +715,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
 
     let rewards: BattleRewards | undefined;
     let xpGained = 0;
+    let xpCatchUp = false;
     let levelUps = 0;
-    let benchReward: Pick<BattleRewards, 'benchXp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
+    let benchReward: Pick<BattleRewards, 'benchXp' | 'benchXpCatchUp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
     let learned: NonNullable<BattleRewards['learned']> = [];
     let passiveUnlockList: NonNullable<BattleRewards['passiveUnlocks']> = [];
     let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
@@ -691,14 +740,19 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       const activeId = battle.playerFamiliar.familiarData.id;
       // XP is derived from the level the enemy was actually scaled to. Legacy
       // battles persisted before enemyLevel existed fall back to level 1.
-      xpGained = battleXp(battle.enemyLevel ?? 1, battle.isBoss);
-      // Elites are worth more XP (and, below, double coins plus a rare chest).
-      if (battle.enemyFamiliar.elite && !battle.isBoss) {
-        xpGained = Math.round(xpGained * BALANCE.eliteXpMultiplier);
-      }
+      const baseXp =
+        battle.isBoss || !battle.enemyFamiliar.elite
+          ? battleXp(battle.enemyLevel ?? 1, battle.isBoss)
+          : Math.round(battleXp(battle.enemyLevel ?? 1, battle.isBoss) * BALANCE.eliteXpMultiplier);
+      // Catch-up is measured against the party's best level BEFORE this award,
+      // so a familiar two levels behind earns a boosted share of the same fight.
+      const highestLevel = highestOwnedLevel(state);
       state.familiarLevels ??= {};
       state.familiarXp ??= {};
       const activeLevelBefore = state.familiarLevels[activeId] ?? 1;
+      const activeMultiplier = catchUpXpMultiplier(activeLevelBefore, highestLevel);
+      xpGained = Math.round(baseXp * activeMultiplier);
+      xpCatchUp = activeMultiplier > 1;
       const progress = applyFamiliarXp(activeLevelBefore, state.familiarXp[activeId] ?? 0, xpGained);
       state.familiarLevels[activeId] = progress.level;
       state.familiarXp[activeId] = progress.xp;
@@ -711,12 +765,14 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(activeId, activeLevelBefore, progress.level));
 
       // The party member who did not land the winning blow still gains a
-      // reduced share, so swapping/relaying does not starve the bench.
+      // reduced share, so swapping/relaying does not starve the bench. Its own
+      // catch-up multiplier applies to that share.
       const benchId = (state.activeParty ?? []).find((id) => id !== activeId);
       if (benchId) {
-        const benchXp = Math.round(xpGained * BALANCE.benchXpShare);
+        const benchLevelBefore = state.familiarLevels[benchId] ?? 1;
+        const benchMultiplier = catchUpXpMultiplier(benchLevelBefore, highestLevel);
+        const benchXp = Math.round(Math.round(baseXp * BALANCE.benchXpShare) * benchMultiplier);
         if (benchXp > 0) {
-          const benchLevelBefore = state.familiarLevels[benchId] ?? 1;
           const benchProgress = applyFamiliarXp(benchLevelBefore, state.familiarXp[benchId] ?? 0, benchXp);
           state.familiarLevels[benchId] = benchProgress.level;
           state.familiarXp[benchId] = benchProgress.xp;
@@ -728,6 +784,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(benchId, benchLevelBefore, benchProgress.level));
           benchReward = {
             benchXp,
+            ...(benchMultiplier > 1 ? { benchXpCatchUp: true } : {}),
             benchFamiliarId: benchId,
             benchLevelUp: benchProgress.levelsGained,
           };
@@ -908,6 +965,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     if (xpGained > 0) {
       const xpReward = {
         xp: xpGained,
+        ...(xpCatchUp ? { xpCatchUp: true } : {}),
         levelUp: levelUps,
         ...benchReward,
         ...(learned.length > 0 ? { learned } : {}),
@@ -927,6 +985,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       steps: turnSteps,
       canceledActions,
       forcedSwap,
+      benchHealed,
     };
 
     // State-level item effects resolve outside the engine; surface them in
