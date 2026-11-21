@@ -1,0 +1,9 @@
+Works: "Fire Rpg background", "Blue Ocean Rpg background", "Temple background", "Forest scene"
+Author: Ironthunder (https://opengameart.org/users/ironthunder)
+Source: https://opengameart.org/content/fire-rpg-background
+        https://opengameart.org/content/blue-ocean-rpg-background
+        https://opengameart.org/content/temple-background
+        https://opengameart.org/content/forest-scene
+Licence: Creative Commons Attribution 4.0 International (CC BY 4.0)
+         https://creativecommons.org/licenses/by/4.0/
+Changes: cropped, resized, colour-graded; see docs/assets/CREDITS.md.

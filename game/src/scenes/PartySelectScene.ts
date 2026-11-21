@@ -1,6 +1,23 @@
 import Phaser from 'phaser';
 import type { GameState } from '@arcane-familiars/game-logic';
-import { FAMILIARS, getAbility, Affinity, AREAS, validateParty } from '@arcane-familiars/game-logic';
+import {
+  FAMILIARS,
+  getAbility,
+  abilitiesAtLevel,
+  learnSchedule,
+  Affinity,
+  AREAS,
+  BALANCE,
+  PASSIVES,
+  passiveTier,
+  passiveTierRoman,
+  passiveCombos,
+  validateParty,
+  scaleFamiliarStats,
+  applyCharm,
+  equippedCharm,
+  charmName,
+} from '@arcane-familiars/game-logic';
 import { gameApiClient } from '../api/client';
 import { SCENE_KEYS } from '../constants/scenes';
 import { gameEventBus } from '../event-bus';
@@ -8,10 +25,14 @@ import { GameEvent } from '../events';
 import type { GameStateSnapshot } from '../events';
 import { Layout } from '../ui/layout';
 import { preloadFamiliarPortraits } from '../sprites/loader';
-import { familiarTextureKey } from '../sprites/registry';
+import { AFFINITY_COLORS, safeFamiliarTextureKey } from '../sprites/registry';
+import { audioManager } from '../audio/manager';
+import { fadeIn, fadeToScene } from '../ui/transitions';
 
 interface PartySelectData {
   areaId: string;
+  /** Enter the day's shared expedition after party selection. */
+  daily?: boolean;
 }
 
 interface FamiliarCard {
@@ -20,6 +41,11 @@ interface FamiliarCard {
   border: Phaser.GameObjects.Rectangle;
   bg: Phaser.GameObjects.Rectangle;
   container: Phaser.GameObjects.Container;
+  /** Primary selection ring, shown only while the card is selected. */
+  ring: Phaser.GameObjects.Rectangle;
+  /** Lead / Backup pill; blank until the card is selected. */
+  orderBadge: Phaser.GameObjects.Text;
+  orderBadgeBg: Phaser.GameObjects.Rectangle;
 }
 
 const LAYOUT = {
@@ -34,10 +60,13 @@ const LAYOUT = {
   CONFIRM_BUTTON_Y_OFFSET: 30,
   BACK_MARGIN: 30,
   NAME_OFFSET_Y: 12,
-  AFFINITY_OFFSET_Y: 24,
+  AFFINITY_OFFSET_Y: 30,
   STATS_OFFSET_Y: 48,
+  CHARM_OFFSET_Y: 124,
   ABILITIES_LABEL_OFFSET_Y: 165,
   ABILITIES_TEXT_OFFSET_Y: 180,
+  NEXT_ABILITY_OFFSET_Y: 204,
+  PASSIVE_OFFSET_Y: 216,
   CARD_BORDER_WIDTH: 2,
   CARD_STROKE_WIDTH: 1,
 } as const;
@@ -56,25 +85,73 @@ const COLORS = {
   TEXT_ENABLED: '#F0EFFF',
   TEXT_HOVER: '#F0EFFF',
   ERROR: '#EF4444',
+  NEW_TAG: 0xf472b6,
+  NEW_TAG_TEXT: '#F472B6',
+  PASSIVE_UNLOCKED: '#2DD4BF',
+  PASSIVE_COMBO: '#F472B6',
 } as const;
+
+/** Rarity colours from DESIGN.md, matching the React charm rows. */
+const CHARM_RARITY_COLORS: Record<string, string> = {
+  common: '#A5A3C4',
+  uncommon: '#2DD4BF',
+  rare: '#F472B6',
+};
 
 const MAX_SAVE_ATTEMPTS = 3;
 const RETRY_DELAY_MS = 1000;
 const MAX_PARTY_SIZE = 2;
 const DEFAULT_FALLBACK_FAMILIARS = ['whiteDog', 'yellowFighter'];
+const SEEN_FAMILIARS_KEY = 'af_seen_familiars';
+
+/**
+ * Seen ids are best-effort; private browsing or disabled storage must not throw.
+ * Returns null when nothing has been stored yet (first visit).
+ */
+function loadSeenFamiliars(): Set<string> | null {
+  try {
+    const raw = localStorage.getItem(SEEN_FAMILIARS_KEY);
+    if (!raw) return null;
+    const parsed: unknown = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return new Set();
+    return new Set(parsed.filter((id): id is string => typeof id === 'string'));
+  } catch {
+    // Unreadable storage: treat as a first visit so tags never get stuck on.
+    return null;
+  }
+}
+
+function saveSeenFamiliars(seen: Set<string>): void {
+  try {
+    localStorage.setItem(SEEN_FAMILIARS_KEY, JSON.stringify([...seen]));
+  } catch {
+    // Storage unavailable: the NEW tag simply reappears next session.
+  }
+}
 
 export class PartySelectScene extends Phaser.Scene {
   private layout!: Layout;
   private areaId!: string;
+  private daily = false;
   private fullGameState: GameState | null = null;
   private cards: FamiliarCard[] = [];
   private cardMap: Map<string, FamiliarCard> = new Map();
   private selectedIds: string[] = [];
+  private allFamiliarIds: string[] = [];
+  private seenFamiliars: Set<string> = new Set();
+  /** First visit with no stored list: everything owned now is the baseline, not "new". */
+  private seenBaselineMissing = false;
+  private page = 0;
+  private readonly PAGE_SIZE = 4;
+  private pageText?: Phaser.GameObjects.Text;
+  private pagePrev?: Phaser.GameObjects.Text;
+  private pageNext?: Phaser.GameObjects.Text;
   private loadingText!: Phaser.GameObjects.Text;
   private confirmText!: Phaser.GameObjects.Text;
   private confirmBg!: Phaser.GameObjects.Rectangle;
   private backText!: Phaser.GameObjects.Text;
   private instructionText!: Phaser.GameObjects.Text;
+  private comboText?: Phaser.GameObjects.Text;
   private retryTimer: Phaser.Time.TimerEvent | null = null;
   private isSaving = false;
   private saveRetryCount = 0;
@@ -93,6 +170,14 @@ export class PartySelectScene extends Phaser.Scene {
     this.cards = [];
     this.cardMap.clear();
     this.selectedIds = [];
+    this.allFamiliarIds = [];
+    const storedSeen = loadSeenFamiliars();
+    this.seenFamiliars = storedSeen ?? new Set();
+    this.seenBaselineMissing = storedSeen === null;
+    this.page = 0;
+    this.pageText = undefined;
+    this.pagePrev = undefined;
+    this.pageNext = undefined;
     this.events.off('shutdown', this.onShutdown, this);
     this.events.on('shutdown', this.onShutdown, this);
 
@@ -102,6 +187,7 @@ export class PartySelectScene extends Phaser.Scene {
       return;
     }
     this.areaId = data.areaId;
+    this.daily = data.daily === true;
   }
 
   preload(): void {
@@ -110,8 +196,10 @@ export class PartySelectScene extends Phaser.Scene {
 
   async create(): Promise<void> {
     if (!this.areaId) return;
-
+    audioManager.playMusic('main');
+    audioManager.stopAmbience();
     this.layout = new Layout(this);
+    fadeIn(this);
 
     // Wire EventBus for save, exit, and scene change notification
     gameEventBus.on(GameEvent.SAVE_GAME, this.handleSave);
@@ -164,6 +252,17 @@ export class PartySelectScene extends Phaser.Scene {
       })
       .setOrigin(0.5);
 
+    this.comboText = this.add
+      .text(this.layout.x(400), confirmY - this.layout.s(46), '', {
+        fontSize: this.layout.font(10),
+        fontFamily: 'DM Sans',
+        color: COLORS.PASSIVE_COMBO,
+        align: 'center',
+        wordWrap: { width: this.layout.s(520) },
+      })
+      .setOrigin(0.5, 1)
+      .setVisible(false);
+
     this.backText = this.add
       .text(this.layout.x(LAYOUT.BACK_MARGIN), confirmY, '< Back', {
         fontSize: this.layout.font(14),
@@ -173,7 +272,8 @@ export class PartySelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
 
     this.backText.on('pointerdown', () => {
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      audioManager.playSfx('ui_cancel');
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     });
     this.backText.on('pointerover', () => this.backText.setColor(COLORS.TEXT_HOVER));
     this.backText.on('pointerout', () => this.backText.setColor(COLORS.SUBTITLE));
@@ -184,23 +284,17 @@ export class PartySelectScene extends Phaser.Scene {
 
       const state = result.state;
       this.fullGameState = state;
+      if (this.seenBaselineMissing) {
+        // Starters (or a save from before NEW tags existed) are not news.
+        for (const id of state.playerFamiliars ?? []) this.seenFamiliars.add(id);
+        saveSeenFamiliars(this.seenFamiliars);
+        this.seenBaselineMissing = false;
+      }
       const savedFamiliars = state.playerFamiliars || [];
       const validSavedFamiliars = savedFamiliars.filter((id) => FAMILIARS[id]);
 
-      // If signed in, merge on-chain owned familiars into the selectable pool
-      let availableFamiliars = validSavedFamiliars;
-      try {
-        const ownedFamiliars = await gameApiClient.getOwnedFamiliars();
-        if (ownedFamiliars.length > 0) {
-          const ownedValid = ownedFamiliars.filter((id) => FAMILIARS[id]);
-          const merged = new Set([...availableFamiliars, ...ownedValid]);
-          availableFamiliars = [...merged];
-        }
-      } catch {
-        // Non-fatal — proceed with state familiars only
-      }
-
-      const familiarIds = availableFamiliars.length >= MAX_PARTY_SIZE ? availableFamiliars : DEFAULT_FALLBACK_FAMILIARS;
+      const familiarIds =
+        validSavedFamiliars.length >= MAX_PARTY_SIZE ? validSavedFamiliars : DEFAULT_FALLBACK_FAMILIARS;
 
       this.loadingText.setAlpha(0);
       this.createFamiliarCards(familiarIds);
@@ -208,10 +302,9 @@ export class PartySelectScene extends Phaser.Scene {
       if (this._sceneGeneration !== gen) return;
 
       if (state.activeParty?.length) {
-        state.activeParty.forEach((id) => {
-          const card = this.cardMap.get(id);
-          if (card) this.toggleCard(card);
-        });
+        this.selectedIds = state.activeParty.filter((id) => this.allFamiliarIds.includes(id)).slice(0, MAX_PARTY_SIZE);
+        this.renderPage();
+        this.updateConfirmButton();
       }
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
@@ -247,18 +340,80 @@ export class PartySelectScene extends Phaser.Scene {
         .setInteractive({ useHandCursor: true });
 
       goBackText.on('pointerdown', () => {
-        this.scene.start(SCENE_KEYS.WORLD_MAP);
+        audioManager.playSfx('ui_cancel');
+        fadeToScene(this, SCENE_KEYS.WORLD_MAP);
       });
       goBackText.on('pointerover', () => goBackText.setColor(COLORS.TEXT_HOVER));
       goBackText.on('pointerout', () => goBackText.setColor(COLORS.SUBTITLE));
       return;
     }
 
-    const totalWidth = validFamiliars.length * LAYOUT.CARD_WIDTH + (validFamiliars.length - 1) * LAYOUT.CARD_GAP;
+    this.allFamiliarIds = validFamiliars;
+    this.page = 0;
+
+    this.pagePrev = this.add
+      .text(this.layout.x(320), this.layout.y(530), '< Prev', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.pagePrev.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.changePage(-1);
+    });
+
+    this.pageText = this.add
+      .text(this.layout.x(400), this.layout.y(530), '', {
+        fontSize: this.layout.font(12),
+        fontFamily: 'JetBrains Mono',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5);
+
+    this.pageNext = this.add
+      .text(this.layout.x(480), this.layout.y(530), 'Next >', {
+        fontSize: this.layout.font(13),
+        fontFamily: 'DM Sans',
+        color: COLORS.SUBTITLE,
+      })
+      .setOrigin(0.5)
+      .setInteractive({ useHandCursor: true });
+    this.pageNext.on('pointerdown', () => {
+      audioManager.playSfx('ui_click');
+      this.changePage(1);
+    });
+
+    this.renderPage();
+    this.setupConfirmButton();
+  }
+
+  private changePage(delta: number): void {
+    const maxPage = Math.max(0, Math.ceil(this.allFamiliarIds.length / this.PAGE_SIZE) - 1);
+    this.page = Math.min(maxPage, Math.max(0, this.page + delta));
+    this.renderPage();
+  }
+
+  private renderPage(): void {
+    for (const card of this.cards) {
+      card.container.destroy(true);
+    }
+    this.cards = [];
+    this.cardMap.clear();
+
+    const pageIds = this.allFamiliarIds.slice(this.page * this.PAGE_SIZE, (this.page + 1) * this.PAGE_SIZE);
+    const totalPages = Math.max(1, Math.ceil(this.allFamiliarIds.length / this.PAGE_SIZE));
+    this.pageText?.setText(`Page ${this.page + 1}/${totalPages}`);
+    this.pagePrev?.setAlpha(this.page > 0 ? 1 : 0.35);
+    this.pageNext?.setAlpha(this.page < totalPages - 1 ? 1 : 0.35);
+
+    const totalWidth = pageIds.length * LAYOUT.CARD_WIDTH + (pageIds.length - 1) * LAYOUT.CARD_GAP;
     const startX = this.layout.x((800 - totalWidth) / 2 + LAYOUT.CARD_WIDTH / 2);
 
-    validFamiliars.forEach((id, index) => {
+    pageIds.forEach((id, index) => {
       const familiar = FAMILIARS[id];
+      const selected = this.selectedIds.includes(id);
       const x = startX + index * this.layout.s(LAYOUT.CARD_WIDTH + LAYOUT.CARD_GAP);
 
       const bg = this.add.rectangle(
@@ -269,49 +424,132 @@ export class PartySelectScene extends Phaser.Scene {
         COLORS.CARD_BG
       );
       const border = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT));
-      border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
+      border.setStrokeStyle(
+        this.layout.s(LAYOUT.CARD_BORDER_WIDTH),
+        selected ? COLORS.SELECTED_BORDER : COLORS.CARD_BORDER
+      );
       border.setFillStyle(COLORS.CARD_BG);
+
+      // Primary selection ring: a thicker overlay stroke so the picked cards are
+      // unmistakable at a glance (the base border stays as the resting state).
+      const ring = this.add.rectangle(0, 0, this.layout.s(LAYOUT.CARD_WIDTH), this.layout.s(LAYOUT.CARD_HEIGHT));
+      ring.setStrokeStyle(this.layout.s(4), COLORS.SELECTED_BORDER);
+      ring.setVisible(selected);
 
       const container = this.add.container(x, this.layout.y(LAYOUT.CARD_Y), [border, bg]);
 
       const portrait = this.add.image(
         0,
         -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(70),
-        familiarTextureKey(id)
+        safeFamiliarTextureKey(this, id)
       );
       portrait.setDisplaySize(this.layout.s(110), this.layout.s(110));
       portrait.setDepth(1);
 
       const offsetY = -this.layout.s(LAYOUT.CARD_HEIGHT / 2) + this.layout.s(LAYOUT.NAME_OFFSET_Y) + this.layout.s(120);
 
+      const level = this.fullGameState?.familiarLevels?.[id] ?? 1;
+      const charm = equippedCharm(this.fullGameState, id);
+      const stats = applyCharm(scaleFamiliarStats(familiar.stats, level), charm);
+
       const nameText = this.add
         .text(0, offsetY, familiar.name, {
-          fontSize: this.layout.font(16),
+          fontSize: this.layout.font(15),
           fontFamily: 'Fredoka',
           fontStyle: '600',
           color: COLORS.TITLE,
         })
         .setOrigin(0.5, 0);
 
-      const affinityText = this.add
-        .text(
-          0,
-          offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y),
-          Affinity[familiar.affinity] ?? String(familiar.affinity),
-          {
-            fontSize: this.layout.font(11),
-            fontFamily: 'DM Sans',
-            color: COLORS.SUBTITLE,
-          }
+      // Level badge pinned to the portrait corner: prominent, monospaced data.
+      const cardRight = this.layout.s(LAYOUT.CARD_WIDTH / 2);
+      const cardTop = -this.layout.s(LAYOUT.CARD_HEIGHT / 2);
+      const levelBadgeText = this.add
+        .text(cardRight - this.layout.s(14), cardTop + this.layout.s(13), `Lv ${level}`, {
+          fontSize: this.layout.font(12),
+          fontFamily: 'JetBrains Mono',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(1, 0);
+      const levelBadgeBg = this.add
+        .rectangle(
+          cardRight - this.layout.s(8),
+          cardTop + this.layout.s(9),
+          levelBadgeText.width + this.layout.s(12),
+          this.layout.s(20),
+          COLORS.SELECTED_BORDER
         )
-        .setOrigin(0.5, 0);
+        .setOrigin(1, 0);
+
+      // NEW tag: owned but not yet seen on this screen. Pink accent matches the
+      // recruit callout from the old victory screen (DESIGN.md rarity colour).
+      const isNew = Boolean(this.fullGameState?.playerFamiliars?.includes(id)) && !this.seenFamiliars.has(id);
+      const newTagText = isNew
+        ? this.add
+            .text(-cardRight + this.layout.s(8), cardTop + this.layout.s(13), 'NEW', {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              fontStyle: '600',
+              color: COLORS.NEW_TAG_TEXT,
+            })
+            .setOrigin(0, 0)
+        : undefined;
+      const newTagBg = newTagText
+        ? this.add
+            .rectangle(
+              newTagText.x - this.layout.s(4),
+              newTagText.y - this.layout.s(2),
+              newTagText.width + this.layout.s(8),
+              this.layout.s(16),
+              COLORS.NEW_TAG,
+              0.22
+            )
+            .setOrigin(0, 0)
+            .setStrokeStyle(this.layout.s(1), COLORS.NEW_TAG, 0.9)
+        : undefined;
+
+      // Affinity chip: code-drawn pill + glyph dot in the affinity's palette colour.
+      const affinityName = Affinity[familiar.affinity] ?? String(familiar.affinity);
+      const affinityColor = AFFINITY_COLORS[affinityName] ?? 0xa5a3c4;
+      const chipY = offsetY + this.layout.s(LAYOUT.AFFINITY_OFFSET_Y);
+      const affinityLabel = this.add
+        .text(0, chipY, affinityName, {
+          fontSize: this.layout.font(11),
+          fontFamily: 'DM Sans',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(0, 0.5);
+      const chipWidth = affinityLabel.width + this.layout.s(26);
+      const chipBg = this.add
+        .rectangle(0, chipY, chipWidth, this.layout.s(18), affinityColor, 0.22)
+        .setStrokeStyle(this.layout.s(1), affinityColor, 0.9);
+      const chipGlyph = this.add.circle(-chipWidth / 2 + this.layout.s(9), chipY, this.layout.s(3), affinityColor);
+      affinityLabel.setPosition(chipGlyph.x + this.layout.s(7), chipY);
+
+      // Lead / Backup order badge: only visible once the card is selected.
+      const badgeTop = cardTop + this.layout.s(10);
+      const orderBadgeBg = this.add
+        .rectangle(0, badgeTop, this.layout.s(58), this.layout.s(20), COLORS.SELECTED_BORDER)
+        .setOrigin(0.5, 0)
+        .setVisible(selected);
+      const orderBadge = this.add
+        .text(0, badgeTop + this.layout.s(10), '', {
+          fontSize: this.layout.font(10),
+          fontFamily: 'DM Sans',
+          fontStyle: '500',
+          color: COLORS.TEXT_ENABLED,
+        })
+        .setOrigin(0.5, 0.5)
+        .setVisible(selected);
 
       const statsStr =
-        `HP: ${familiar.stats.hp}\n` +
-        `ATK: ${familiar.stats.attack}\n` +
-        `DEF: ${familiar.stats.defense}\n` +
-        `SPD: ${familiar.stats.speed}\n` +
-        `ARC: ${familiar.stats.arcane}`;
+        `HP: ${stats.hp}\n` +
+        `ATK: ${stats.attack}\n` +
+        `DEF: ${stats.defense}\n` +
+        `SPD: ${stats.speed}\n` +
+        `ARC: ${stats.arcane}`;
 
       const statsText = this.add
         .text(0, offsetY + this.layout.s(LAYOUT.STATS_OFFSET_Y), statsStr, {
@@ -323,12 +561,30 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
-      const abilityNames = familiar.abilities
+      const charmText = charm
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.CHARM_OFFSET_Y), `◆ ${charmName(charm)}`, {
+              fontSize: this.layout.font(10),
+              fontFamily: 'DM Sans',
+              fontStyle: '500',
+              color: CHARM_RARITY_COLORS[charm.rarity] ?? COLORS.SUBTITLE,
+              wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
+
+      const abilityNames = abilitiesAtLevel(familiar, level)
         .map((aId) => {
           const ability = getAbility(aId);
           return ability?.name || aId;
         })
         .join(', ');
+
+      const nextUnlock = learnSchedule(familiar).find((entry) => entry.level > level);
+      const nextAbilityName = nextUnlock ? (getAbility(nextUnlock.abilityId)?.name ?? nextUnlock.abilityId) : undefined;
+      const nextUnlockLabel =
+        nextUnlock && nextAbilityName ? `Next: ${nextAbilityName} at Lv ${nextUnlock.level}` : undefined;
 
       const abilitiesLabel = this.add
         .text(0, offsetY + this.layout.s(LAYOUT.ABILITIES_LABEL_OFFSET_Y), 'Abilities:', {
@@ -348,11 +604,70 @@ export class PartySelectScene extends Phaser.Scene {
         })
         .setOrigin(0.5, 0);
 
-      container.add([portrait, nameText, affinityText, statsText, abilitiesLabel, abilitiesText]);
+      const nextAbilityText = nextUnlockLabel
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.NEXT_ABILITY_OFFSET_Y), nextUnlockLabel, {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              color: COLORS.LABEL,
+              wordWrap: { width: this.layout.s(LAYOUT.CARD_WIDTH - 20) },
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
 
-      const card: FamiliarCard = { familiarId: id, selected: false, border, bg, container };
+      const passive = familiar.passive ? PASSIVES[familiar.passive] : undefined;
+      const tier = passiveTier(level);
+      const passiveLabel = passive
+        ? tier > 0
+          ? `Passive: ${passive.name} ${passiveTierRoman(tier as 1 | 2 | 3 | 4)}`
+          : `Passive: ${passive.name} at Lv ${BALANCE.passiveTierLevels[0]}`
+        : undefined;
+      const passiveText = passiveLabel
+        ? this.add
+            .text(0, offsetY + this.layout.s(LAYOUT.PASSIVE_OFFSET_Y), passiveLabel, {
+              fontSize: this.layout.font(9),
+              fontFamily: 'DM Sans',
+              color: tier > 0 ? COLORS.PASSIVE_UNLOCKED : COLORS.LABEL,
+              align: 'center',
+            })
+            .setOrigin(0.5, 0)
+        : undefined;
+
+      container.add([
+        portrait,
+        levelBadgeBg,
+        levelBadgeText,
+        nameText,
+        chipBg,
+        chipGlyph,
+        affinityLabel,
+        statsText,
+        ...(charmText ? [charmText] : []),
+        abilitiesLabel,
+        abilitiesText,
+        ...(nextAbilityText ? [nextAbilityText] : []),
+        ...(passiveText ? [passiveText] : []),
+        ring,
+        orderBadgeBg,
+        orderBadge,
+        ...(newTagBg ? [newTagBg] : []),
+        ...(newTagText ? [newTagText] : []),
+      ]);
+
+      const card: FamiliarCard = {
+        familiarId: id,
+        selected,
+        border,
+        bg,
+        container,
+        ring,
+        orderBadge,
+        orderBadgeBg,
+      };
       this.cards.push(card);
       this.cardMap.set(id, card);
+      this.updateSelectionVisual(card);
 
       border.setInteractive({ useHandCursor: true });
       border.on('pointerdown', () => {
@@ -369,14 +684,13 @@ export class PartySelectScene extends Phaser.Scene {
         }
       });
     });
-
-    this.setupConfirmButton();
   }
 
   private setupConfirmButton(): void {
     this.confirmBg.setInteractive({ useHandCursor: true });
     this.confirmBg.on('pointerdown', () => {
       if (this.selectedIds.length === MAX_PARTY_SIZE && !this.isSaving && !this._hasShownTerminalError) {
+        audioManager.playSfx('ui_confirm');
         this.confirmParty();
       }
     });
@@ -384,19 +698,40 @@ export class PartySelectScene extends Phaser.Scene {
 
   private toggleCard(card: FamiliarCard): void {
     if (card.selected) {
-      card.selected = false;
-      card.border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.CARD_BORDER);
-      card.border.setFillStyle(COLORS.CARD_BG);
+      audioManager.playSfx('ui_cancel', { volume: 0.7 });
       this.selectedIds = this.selectedIds.filter((id) => id !== card.familiarId);
     } else {
-      if (this.selectedIds.length >= MAX_PARTY_SIZE) return;
-      card.selected = true;
-      card.border.setStrokeStyle(this.layout.s(LAYOUT.CARD_BORDER_WIDTH), COLORS.SELECTED_BORDER);
-      card.border.setFillStyle(COLORS.CARD_BG);
+      if (this.selectedIds.length >= MAX_PARTY_SIZE) {
+        audioManager.playSfx('ui_error', { volume: 0.5 });
+        return;
+      }
+      audioManager.playSfx('ui_confirm', { volume: 0.7 });
       this.selectedIds.push(card.familiarId);
     }
 
+    // Re-derive every visible card: removing the lead promotes the backup, so
+    // the Lead / Backup badges must shift with the selection order.
+    for (const visible of this.cards) this.updateSelectionVisual(visible);
     this.updateConfirmButton();
+  }
+
+  /** Ring + order badge reflect this card's position in the selection order. */
+  private updateSelectionVisual(card: FamiliarCard): void {
+    const order = this.selectedIds.indexOf(card.familiarId);
+    const selected = order !== -1;
+    card.selected = selected;
+
+    card.ring.setVisible(selected);
+    card.orderBadgeBg.setVisible(selected);
+    card.orderBadge.setVisible(selected);
+    if (selected) {
+      card.orderBadge.setText(order === 0 ? 'LEAD' : order === 1 ? 'BACKUP' : '');
+    }
+    card.border.setStrokeStyle(
+      this.layout.s(selected ? 2 : LAYOUT.CARD_BORDER_WIDTH),
+      selected ? COLORS.SELECTED_BORDER : COLORS.CARD_BORDER
+    );
+    card.border.setFillStyle(COLORS.CARD_BG);
   }
 
   private updateConfirmButton(): void {
@@ -411,6 +746,28 @@ export class PartySelectScene extends Phaser.Scene {
     if (this.confirmBg.input) {
       this.confirmBg.input.enabled = ready;
     }
+
+    this.updatePassiveCombos();
+  }
+
+  /** Party-select combo hints: partner-only passive boosts for the chosen pair. */
+  private updatePassiveCombos(): void {
+    if (!this.comboText) return;
+
+    if (this.selectedIds.length !== MAX_PARTY_SIZE) {
+      this.comboText.setText('').setVisible(false);
+      return;
+    }
+
+    const [first, second] = this.selectedIds.map((id) => FAMILIARS[id]);
+    const levels = this.selectedIds.map((id) => this.fullGameState?.familiarLevels?.[id] ?? 1);
+    if (!first || !second) {
+      this.comboText.setText('').setVisible(false);
+      return;
+    }
+
+    const combos = passiveCombos(first, levels[0], second, levels[1]).slice(0, 2);
+    this.comboText.setText(combos.join('\n')).setVisible(combos.length > 0);
   }
 
   private async confirmParty(): Promise<void> {
@@ -424,8 +781,7 @@ export class PartySelectScene extends Phaser.Scene {
     }
 
     try {
-      const allFamiliarIds = this.cards.map((c) => c.familiarId);
-      const validation = validateParty(this.selectedIds, allFamiliarIds);
+      const validation = validateParty(this.selectedIds, this.allFamiliarIds);
       if (!validation.valid) {
         throw new Error(validation.error);
       }
@@ -433,11 +789,13 @@ export class PartySelectScene extends Phaser.Scene {
       await gameApiClient.setParty(this.selectedIds);
       if (this._sceneGeneration !== gen) return;
 
-      this.scene.start(SCENE_KEYS.EXPLORATION, { areaId: this.areaId });
+      this.markOwnedFamiliarsSeen();
+      fadeToScene(this, SCENE_KEYS.EXPLORATION, { areaId: this.areaId, ...(this.daily ? { daily: true } : {}) });
     } catch (err) {
       if (this._sceneGeneration !== gen) return;
 
       this.saveRetryCount++;
+      audioManager.playSfx('ui_error');
       const message = err instanceof Error ? err.message : 'Failed to save';
 
       if (this.saveRetryCount >= MAX_SAVE_ATTEMPTS) {
@@ -454,6 +812,19 @@ export class PartySelectScene extends Phaser.Scene {
         this.confirmParty();
       });
     }
+  }
+
+  /** Confirming the party counts as seeing every owned familiar. */
+  private markOwnedFamiliarsSeen(): void {
+    const owned = this.fullGameState?.playerFamiliars ?? [];
+    let changed = false;
+    for (const id of owned) {
+      if (!this.seenFamiliars.has(id)) {
+        this.seenFamiliars.add(id);
+        changed = true;
+      }
+    }
+    if (changed) saveSeenFamiliars(this.seenFamiliars);
   }
 
   private showSaveErrorWithGoBack(): void {
@@ -476,7 +847,7 @@ export class PartySelectScene extends Phaser.Scene {
       .setInteractive({ useHandCursor: true });
 
     goBackText.on('pointerdown', () => {
-      this.scene.start(SCENE_KEYS.WORLD_MAP);
+      fadeToScene(this, SCENE_KEYS.WORLD_MAP);
     });
     goBackText.on('pointerover', () => goBackText.setColor(COLORS.TEXT_HOVER));
     goBackText.on('pointerout', () => goBackText.setColor(COLORS.SUBTITLE));
@@ -500,7 +871,7 @@ export class PartySelectScene extends Phaser.Scene {
 
   private handleExit = (): void => {
     this.cleanupTimers();
-    this.scene.start(SCENE_KEYS.WORLD_MAP);
+    fadeToScene(this, SCENE_KEYS.WORLD_MAP);
   };
 
   private onShutdown(): void {

@@ -36,7 +36,9 @@ function renderArc(
   isActive: boolean,
   size: number = 80,
   nameOnTop: boolean = false,
-  labelAccessory?: ReactNode
+  labelAccessory?: ReactNode,
+  /** Phone HUD: no name/chip rows (there is no room for them at half scale). */
+  compact: boolean = false
 ) {
   const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;
   const mpRatio = familiar.maxMp > 0 ? Math.min(1, Math.max(0, familiar.mp / familiar.maxMp)) : 0;
@@ -70,7 +72,7 @@ function renderArc(
 
   return (
     <div className="flex flex-col items-center gap-1">
-      {nameOnTop && labelRow}
+      {!compact && nameOnTop && labelRow}
       <div className="relative" style={{ width: size, height: size }}>
         <svg width={size} height={size} className="-rotate-90">
           <circle
@@ -119,24 +121,42 @@ function renderArc(
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-0">
           <span
             className="font-mono font-bold tabular-nums drop-shadow-md"
-            style={{ color: textColor, fontSize: isActive ? '11px' : '8px' }}
+            style={{ color: textColor, fontSize: compact ? (isActive ? '20px' : '16px') : isActive ? '11px' : '8px' }}
           >
             {Math.max(0, Math.floor(familiar.hp))}
           </span>
-          <span className="font-mono tabular-nums" style={{ color: subtextColor, fontSize: isActive ? '8px' : '6px' }}>
+          <span
+            className="font-mono tabular-nums"
+            style={{ color: subtextColor, fontSize: compact ? (isActive ? '14px' : '11px') : isActive ? '8px' : '6px' }}
+          >
             {Math.max(0, Math.floor(familiar.mp))} MP
           </span>
         </div>
       </div>
-      {!nameOnTop && labelRow}
+      {!compact && !nameOnTop && labelRow}
     </div>
   );
+}
+
+/** True on phone-width viewports, where the HUD stage is scaled to ~half size. */
+function useIsPhone(): boolean {
+  const query = '(max-width: 639px)';
+  const [phone, setPhone] = useState(() => (typeof window === 'undefined' ? false : window.matchMedia(query).matches));
+  useEffect(() => {
+    const list = window.matchMedia(query);
+    const onChange = () => setPhone(list.matches);
+    list.addEventListener('change', onChange);
+    setPhone(list.matches);
+    return () => list.removeEventListener('change', onChange);
+  }, []);
+  return phone;
 }
 
 function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClick }: CircularArcPartyPanelProps) {
   const [swapPendingId, setSwapPendingId] = useState<string | null>(null);
 
   const interactive = typeof onSwapClick === 'function';
+  const compact = useIsPhone();
 
   // Hooks must run regardless of party contents (panel may render empty).
   const resolvedActiveId = activeId ?? party[0]?.id;
@@ -173,9 +193,15 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
   ) : undefined;
 
   return (
-    <div className="pointer-events-none flex flex-col items-center gap-1">
+    <div
+      className={`pointer-events-none flex items-center ${
+        compact ? 'flex-row justify-center gap-2' : 'flex-col gap-1'
+      }`}
+    >
       {/* Active familiar - larger, name on top, offset left */}
-      <div className="relative -ml-9">{renderArc(active, true, 64, true, activeChip)}</div>
+      <div className={compact ? 'relative' : 'relative -ml-9'}>
+        {renderArc(active, true, compact ? 88 : 58, true, compact ? undefined : activeChip, compact)}
+      </div>
 
       {/* Inactive familiar(s) - smaller, grayscale, offset right, almost touching.
           In interactive mode each card is a button promoting it to party lead.
@@ -196,8 +222,8 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
 
         if (!interactive || isFainted) {
           return (
-            <div key={familiar.id} className="relative -mr-9 -mt-0.5 opacity-60">
-              {renderArc(familiar, false, 50, false, swapBadge)}
+            <div key={familiar.id} className={compact ? 'relative opacity-60' : 'relative -mr-9 -mt-0.5 opacity-60'}>
+              {renderArc(familiar, false, compact ? 64 : 46, false, compact ? undefined : swapBadge, compact)}
             </div>
           );
         }
@@ -209,16 +235,22 @@ function CircularArcPartyPanel({ party, activeId, statusEffects = [], onSwapClic
             onClick={() => handleSwap(familiar.id)}
             disabled={swapPendingId === familiar.id}
             aria-label={`Make ${familiar.name} the active familiar`}
-            className="group pointer-events-auto relative -mr-9 -mt-0.5 flex cursor-pointer flex-col items-center rounded-md transition duration-150 ease-out hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60"
+            className={`group pointer-events-auto relative flex cursor-pointer flex-col items-center rounded-md transition duration-150 ease-out hover:-translate-y-px hover:brightness-110 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-accent disabled:cursor-not-allowed disabled:opacity-60 ${
+              compact ? '' : '-mr-9 -mt-0.5'
+            }`}
           >
-            {renderArc(familiar, false, 50, false, swapBadge)}
+            {renderArc(familiar, false, compact ? 64 : 46, false, compact ? undefined : swapBadge, compact)}
           </button>
         );
       })}
 
       {/* Shared status effects - horizontal, below inactive, wraps to 2 lines max */}
       {statusEffects.length > 0 && (
-        <div className="mt-1 flex max-w-[132px] flex-wrap items-center justify-center gap-1">
+        <div
+          className={`flex flex-wrap items-center justify-center gap-1 ${
+            compact ? 'max-w-[96px]' : 'mt-1 max-w-[132px]'
+          }`}
+        >
           {statusEffects.map((effect) => (
             <div
               key={effect.id}

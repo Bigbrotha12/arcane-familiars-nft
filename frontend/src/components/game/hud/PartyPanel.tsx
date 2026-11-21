@@ -14,7 +14,7 @@ function PartyPanel({ party, activeId }: PartyPanelProps) {
   const resolvedActiveId = activeId ?? party[0].id;
 
   return (
-    <div className="hud-frame pointer-events-none flex w-56 flex-col gap-2 rounded-md p-md">
+    <div className="hud-frame pointer-events-none flex w-56 flex-col gap-1.5 rounded-md p-3">
       {party.map((familiar) => {
         const isActive = familiar.id === resolvedActiveId;
         const hpRatio = familiar.maxHp > 0 ? Math.min(1, Math.max(0, familiar.hp / familiar.maxHp)) : 0;

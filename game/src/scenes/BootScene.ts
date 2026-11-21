@@ -1,6 +1,7 @@
 import Phaser from 'phaser';
 import { Layout } from '../ui/layout';
 import { SCENE_KEYS } from '../constants/scenes';
+import { audioManager } from '../audio/manager';
 
 export class BootScene extends Phaser.Scene {
   private readonly TRANSITION_DELAY_MS = 800;
@@ -12,7 +13,15 @@ export class BootScene extends Phaser.Scene {
 
   init(): void {}
 
+  preload(): void {
+    audioManager.preload(this, {
+      music: ['main'],
+      sfx: ['ui_click', 'ui_confirm', 'ui_cancel', 'ui_error', 'ui_hover'],
+    });
+  }
+
   create(): void {
+    audioManager.playMusic('main');
     const { width, height } = this.scale;
     const layout = new Layout(this);
 

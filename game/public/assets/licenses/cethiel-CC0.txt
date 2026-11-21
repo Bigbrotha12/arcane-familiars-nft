@@ -1,0 +1,6 @@
+Work: "Earth Impact - Magic Effect"
+Author: Cethiel
+Source: https://opengameart.org/content/earth-impact-magic-effect
+Licence: CC0 1.0 Universal (Public Domain Dedication)
+         https://creativecommons.org/publicdomain/zero/1.0/
+Changes: see docs/assets/CREDITS.md.

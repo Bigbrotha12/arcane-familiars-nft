@@ -19,6 +19,9 @@ export type {
   SwapFamiliarResponse,
   FleeBattleRequest,
   FleeBattleResponse,
+  BootstrapResponse,
+  AbandonBattleRequest,
+  AbandonBattleResponse,
 } from '@/types/api';
 export { ActionType, Outcome, BattleResult } from '@/types/battle';
 export type {

@@ -747,16 +747,16 @@ The `mainContainer` contains all duplicated chrome (navPanel, encounterPanel, tr
 Battle backgrounds are generated per-dungeon area and per-boss room using ComfyUI text-to-image workflows. Six images were generated matching the three areas and three boss encounters:
 
 - **Area backgrounds** (visible in non-boss battles):
-  - `verdund` — Verdant Meadow (soft sunlight, grassy hills)
+  - `verdant` — Verdant Meadow (sunlit green forest)
   - `crystal` — Crystal Caves (glowing crystals, bioluminal fungi)
   - `shadow` — Shadow Forest (twisted trees, moonlight, mist)
 
 - **Boss room backgrounds** (visible in boss battles):
-  - `meadow_guardian` — Meadow Guardian boss chamber (ancient stone ruins, glowing runes)
-  - `cave_warden` — Cave Warden boss chamber (crystal pillars, ethereal blue light)
+  - `cave_warden` — Cave Warden boss chamber (crystal pillars, ethereal blue light). The file originally shipped as `battle_bg_meadow_guardian.png`; the ice-knight art matches this prompt, not a meadow.
   - `shadow_lord` — Shadow Lord boss chamber (obsidian throne, shadow energy, ruby eyes)
+  - **no art** — Meadow Guardian. The remaining boss file showed a horned demon in a dead forest, which matches no boss; it is kept unreferenced as `battle_bg_unused_forest_demon.png`. Meadow Guardian falls back to the area wash until new art is generated through the asset pipeline.
 
-These 6 PNG images (800×600) are stored at `game/public/assets/battle_bg/` and loaded in `BattleScene.preload()`. The appropriate background is selected based on `areaId` (for regular battles) or `battleState.enemyFamiliar.familiarData.id` (for boss battles). The background image renders at **depth -2** with a semi-transparent dark rect (`0x000000`, alpha 0.5) at **depth -1** behind it — this darkens the background for readability while staying behind all UI elements (depth 0: hp/mp bars, familiar names, action buttons) and familiar sprites (depth 1), so nothing appears faded. The background is cleaned up when the battle ends or the scene shuts down.
+These 5 PNG images (800×600) are stored at `game/public/assets/battle_bg/` and loaded in `BattleScene.preload()`. The appropriate background is selected based on `areaId` (for regular battles) or `battleState.enemyFamiliar.familiarData.id` (for boss battles). Areas without generated art (Ember Hollow, Frostpeak Summit, Sunken Archive) deliberately fall back to an area-coloured wash using `area.bgColor` instead of borrowing another biome's image. The background image renders at **depth -2** with a semi-transparent dark rect (`0x000000`, alpha 0.5) at **depth -1** behind it — this darkens the background for readability while staying behind all UI elements (depth 0: hp/mp bars, familiar names, action buttons) and familiar sprites (depth 1), so nothing appears faded. The background is cleaned up when the battle ends or the scene shuts down.
 
 **Fix location:** `game/src/scenes/BattleScene.ts` — added `battleBackground` and `battleBackgroundOverlay` properties; loaded 6 battle background images in `preload()`; selected and displayed the appropriate background in `create()` based on area/boss state, using explicit depths (`bg` = -2, `overlay` = -1, UI = 0, sprites = 1) so the battle UI always renders on top of the background; cleaned up background in `handleContinue()`, `handleExit()`, and `onShutdown()`.
 

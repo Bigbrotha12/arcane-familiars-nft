@@ -5,6 +5,7 @@ import { getFamiliar } from '../../data/familiars';
 import { ActionType } from '../../types/battle';
 import { EffectType, StatName } from '../../data/abilities';
 import { getItem, describeItem, ITEMS, type ItemData } from '../../data/items';
+import { computeItemHeal, isFieldUsableItem } from '../items';
 import type { BattleFamiliar, BattleAction } from '../../types/battle';
 
 function makeRng(seed = 42): () => number {
@@ -44,25 +45,37 @@ function itemAction(itemId: string): BattleAction {
 }
 
 function useItem(item: ItemData, player = makePlayer(), enemy = makeEnemy()) {
-  const enemyAction: BattleAction = { type: ActionType.Defend };
+  // Run is inert in the engine (0 damage, no effects), so item assertions are
+  // not disturbed by the enemy's action. Defend would guard and halve bombs.
+  const enemyAction: BattleAction = { type: ActionType.Run };
   const result = resolveTurn(itemAction(item.id), player, enemy, enemyAction, makeRng());
   return result;
 }
 
 describe('item data registry', () => {
-  it('exposes all ten basic items', () => {
+  it('exposes the full item catalog', () => {
     expect(Object.keys(ITEMS).sort()).toEqual(
       [
+        'antidote',
         'elixir',
         'ether_large',
         'ether_small',
         'fire_bomb',
+        'focus_charm',
         'frost_bomb',
+        'greater_tonic',
         'lucky_coin',
+        'mana_dew',
+        'mega_elixir',
         'phoenix_feather',
+        'potion_large',
         'potion_medium',
         'potion_small',
+        'regen_draught',
+        'shock_bomb',
         'tonic',
+        'venom_flask',
+        'ward_scroll',
       ].sort()
     );
   });
@@ -88,6 +101,60 @@ describe('item data registry', () => {
   it('only drops items with a positive dropWeight into the treasure pool', () => {
     // lucky_coin has no dropWeight and must never drop.
     expect(getItem('lucky_coin')!.dropWeight).toBeUndefined();
+  });
+});
+
+describe('field-usable items', () => {
+  it('allows only pure healing and revive items', () => {
+    for (const id of [
+      'potion_small',
+      'potion_medium',
+      'potion_large',
+      'ether_small',
+      'elixir',
+      'mega_elixir',
+      'mana_dew',
+    ]) {
+      expect(isFieldUsableItem(getItem(id)!)).toBe(true);
+    }
+    expect(isFieldUsableItem(getItem('phoenix_feather')!)).toBe(true);
+
+    for (const id of [
+      'fire_bomb',
+      'frost_bomb',
+      'shock_bomb',
+      'tonic',
+      'antidote',
+      'greater_tonic',
+      'regen_draught',
+      'venom_flask',
+      'ward_scroll',
+      'focus_charm',
+      'lucky_coin',
+    ]) {
+      expect(isFieldUsableItem(getItem(id)!)).toBe(false);
+    }
+  });
+
+  it('rejects items with no effects', () => {
+    expect(isFieldUsableItem({ ...getItem('potion_small')!, effects: [] })).toBe(false);
+  });
+
+  it('computes field heals with the same per-effect math and caps', () => {
+    expect(computeItemHeal(getItem('potion_small')!.effects, { hp: 100, mp: 0 }, { hp: 120, mp: 0 })).toEqual({
+      hp: 20,
+      mp: 0,
+    });
+
+    expect(computeItemHeal(getItem('elixir')!.effects, { hp: 10, mp: 70 }, { hp: 120, mp: 80 })).toEqual({
+      hp: 40,
+      mp: 10,
+    });
+
+    expect(computeItemHeal(getItem('mega_elixir')!.effects, { hp: 100, mp: 40 }, { hp: 120, mp: 80 })).toEqual({
+      hp: 20,
+      mp: 40,
+    });
   });
 });
 
@@ -129,6 +196,21 @@ describe('item effects in battle', () => {
     expect(playerResult.targetId).not.toBe(updatedPlayerFamiliar.uid);
     expect(updatedEnemyFamiliar.currentHp).toBe(90 - 25);
     expect(updatedPlayerFamiliar.currentHp).toBe(60);
+  });
+
+  it('bomb damage is flat but is halved by an active guard', () => {
+    const enemy = makeEnemy(); // maxHp/hp 90
+    const { playerResult, updatedEnemyFamiliar } = resolveTurn(
+      itemAction('fire_bomb'),
+      makePlayer(),
+      enemy,
+      { type: ActionType.Defend },
+      makeRng()
+    );
+    // 25 * guardDamageTaken = 12.5 → 13
+    expect(updatedEnemyFamiliar.currentHp).toBe(90 - 13);
+    expect(playerResult.guarded).toBe(true);
+    expect(playerResult.description).toContain('(guarded)');
   });
 
   it('frost_bomb damages and slows the enemy', () => {

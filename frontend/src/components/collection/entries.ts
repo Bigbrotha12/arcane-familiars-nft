@@ -1,5 +1,13 @@
-import { Affinity, FAMILIARS, Rarity } from '@arcane-familiars/game-logic';
-import type { CatalogFamiliar } from '@/lib/collection';
+import {
+  Affinity,
+  FAMILIARS,
+  PASSIVES,
+  Rarity,
+  getAbility,
+  learnSchedule,
+  passiveDescription,
+} from '@arcane-familiars/game-logic';
+import type { FamiliarData } from '@arcane-familiars/game-logic';
 
 export interface FamiliarStats {
   hp: number;
@@ -19,6 +27,10 @@ export interface CollectionEntry {
   affinity?: string;
   image?: string;
   stats: FamiliarStats;
+  /** Compact learn schedule, e.g. "Lv 1 Brave · Lv 3 Sturdy · Lv 9 Sunburst · Lv 12 Rank II". */
+  learnset?: string;
+  /** Party passive summary, when the species has one. */
+  passive?: { name: string; description: string; maxDescription: string };
 }
 
 const EMPTY_STATS: FamiliarStats = { hp: 0, mp: 0, attack: 0, defense: 0, arcane: 0, speed: 0 };
@@ -27,6 +39,21 @@ const EMPTY_STATS: FamiliarStats = { hp: 0, mp: 0, attack: 0, defense: 0, arcane
 function humanizeId(id: string): string {
   const spaced = id.replace(/([a-z0-9])([A-Z])/g, '$1 $2');
   return spaced.charAt(0).toUpperCase() + spaced.slice(1);
+}
+
+/** Group a species' unlocks into one compact "Lv n A / B" segment per level. */
+export function learnsetLabel(species: FamiliarData): string {
+  const groups: { level: number; names: string[] }[] = [];
+  for (const entry of learnSchedule(species)) {
+    const name = entry.abilityId.endsWith('_2') ? 'Rank II' : (getAbility(entry.abilityId)?.name ?? entry.abilityId);
+    const group = groups.find((g) => g.level === entry.level);
+    if (group) {
+      if (!group.names.includes(name)) group.names.push(name);
+    } else {
+      groups.push({ level: entry.level, names: [name] });
+    }
+  }
+  return groups.map((group) => `Lv ${group.level} ${group.names.join(' / ')}`).join(' · ');
 }
 
 /**
@@ -39,28 +66,19 @@ export function portraitPath(id: string): string {
   return `/assets/sprites/familiars/${id}/${id}_portrait.png`;
 }
 
-/** Map a D1 catalog row (`GET /api/collection`) into a display entry. */
-export function catalogEntry(row: CatalogFamiliar): CollectionEntry {
+/** Species passive summary for the codex card (tier I and tier IV text). */
+function passiveSummary(species?: FamiliarData): CollectionEntry['passive'] {
+  if (!species?.passive) return undefined;
+  const passive = PASSIVES[species.passive];
   return {
-    id: `catalog-${row.familiar_id}`,
-    name: row.name,
-    description: row.description,
-    rarity: row.rarity,
-    affinity: row.affinity,
-    image: row.image,
-    stats: {
-      hp: row.hp,
-      mp: row.mp,
-      attack: row.attack,
-      defense: row.defense,
-      arcane: row.arcane,
-      speed: row.speed,
-    },
+    name: passive.name,
+    description: passiveDescription(passive, 1),
+    maxDescription: passiveDescription(passive, 4),
   };
 }
 
 /**
- * Map an owned species id (`GET /api/game/owned-familiars`) into a display entry
+ * Map an in-game familiar species id into a display entry
  * using the local game-logic metadata, which is the authoritative source for
  * name/stats/rarity/affinity. Unknown ids still render (with the styled
  * placeholder) so a newly added species never silently disappears from a
@@ -95,5 +113,7 @@ export function speciesEntry(id: string): CollectionEntry {
       arcane: data.stats.arcane,
       speed: data.stats.speed,
     },
+    learnset: learnsetLabel(data),
+    passive: passiveSummary(data),
   };
 }

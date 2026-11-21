@@ -3,6 +3,7 @@
 // highlighted; visited/start/boss/unvisited rooms use distinct colors. Includes
 // a legend row. Anchored top-left; non-interactive chrome.
 
+import { useState } from 'react';
 import type { DungeonSnapshot, DungeonRoomSnapshot } from '@/game';
 
 interface MiniMapProps {
@@ -20,7 +21,7 @@ const COLLISION_STEP = 0.5;
 const DISCONNECT_OFFSET = 30;
 const ORIGIN_X = 0;
 const ORIGIN_Y = 0;
-const RADIUS = 2.5;
+const RADIUS = 5;
 
 const DIR_OFFSETS: Record<string, { dx: number; dy: number }> = {
   north: { dx: 0, dy: -DIAMOND_STEP },
@@ -61,7 +62,7 @@ function computeLayout(rooms: DungeonRoomSnapshot[]): {
   const positions = new Map<string, Position>();
   const edges: [string, string][] = [];
   const seen = new Set<string>();
-  let nextOffset = 0;
+  let disconnectedComponents = 0;
 
   // Start traversal from the Start room, or first room if no Start.
   const startId =
@@ -120,17 +121,19 @@ function computeLayout(rooms: DungeonRoomSnapshot[]): {
     }
   }
 
-  // Handle disconnected rooms: start new BFS from unvisited rooms.
+  // Handle disconnected rooms: start a new BFS from each unvisited room, laid
+  // out to the right of everything placed so far. (The old `nextOffset /
+  // DISCONNECT_OFFSET` maths put the first straggler on top of the start room.)
   for (const id of ids) {
     if (positions.has(id)) continue;
     const room = byId.get(id);
     if (!room) continue;
 
-    const dx = roundCoord(nextOffset / DISCONNECT_OFFSET);
-    const dy = roundCoord(nextOffset % DISCONNECT_OFFSET);
-
-    positions.set(id, { x: dx, y: dy });
-    nextOffset++;
+    const placedXs = [...positions.values()].map((pos) => pos.x);
+    const rightEdge = placedXs.length ? Math.max(...placedXs) : ORIGIN_X;
+    const dx = roundCoord(rightEdge + DISCONNECT_OFFSET * (disconnectedComponents + 1));
+    const dy = ORIGIN_Y;
+    disconnectedComponents++;
 
     const q: [string, number, number][] = [[id, dx, dy]];
 
@@ -207,14 +210,30 @@ const NODE_COLORS: Record<string, { fill: string; stroke: string }> = {
   start: { fill: '#2DD4BF', stroke: '#0A0A0F' },
   visited: { fill: '#A5A3C4', stroke: '#1E1B4B' },
   boss: { fill: '#EF4444', stroke: '#0A0A0F' },
+  rest: { fill: '#2DD4BF', stroke: '#0A0A0F' },
+  chest: { fill: '#FBBF24', stroke: '#1E1B4B' },
+  curio: { fill: '#F472B6', stroke: '#1E1B4B' },
+  elite: { fill: '#F472B6', stroke: '#1E1B4B' },
   unknown: { fill: '#3B3870', stroke: '#6366A1' },
 };
+
+function isRestVisible(room: DungeonRoomSnapshot, currentRoomId: string, visitedRoomIds: string[]): boolean {
+  // Shrines are a surprise until the room is on the map (current or visited).
+  return room.type === 'Rest' && (room.id === currentRoomId || visitedRoomIds.includes(room.id));
+}
 
 function nodeStyle(
   room: DungeonRoomSnapshot,
   currentRoomId: string,
   visitedRoomIds: string[]
 ): { key: string; fill: string; stroke: string } {
+  if (isRestVisible(room, currentRoomId, visitedRoomIds)) {
+    return {
+      key: 'rest',
+      fill: NODE_COLORS.rest.fill,
+      stroke: room.id === currentRoomId ? '#F0EFFF' : NODE_COLORS.rest.stroke,
+    };
+  }
   if (room.id === currentRoomId) {
     return { key: 'current', ...NODE_COLORS.current };
   }
@@ -234,76 +253,211 @@ const LEGEND: { key: string; label: string }[] = [
   { key: 'current', label: 'You' },
   { key: 'start', label: 'Start' },
   { key: 'visited', label: 'Visited' },
+  { key: 'rest', label: 'Rest' },
+  { key: 'chest', label: 'Chest' },
+  { key: 'curio', label: 'Curio' },
+  { key: 'elite', label: 'Elite' },
   { key: 'boss', label: 'Boss' },
   { key: 'unknown', label: 'Unseen' },
 ];
 
 function MiniMap({ dungeon }: MiniMapProps) {
+  const [showLegend, setShowLegend] = useState(false);
   const { positions, edges, viewX, viewY, width, height } = computeLayout(dungeon.rooms);
   const rooms = dungeon.rooms;
 
-  return (
-    <div className="hud-frame pointer-events-none flex flex-col gap-1 rounded-md p-[6px]">
-      {rooms.length > 0 && (
-        <svg width={width * 12} height={height * 12} viewBox={`${viewX} ${viewY} ${width} ${height}`}>
-          <g>
-            {edges.map(([a, b], i) => {
-              const pa = positions.get(a);
-              const pb = positions.get(b);
-              if (!pa || !pb) return null;
-              const isLit = a === dungeon.currentRoomId || b === dungeon.currentRoomId;
-              return (
-                <line
-                  key={i}
-                  x1={pa.x}
-                  y1={pa.y}
-                  x2={pb.x}
-                  y2={pb.y}
-                  stroke={isLit ? '#7C5CFC' : '#3B3870'}
-                  strokeWidth={isLit ? 1.5 : 1}
-                  strokeOpacity={isLit ? 1 : 0.7}
-                />
-              );
-            })}
-          </g>
-          <g>
-            {rooms.map((room) => {
-              const pos = positions.get(room.id);
-              if (!pos) return null;
-              const style = nodeStyle(room, dungeon.currentRoomId, dungeon.visitedRoomIds);
-              const r = style.key === 'current' ? RADIUS + 1 : RADIUS;
-              return (
-                <circle
-                  key={room.id}
-                  cx={pos.x}
-                  cy={pos.y}
-                  r={r}
-                  fill={style.fill}
-                  stroke={style.stroke}
-                  strokeWidth={1}
-                >
-                  <title>{`${room.name}${room.id === dungeon.currentRoomId ? ' (current)' : ''}`}</title>
-                </circle>
-              );
-            })}
-          </g>
-        </svg>
-      )}
+  // Node size is derived from the graph extent so a wide dungeon still shows
+  // readable dots once the whole graph is scaled into the fixed viewport.
+  const nodeRadius = Math.max(1.1, Math.min(2.4, Math.min(width, height) / 9));
 
-      <div className="flex flex-wrap gap-x-1.5 gap-y-0.5">
-        {LEGEND.map(({ key, label }) => {
-          const color = NODE_COLORS[key];
-          return (
-            <span key={key} className="flex items-center gap-0.5">
-              <span
-                className="inline-block h-1.5 w-1.5 rounded-full border"
-                style={{ backgroundColor: color.fill, borderColor: color.stroke }}
-              />
-              <span className="font-mono text-[8px] uppercase tracking-wide text-[#A5A3C4]">{label}</span>
-            </span>
-          );
-        })}
+  return (
+    <div className="hud-frame pointer-events-none relative flex w-[168px] flex-col gap-1 rounded-md p-[6px] sm:w-[200px] max-sm:w-[300px] max-sm:gap-2 max-sm:p-1.5">
+      {/* Fixed footprint: the whole graph is scaled to fit inside this box, so it
+          can never grow over the room card or get cropped by the canvas edge. */}
+      <button
+        type="button"
+        aria-label="Map legend"
+        aria-expanded={showLegend}
+        onClick={() => setShowLegend((value) => !value)}
+        className="pointer-events-auto absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full border border-[#3B3870] bg-[#1E1B4B]/90 font-mono text-[10px] font-bold text-[#B8B5E0] transition-colors hover:text-[#F0EFFF] focus:outline-none focus-visible:ring-2 focus-visible:ring-accent max-sm:h-8 max-sm:w-8 max-sm:text-[18px]"
+      >
+        ?
+      </button>
+
+      <div className="h-[96px] w-full sm:h-[118px] max-sm:h-[200px]">
+        {rooms.length > 0 && (
+          <svg
+            className="h-full w-full"
+            viewBox={`${viewX} ${viewY} ${width} ${height}`}
+            preserveAspectRatio="xMidYMid meet"
+            role="img"
+            aria-label={`Dungeon map, ${rooms.length} rooms, current room ${dungeon.currentRoomId}`}
+          >
+            <g>
+              {edges.map(([a, b], i) => {
+                const pa = positions.get(a);
+                const pb = positions.get(b);
+                if (!pa || !pb) return null;
+                const isLit = a === dungeon.currentRoomId || b === dungeon.currentRoomId;
+                return (
+                  <line
+                    key={i}
+                    x1={pa.x}
+                    y1={pa.y}
+                    x2={pb.x}
+                    y2={pb.y}
+                    stroke={isLit ? '#7C5CFC' : '#3B3870'}
+                    strokeWidth={isLit ? 1.5 : 1}
+                    strokeOpacity={isLit ? 1 : 0.7}
+                    vectorEffect="non-scaling-stroke"
+                  />
+                );
+              })}
+            </g>
+            <g>
+              {rooms.map((room) => {
+                const pos = positions.get(room.id);
+                if (!pos) return null;
+                const style = nodeStyle(room, dungeon.currentRoomId, dungeon.visitedRoomIds);
+                const isRest = style.key === 'rest';
+                const isCurrent = room.id === dungeon.currentRoomId;
+                const r = isCurrent ? nodeRadius * 1.35 : nodeRadius;
+                const title = `${room.name}${isCurrent ? ' (current)' : ''}`;
+                const hasChest =
+                  Boolean(room.chest) || (dungeon.visitedRoomIds.includes(room.id) && room.hasTreasure === true);
+                const chestSize = Math.max(1.2, r * 0.8);
+                const chestMarker = hasChest ? (
+                  <rect
+                    x={pos.x + r * 0.6}
+                    y={pos.y - r * 1.6}
+                    width={chestSize}
+                    height={chestSize}
+                    rx={0.3}
+                    fill={NODE_COLORS.chest.fill}
+                    stroke={NODE_COLORS.chest.stroke}
+                    strokeWidth={0.75}
+                    vectorEffect="non-scaling-stroke"
+                  >
+                    <title>Chest</title>
+                  </rect>
+                ) : null;
+                // Curios stay a surprise until their room is visited.
+                const showCurio = dungeon.visitedRoomIds.includes(room.id) && room.hasCurio === true;
+                const curioMarker = showCurio ? (
+                  <text
+                    x={pos.x - r * 1.2}
+                    y={pos.y - r * 1.1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={Math.max(2.2, r * 1.6)}
+                    fontWeight={700}
+                    fill={NODE_COLORS.curio.fill}
+                    stroke="#0A0A0F"
+                    strokeWidth={0.25}
+                    vectorEffect="non-scaling-stroke"
+                    style={{ paintOrder: 'stroke' }}
+                  >
+                    ?<title>Curio</title>
+                  </text>
+                ) : null;
+                const showElite = dungeon.visitedRoomIds.includes(room.id) && Boolean(room.elite);
+                const eliteMarker = showElite ? (
+                  <text
+                    x={pos.x + r * 1.15}
+                    y={pos.y + r * 1.1}
+                    textAnchor="middle"
+                    dominantBaseline="middle"
+                    fontSize={Math.max(2.2, r * 1.5)}
+                    fontWeight={700}
+                    fill={NODE_COLORS.elite.fill}
+                    stroke="#0A0A0F"
+                    strokeWidth={0.25}
+                    vectorEffect="non-scaling-stroke"
+                    style={{ paintOrder: 'stroke' }}
+                  >
+                    !<title>Elite</title>
+                  </text>
+                ) : null;
+                if (isRest) {
+                  return (
+                    <g key={room.id}>
+                      <rect
+                        x={pos.x - r}
+                        y={pos.y - r}
+                        width={r * 2}
+                        height={r * 2}
+                        transform={`rotate(45 ${pos.x} ${pos.y})`}
+                        fill={style.fill}
+                        stroke={style.stroke}
+                        strokeWidth={1}
+                        vectorEffect="non-scaling-stroke"
+                      >
+                        <title>{title}</title>
+                      </rect>
+                      {chestMarker}
+                      {curioMarker}
+                      {eliteMarker}
+                    </g>
+                  );
+                }
+                return (
+                  <g key={room.id}>
+                    {isCurrent && (
+                      <circle
+                        cx={pos.x}
+                        cy={pos.y}
+                        r={r}
+                        fill="none"
+                        stroke="#7C5CFC"
+                        strokeWidth={1.5}
+                        vectorEffect="non-scaling-stroke"
+                        className="animate-ping motion-reduce:animate-none"
+                        style={{ transformOrigin: `${pos.x}px ${pos.y}px` }}
+                        aria-hidden="true"
+                      />
+                    )}
+                    <circle
+                      cx={pos.x}
+                      cy={pos.y}
+                      r={r}
+                      fill={style.fill}
+                      stroke={style.stroke}
+                      strokeWidth={1}
+                      vectorEffect="non-scaling-stroke"
+                    >
+                      <title>{title}</title>
+                    </circle>
+                    {chestMarker}
+                    {curioMarker}
+                    {eliteMarker}
+                  </g>
+                );
+              })}
+            </g>
+          </svg>
+        )}
       </div>
+
+      {showLegend && (
+        <div className="grid grid-cols-3 gap-x-1 gap-y-0.5 border-t border-white/10 pt-1">
+          {LEGEND.map(({ key, label }) => {
+            const color = NODE_COLORS[key];
+            return (
+              <span key={key} className="flex items-center gap-0.5">
+                <span
+                  className={`inline-block h-1.5 w-1.5 border ${
+                    key === 'rest' ? 'rotate-45 rounded-[1px]' : key === 'chest' ? 'rounded-[1px]' : 'rounded-full'
+                  }`}
+                  style={{ backgroundColor: color.fill, borderColor: color.stroke }}
+                />
+                <span className="font-mono text-[9px] uppercase tracking-wide text-[#A5A3C4] max-sm:text-[18px]">
+                  {label}
+                </span>
+              </span>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }

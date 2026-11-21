@@ -1,25 +1,23 @@
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createBrowserRouter, RouterProvider, Navigate } from 'react-router-dom';
 import Layout from '@/components/layout/Layout';
-import PlayLayout from '@/components/layout/PlayLayout';
 import ComingSoon from '@/components/common/ComingSoon';
 import LandingPage from '@/components/layout/LandingPage';
 import PrivacyPolicy from '@/components/legal/PrivacyPolicy';
 import TermsOfService from '@/components/legal/TermsOfService';
-import GamePage from '@/components/game/GamePage';
-import CollectionPage from '@/components/collection/CollectionPage';
-import FamiliarStatusPreview from '@/components/game/hud/FamiliarStatusPreview';
+import Credits from '@/components/legal/Credits';
+const FamiliarStatusPreview = lazy(() => import('@/components/game/hud/FamiliarStatusPreview'));
 
-/**
- * Minimal callback page for the Immutable Passport OAuth redirect. The SDK's
- * popup login flow redirects to `${origin}/callback` after authentication; the
- * SPA must be routable here so the `@imtbl/auth` SDK can load, exchange the
- * authorization code for tokens, and postMessage the result back to the opener.
- */
-function CallbackHandler() {
+// Route-level code splitting keeps the game shell and HUD out of the initial
+// landing-page bundle.
+const PlayLayout = lazy(() => import('@/components/layout/PlayLayout'));
+const GamePage = lazy(() => import('@/components/game/GamePage'));
+const CollectionPage = lazy(() => import('@/components/collection/CollectionPage'));
+
+function RouteLoading(): JSX.Element {
   return (
-    <div className="h-screen flex items-center justify-center bg-surface-primary">
-      <p className="font-body text-sm text-text-secondary">Completing sign-in…</p>
+    <div className="flex min-h-[40vh] items-center justify-center bg-surface-primary">
+      <p className="font-body text-sm text-text-secondary">Loading…</p>
     </div>
   );
 }
@@ -28,10 +26,6 @@ const router = createBrowserRouter([
   {
     path: '/',
     element: <LandingPage />,
-  },
-  {
-    path: '/callback',
-    element: <CallbackHandler />,
   },
   {
     path: '/privacy',
@@ -44,22 +38,35 @@ const router = createBrowserRouter([
     children: [{ index: true, element: <TermsOfService /> }],
   },
   {
+    path: '/credits',
+    element: <Layout />,
+    children: [{ index: true, element: <Credits /> }],
+  },
+  {
     path: '/app',
     element: <Layout />,
     children: [
       { index: true, element: <ComingSoon /> },
       { path: 'game', element: <Navigate to="/play/game" replace /> },
-      { path: 'collection', element: <CollectionPage /> },
-      { path: 'marketplace', element: <ComingSoon /> },
-      { path: 'minter', element: <ComingSoon /> },
-      { path: 'bridge', element: <ComingSoon /> },
+      {
+        path: 'collection',
+        element: (
+          <Suspense fallback={<RouteLoading />}>
+            <CollectionPage />
+          </Suspense>
+        ),
+      },
       { path: 'other', element: <ComingSoon /> },
       { path: '*', element: <ComingSoon /> },
     ],
   },
   {
     path: '/play',
-    element: <PlayLayout />,
+    element: (
+      <Suspense fallback={<RouteLoading />}>
+        <PlayLayout />
+      </Suspense>
+    ),
     children: [
       { index: true, element: <Navigate to="/play/game" replace /> },
       { path: 'game', element: <GamePage /> },
@@ -67,7 +74,11 @@ const router = createBrowserRouter([
   },
   {
     path: '/preview',
-    element: <FamiliarStatusPreview />,
+    element: (
+      <Suspense fallback={<RouteLoading />}>
+        <FamiliarStatusPreview />
+      </Suspense>
+    ),
   },
 ]);
 

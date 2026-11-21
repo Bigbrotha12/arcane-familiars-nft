@@ -1,5 +1,5 @@
 import path from 'node:path';
-import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-pool-workers';
+import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
@@ -28,9 +28,6 @@ export default defineConfig({
             // restrictive mode so a missed override can't silently allow
             // anonymous access.
             ENVIRONMENT: 'production',
-            IMMUTABLE_CLIENT_ID: 'test-client-id',
-            IMMUTABLE_AUTH_ISSUER: 'https://auth.immutable.com/',
-            IMMUTABLE_JWKS_URI: 'https://auth.immutable.com/.well-known/jwks.json',
             // Test-only binding used by the migrations setup file.
             TEST_MIGRATIONS: migrations,
           },

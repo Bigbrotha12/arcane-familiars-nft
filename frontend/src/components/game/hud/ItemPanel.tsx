@@ -31,7 +31,7 @@ function ItemPanel({ open, items, onSelect, onClose }: ItemPanelProps) {
                   <img
                     src={item.iconUrl}
                     alt=""
-                    className="mr-1.5 h-7 w-7 shrink-0 rounded-sm border border-[#E8E4F0] bg-white object-contain"
+                    className="mr-1.5 h-7 w-7 shrink-0 rounded-sm border border-[#E8E4F0] bg-white object-contain max-sm:h-12 max-sm:w-12 max-sm:mr-2.5"
                   />
                 )}
                 <span className="flex-1 text-left font-body font-medium">{item.name}</span>

@@ -41,36 +41,11 @@
   ],
   "vars": {
     "ENVIRONMENT": "development",
-    // On-chain ownership authority (BC4). Off by default: the persisted
-    // playerFamiliars grants set remains the source of truth until enabled.
-    "OWNERSHIP_AUTHORITY": "false",
-    // BC2 minting seam flag. Off by default — mint routes return 403 until the
-    // real Immutable Minting API key is provisioned as a Worker secret.
-    "MINTING_ENABLED": "false",
-    "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-    "IMX_API_MAINNET": "https://api.immutable.com",
-    "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-    "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-    // Real Passport Hub client ID. If a separate sandbox/production client is
-    // ever created, update the corresponding env section below instead of this default.
-    "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-    "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-    "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
   },
   "env": {
     "production": {
       "vars": {
         "ENVIRONMENT": "production",
-        "OWNERSHIP_AUTHORITY": "false",
-        "MINTING_ENABLED": "false",
-        "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-        "IMX_API_MAINNET": "https://api.immutable.com",
-        "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-        "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-        // Production Passport Hub client ID.
-        "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-        "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-        "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
       },
       "d1_databases": [
         {
@@ -87,16 +62,6 @@
     "staging": {
       "vars": {
         "ENVIRONMENT": "staging",
-        "OWNERSHIP_AUTHORITY": "false",
-        "MINTING_ENABLED": "false",
-        "IMX_API_SANDBOX": "https://api.sandbox.immutable.com",
-        "IMX_API_MAINNET": "https://api.immutable.com",
-        "COLLECTION_CONTRACT_SANDBOX": "0xb7eaa855fa6432d0597f297bace4613c33a075d1",
-        "COLLECTION_CONTRACT_MAINNET": "0xacb3c6a43d15b907e8433077b6d38ae40936fe2c",
-        // Staging Passport Hub client ID (same as production for now).
-        "IMMUTABLE_CLIENT_ID": "fe5ZrzViheSLILV2avV6zbnBBYp6acYq",
-        "IMMUTABLE_AUTH_ISSUER": "https://auth.immutable.com/",
-        "IMMUTABLE_JWKS_URI": "https://auth.immutable.com/.well-known/jwks.json",
       },
       "d1_databases": [
         {

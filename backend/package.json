@@ -19,16 +19,13 @@
   },
   "dependencies": {
     "@arcane-familiars/game-logic": "*",
-    "hono": "^4.12.32",
-    "jose": "^6.2.10",
-    "viem": "^2.18.8"
+    "hono": "^4.13.19"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/vitest-plugin": "^1.8.4",
     "@cloudflare/workers-types": "^5.20260727.1",
-    "miniflare": "^5.20260815.0-alpha",
     "typescript": "^7.0.2",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.114.0"
+    "vitest": "^4.1.12",
+    "wrangler": "^4.164.0"
   }
 }

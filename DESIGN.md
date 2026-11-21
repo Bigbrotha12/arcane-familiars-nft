@@ -2,16 +2,16 @@
 
 ## Product Context
 
-- **What this is:** A web-based 2D creature-collector NFT game where players summon familiars, craft spells, and battle creatures or other players.
+- **What this is:** A web-based 2D creature-collector game where players summon familiars, craft spells, and battle creatures or other players.
 - **Who it's for:** Casual-to-core gamers who enjoy collectible creature games (Pokemon Go, Axie Infinity audience) — people who want cute companions, strategic battles, and real ownership of their assets.
-- **Space/industry:** Blockchain gaming / NFT creature battler
+- **Space/industry:** Cozy creature-collector / turn-based RPG
 - **Project type:** Web app (React SPA) with landing/marketing pages + game canvas interface
 
 ## Aesthetic Direction
 
 - **Direction:** Playful & Collectible — warm, bright, approachable. Think cozy indie game meets Pokemon Center, not crypto exchange.
 - **Decoration level:** Intentional — soft gradients, subtle magical particle effects on hover, card-style surfaces with gentle shadows. Decoration serves the creatures, not the other way around.
-- **Mood:** Warm, inviting, and delightful. The first impression should be "I want that creature," not "I need to understand blockchain." The game has real depth, but the UI makes you feel welcome.
+- **Mood:** Warm, inviting, and delightful. The first impression should be "I want that creature," not "I need to learn a complicated system." The game has real depth, but the UI makes you feel welcome.
 - **Reference sites:** Pokemon Go (warmth, collectibility), Axie Infinity (creature showcase, card battles), Hollow Knight/Hades (2D illustrated charm)
 
 ## Typography
@@ -34,7 +34,7 @@
 
 ## Color
 
-- **Approach:** Warm and expressive. Color is a primary design tool — the palette is deliberately warmer and brighter than typical blockchain game sites.
+- **Approach:** Warm and expressive. Color is a primary design tool — the palette is deliberately warmer and brighter than typical dark game sites.
 - **Primary (Accent):** `#7C5CFC` (magical purple-blue) — CTAs, links, active states, key UI elements
 - **Primary hover:** `#6A4AE8` — button hover states
 - **Primary light:** `#EDE7FF` — secondary buttons, background tints
@@ -110,7 +110,7 @@
 | Date       | Decision                                    | Rationale                                                                                                                                            |
 | ---------- | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 2026-07-27 | Initial design system created               | Created by /design-consultation based on product context + competitive research                                                                      |
-| 2026-07-27 | Warm/light palette over dark/crypto default | Every blockchain game uses dark + gold. Warm cream + purple-blue distinguishes Arcane Familiars and signals approachability                          |
+| 2026-07-27 | Warm/light palette over dark/crypto default | Most creature-collector games use dark + gold. Warm cream + purple-blue distinguishes Arcane Familiars and signals approachability                   |
 | 2026-07-27 | 2D illustrated direction over 3D renders    | Cheaper to produce, more memorable, aligns with "cute" positioning; competitors all chase 3D homogeneity                                             |
-| 2026-07-27 | No blockchain jargon on landing page        | Lead with creature appeal and game depth; blockchain visibility deferred to Market section                                                           |
+| 2026-07-27 | No systems jargon on landing page           | Lead with creature appeal and game depth                                                                                                             |
 | 2026-07-27 | Fredoka + DM Sans type stack                | Fredoka's rounded forms signal friendliness; DM Sans provides clean readability; together they avoid the Inter/Roboto/Space Grotesk convergence trap |

@@ -8,6 +8,7 @@ import type {
   ForcedSwapInfo,
   GameState,
   ItemData,
+  CharmRoll,
 } from '@arcane-familiars/game-logic';
 import {
   AREAS,
@@ -20,21 +21,51 @@ import {
   updateCooldowns,
   validateBattleAction,
   seededRandom,
+  resolveBattleRoomId,
+  applyFamiliarXp,
+  applyRecruitWin,
+  scaleFamiliarStats,
+  applyCharm,
+  equippedCharm,
+  abilitiesAtLevel,
+  newlyLearned,
+  newPassiveTiers,
+  partyPassives,
+  PASSIVES,
+  getAbility,
+  battleXp,
+  BALANCE,
+  MAX_FAMILIAR_LEVEL,
+  applyElite,
+  isNewPlayer,
+  catchUpXpMultiplier,
+  getRunLoot,
+  getRunStats,
+  buildRunSummary,
+  addInventoryItem,
+  bankRunLoot,
+  discardRunLoot,
+  findOwnedItem,
+  consumeOwnedItem,
+  reviveFaintedParty,
+  rollChest,
   BattleResult,
   ActionType,
   Outcome,
+  EffectType,
 } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import { conditionalStateUpdate, getOrCreateGameState } from '../utils/saveManager';
+import { commitBattleAndState, getOrCreateGameState } from '../utils/saveManager';
 import { generateId } from '../utils/uuid';
 import { internalError, readBody } from '../utils/http';
-import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
+import { sanitizeBattleForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const gameBattleRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
 
 // Anti-farming: max completed battles (win or loss) per UTC calendar day per
 // account (WS4 step 18). Fleeing does not count.
-const MAX_BATTLES_PER_DAY = 20;
+// Raised from 20 to 100 (2026-11-16): 20 cut sessions short now that runs are longer.
+const MAX_BATTLES_PER_DAY = 100;
 
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
@@ -56,19 +87,33 @@ function countCompletedBattle(state: GameState): void {
   state.battlesToday = (state.battlesToday ?? 0) + 1;
 }
 
+/**
+ * Level a newly joined familiar starts at: just below the enemy it came from,
+ * so recruits are usable in the area where they were found. Never lowers an
+ * existing level.
+ */
+function setJoinLevel(state: GameState, familiarId: string, sourceLevel: number): void {
+  const joinLevel = Math.max(1, Math.min(MAX_FAMILIAR_LEVEL, Math.floor(sourceLevel) - BALANCE.recruitLevelOffset));
+  state.familiarLevels ??= {};
+  if ((state.familiarLevels[familiarId] ?? 1) < joinLevel) {
+    state.familiarLevels[familiarId] = joinLevel;
+  }
+}
+
 function cryptoSeed(): number {
   return crypto.getRandomValues(new Uint32Array(1))[0];
 }
 
-function createBattleFamiliar(familiarId: string): BattleFamiliar {
+function createBattleFamiliar(familiarId: string, level = 1, charm?: CharmRoll): BattleFamiliar {
   const data = getFamiliar(familiarId);
   if (!data) throw new Error(`Unknown familiar: ${familiarId}`);
+  const stats = applyCharm(scaleFamiliarStats(data.stats, level), charm);
 
   return {
     uid: generateId(),
-    familiarData: data,
-    currentHp: data.stats.hp,
-    currentMp: data.stats.mp,
+    familiarData: { ...data, abilities: abilitiesAtLevel(data, level), stats },
+    currentHp: stats.hp,
+    currentMp: stats.mp,
     statusEffects: [],
     cooldowns: {},
     isAlly: false,
@@ -113,8 +158,13 @@ function persistCombatantResources(dungeon: GameState['dungeon'], familiar: Batt
  * resources persisted in the dungeon state. Shared by battle start, voluntary
  * swap-in, and the involuntary KO relay.
  */
-function buildIncomingCombatant(dungeon: GameState['dungeon'], familiarId: string): BattleFamiliar {
-  const familiar = createBattleFamiliar(familiarId);
+function buildIncomingCombatant(
+  dungeon: GameState['dungeon'],
+  familiarId: string,
+  level = 1,
+  charm?: CharmRoll
+): BattleFamiliar {
+  const familiar = createBattleFamiliar(familiarId, level, charm);
   const resources = getPersistedResources(dungeon, familiarId, familiar);
   familiar.currentHp = resources.currentHp;
   familiar.currentMp = resources.currentMp;
@@ -131,6 +181,126 @@ function generateBattleRewards(rng: () => number): BattleRewards {
   }
 
   return { currency, items };
+}
+
+/** Ability unlocks earned by a familiar that levelled from `fromLevel` to `toLevel`. */
+function learnedAbilities(
+  familiarId: string,
+  fromLevel: number,
+  toLevel: number
+): NonNullable<BattleRewards['learned']> {
+  if (toLevel <= fromLevel) return [];
+  const species = getFamiliar(familiarId);
+  if (!species) return [];
+
+  return newlyLearned(species, fromLevel, toLevel).map((abilityId) => ({
+    familiarId,
+    familiarName: species.name,
+    abilityId,
+    abilityName: getAbility(abilityId)?.name ?? abilityId,
+  }));
+}
+
+/** Passive tiers unlocked by a familiar that levelled from `fromLevel` to `toLevel`. */
+function passiveUnlocks(
+  familiarId: string,
+  fromLevel: number,
+  toLevel: number
+): NonNullable<BattleRewards['passiveUnlocks']> {
+  if (toLevel <= fromLevel) return [];
+  const species = getFamiliar(familiarId);
+  if (!species) return [];
+
+  return newPassiveTiers(species, fromLevel, toLevel).map(({ id, tier }) => ({
+    familiarId,
+    familiarName: species.name,
+    passiveId: id,
+    passiveName: PASSIVES[id].name,
+    tier,
+  }));
+}
+
+/** The action's display name for the best-hit line. */
+function actionDisplayName(action: BattleAction): string {
+  switch (action.type) {
+    case ActionType.Ability:
+      return getAbility(action.abilityId ?? '')?.name ?? 'Ability';
+    case ActionType.Item:
+      return getItem(action.itemId ?? '')?.name ?? 'Item';
+    default:
+      return 'Attack';
+  }
+}
+
+/** Largest single direct-damage step the acting player dealt this turn. */
+function findBestHit(
+  steps: BattleTurnResult['steps'],
+  actorUid: string,
+  familiarId: string,
+  action: BattleAction
+): { familiarId: string; damage: number; abilityName: string } | undefined {
+  let best: { familiarId: string; damage: number; abilityName: string } | undefined;
+
+  for (const step of steps) {
+    if (step.actorUid !== actorUid) continue;
+    if (step.result.effectType !== EffectType.Damage || step.result.value <= 0) continue;
+    const damage = Math.abs(step.result.value);
+    if (!best || damage > best.damage) {
+      best = { familiarId, damage, abilityName: actionDisplayName(action) };
+    }
+  }
+
+  return best;
+}
+
+/** Party-wide passives from the dungeon party (falling back to the active party). */
+function battlePassives(state: GameState) {
+  const dungeonParty = state.dungeon?.party ?? [];
+  const ids = dungeonParty.length > 0 ? dungeonParty : (state.activeParty ?? []);
+  return partyPassives(ids.map((id) => ({ familiarId: id, level: state.familiarLevels?.[id] ?? 1 })));
+}
+
+function relayInstinctDiscount(passives: ReturnType<typeof battlePassives>): number | undefined {
+  return passives.find((passive) => passive.id === 'relayInstinct')?.value;
+}
+
+/** Highest familiar level among everything the player owns (minimum 1). */
+function highestOwnedLevel(state: GameState): number {
+  let highest = 1;
+  for (const id of state.playerFamiliars ?? []) {
+    highest = Math.max(highest, state.familiarLevels?.[id] ?? 1);
+  }
+  return highest;
+}
+
+/**
+ * Build the combatant that replaces the current one (manual swap or KO relay).
+ * Once-per-battle passive effects are tracked per species on the battle, so a
+ * familiar keeps a spent Second Wind when it returns, and each familiar gets
+ * the Relay Instinct discount at most once per battle (otherwise a free swap
+ * every turn would make abilities free).
+ */
+function swapInCombatant(battle: BattleState, state: GameState, familiarId: string): BattleFamiliar {
+  const uses = (battle.passiveUses ??= { secondWind: [], relay: [] });
+  const outgoing = battle.playerFamiliar;
+  if (outgoing.secondWindUsed && !uses.secondWind.includes(outgoing.familiarData.id)) {
+    uses.secondWind.push(outgoing.familiarData.id);
+  }
+
+  const incoming = buildIncomingCombatant(
+    state.dungeon,
+    familiarId,
+    state.familiarLevels?.[familiarId] ?? 1,
+    equippedCharm(state, familiarId)
+  );
+  if (uses.secondWind.includes(familiarId)) incoming.secondWindUsed = true;
+
+  const discount = relayInstinctDiscount(battle.playerPassives ?? []);
+  if (discount !== undefined && !uses.relay.includes(familiarId)) {
+    incoming.relayDiscount = discount;
+    uses.relay.push(familiarId);
+  }
+  return incoming;
 }
 
 gameBattleRouter.post('/game/battle/start', async (c) => {
@@ -150,6 +320,20 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const state = loaded.state;
 
+    const activeBattle = await c.env.DB.prepare('SELECT battle_id FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+      .bind(anonymousId)
+      .first<{ battle_id: string }>();
+    if (activeBattle) {
+      return c.json(
+        {
+          error: 'A battle is already active; resume or abandon it',
+          code: 'BATTLE_ACTIVE',
+          battleId: activeBattle.battle_id,
+        },
+        409
+      );
+    }
+
     // Daily battle cap: reject the start before any state/battle validation so
     // the 403 fires even against a minimal state (testable) and no battle row or
     // state write happens when the cap is exhausted.
@@ -166,19 +350,8 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
     }
 
     const party = state.activeParty ?? [];
-    if (!party.includes(playerFamiliarId)) {
+    if (!party.includes(playerFamiliarId) || !state.playerFamiliars.includes(playerFamiliarId)) {
       return c.json({ error: 'Familiar is not in your active party' }, 400);
-    }
-
-    // Defence in depth (BC4): activeParty should already have been checked
-    // against the fieldable set when it was written, but a stale/forged row
-    // must not start a battle. Flag-gated so today's lenient behaviour (and
-    // the zero-read hot path) is unchanged when ownership authority is off.
-    if (isOwnershipAuthorityEnabled(c.env)) {
-      const fieldable = await resolveFieldableFamiliars(c.env.DB, c.get('accountKey'), state, true);
-      if (!fieldable.includes(playerFamiliarId)) {
-        return c.json({ error: 'Familiar is not owned by this account' }, 400);
-      }
     }
 
     const dungeon = state.dungeon;
@@ -198,7 +371,21 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
       return c.json({ error: 'Invalid area' }, 500);
     }
 
-    const playerFamiliar = buildIncomingCombatant(dungeon, playerFamiliarId);
+    const playerFamiliar = buildIncomingCombatant(
+      dungeon,
+      playerFamiliarId,
+      state.familiarLevels?.[playerFamiliarId] ?? 1,
+      equippedCharm(state, playerFamiliarId)
+    );
+    if (playerFamiliar.currentHp <= 0) {
+      return c.json(
+        {
+          error: 'That familiar has fainted; choose a living party member',
+          code: 'FAMILIAR_FAINTED',
+        },
+        400
+      );
+    }
 
     // Enemy identity is derived from the persisted room encounter, never from the client.
     const enemyId = pending.enemyId;
@@ -209,49 +396,60 @@ gameBattleRouter.post('/game/battle/start', async (c) => {
 
     const battleSeed = cryptoSeed();
 
-    let enemyFamiliar: BattleFamiliar;
-    if (baseEnemy.isBoss) {
-      enemyFamiliar = createBattleFamiliar(enemyId);
-    } else {
-      // The level was fixed when the encounter was rolled (explore), so fleeing
-      // and re-starting cannot reroll enemy strength.
-      const level = pending.level ?? area.levelRange[0];
-      enemyFamiliar = {
-        uid: generateId(),
-        familiarData: scaleEnemy(baseEnemy, level),
-        currentHp: Math.round(baseEnemy.stats.hp * (1 + 0.1 * (level - 1))),
-        currentMp: Math.round(baseEnemy.stats.mp * (1 + 0.1 * (level - 1))),
-        statusEffects: [],
-        cooldowns: {},
-        isAlly: false,
-      };
-    }
+    // A brand-new player's first fight is guided: the enemy sits at the area's
+    // minimum level, any elite on a legacy pending encounter is ignored, and
+    // the engine gets one safety net. Bosses are never guided.
+    const guided = isNewPlayer(state) && !baseEnemy.isBoss;
+
+    // Non-boss levels were fixed when the encounter was rolled (explore), so
+    // fleeing and re-starting cannot reroll enemy strength. Bosses sit at the
+    // top of their area's level band and are scaled like any other enemy.
+    const enemyLevel = baseEnemy.isBoss
+      ? area.levelRange[1]
+      : guided
+        ? area.levelRange[0]
+        : (pending.level ?? area.levelRange[0]);
+    // Elites are normal encounters with one affix; bosses never roll one.
+    const eliteId = baseEnemy.isBoss || guided ? undefined : pending.elite;
+    const scaledBase = scaleEnemy(baseEnemy, enemyLevel);
+    const scaled = eliteId ? applyElite(scaledBase, eliteId) : scaledBase;
+    const enemyFamiliar: BattleFamiliar = {
+      uid: generateId(),
+      familiarData: scaled,
+      currentHp: scaled.stats.hp,
+      currentMp: scaled.stats.mp,
+      statusEffects: [],
+      cooldowns: {},
+      isAlly: false,
+      ...(eliteId ? { elite: eliteId } : {}),
+    };
 
     const battle: BattleState = {
       id: generateId(),
+      roomId: dungeon.currentRoomId,
       playerFamiliar,
       enemyFamiliar,
       isBoss: baseEnemy.isBoss ?? false,
+      enemyLevel,
       turnCount: 0,
       status: BattleResult.Active,
       swapsThisTurn: 0,
       seed: battleSeed,
+      playerPassives: battlePassives(state),
+      ...(guided ? { guided: true } : {}),
     };
 
-    // Supersede any leftover battle row: rows are only removed when a battle
-    // ends (win/loss/flee), so an abandoned session (closed tab, kicked out
-    // mid-battle) leaves a row behind that violates the one-battle-per-user
-    // unique index and would 500 every future start. There is no
-    // battle-resume path, so deleting it here is safe.
-    await c.env.DB.batch([
-      c.env.DB.prepare('DELETE FROM active_battles WHERE anonymous_id = ?').bind(anonymousId),
-      c.env.DB.prepare(
-        `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
-         VALUES (?, ?, ?, datetime('now'))`
-      ).bind(battle.id, anonymousId, JSON.stringify(battle)),
-    ]);
+    // A battle row is created only after the active-battle guard above. Resume
+    // and abandon are the only ways to clear an existing row; the route never
+    // deletes a live battle to make room for a restart (which would restore HP).
+    await c.env.DB.prepare(
+      `INSERT INTO active_battles (battle_id, anonymous_id, battle_json, created_at)
+       VALUES (?, ?, ?, datetime('now'))`
+    )
+      .bind(battle.id, anonymousId, JSON.stringify(battle))
+      .run();
 
-    return c.json({ battle });
+    return c.json({ battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Start battle');
   }
@@ -287,6 +485,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     const battle = JSON.parse(row.battle_json) as BattleState;
     ensureBattleUids(battle);
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
+    // Battles persisted before passives existed get the party's current passives.
+    battle.playerPassives ??= battlePassives(state);
 
     if (battle.status !== BattleResult.Active) {
       return c.json({ error: 'Battle is not active' }, 400);
@@ -296,7 +497,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
     }
 
-    const validation = validateBattleAction(action, battle);
+    const validation = validateBattleAction(action, battle, state.dungeon?.partyHp);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid action' }, 400);
     }
@@ -310,8 +511,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
         return c.json({ error: 'Player familiar does not know this ability' }, 400);
       }
     }
-
-    const state = loaded.state;
 
     // Anti-farming re-check: the guard at start is check-then-act, so a player
     // at the cap could race `start` + `action` and let a battle that should
@@ -335,10 +534,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // actor can be KO'd before acting under speed-ordered turns).
     let stateEffectNote: string | undefined;
     let consumedItem: ItemData | undefined;
-    let faintedPartyIds: string[] = [];
     if (action.type === ActionType.Item && action.itemId) {
-      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
-      if (!itemEntry || typeof itemEntry.quantity !== 'number' || itemEntry.quantity < 1) {
+      const owned = findOwnedItem(state, action.itemId);
+      if (!owned) {
         return c.json({ error: 'You do not own this item' }, 400);
       }
       const item = getItem(action.itemId);
@@ -356,7 +554,6 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
 
       consumedItem = item;
-      faintedPartyIds = fainted;
     }
 
     // Derive a per-turn RNG from the battle seed so each turn gets a distinct,
@@ -372,7 +569,22 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       updatedEnemyFamiliar,
       steps: turnSteps,
       canceledActions,
-    } = resolveTurn(action, battle.playerFamiliar, battle.enemyFamiliar, enemyAction, rng);
+      guidedSaveUsed,
+    } = resolveTurn(
+      action,
+      battle.playerFamiliar,
+      battle.enemyFamiliar,
+      enemyAction,
+      rng,
+      battle.playerPassives ?? [],
+      {
+        enabled: battle.guided === true,
+        used: battle.guidedSaveUsed === true,
+      }
+    );
+
+    // Persist the one-time guided save so a later turn does not re-trigger it.
+    if (guidedSaveUsed !== undefined) battle.guidedSaveUsed = guidedSaveUsed;
 
     const playerActed = turnSteps.some((s) => s.actorUid === battle.playerFamiliar.uid);
     const enemyActed = turnSteps.some((s) => s.actorUid === battle.enemyFamiliar.uid);
@@ -381,6 +593,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // state-effect notes attach to the step of whoever acted this turn, even
     // when that actor did not survive it.
     const actingPlayerUid = battle.playerFamiliar.uid;
+    const actingFamiliarId = battle.playerFamiliar.familiarData.id;
 
     // Consume the item and apply its state-level effects only if the player's
     // slot executed: a KO-canceled actor never used the item, so it must not
@@ -388,9 +601,9 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     // applied here rather than in the battle engine, which only sees the two
     // active combatants.
     if (action.type === ActionType.Item && action.itemId && playerActed && consumedItem) {
-      const itemEntry = state.inventory.items.find((i) => i.itemId === action.itemId);
-      if (itemEntry) {
-        itemEntry.quantity -= 1;
+      const consumed = consumeOwnedItem(state, action.itemId);
+      if (!consumed) {
+        return c.json({ error: 'You do not own this item' }, 400);
       }
 
       for (const effect of consumedItem.effects) {
@@ -399,13 +612,46 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
           stateEffectNote = `gains ${effect.value} currency`;
         }
         if (effect.kind === 'revive_party' && state.dungeon) {
-          for (const id of faintedPartyIds) {
-            const data = getFamiliar(id);
-            if (data) {
-              state.dungeon.partyHp[id] = Math.max(1, Math.floor((data.stats.maxHp * effect.percentage) / 100));
-            }
+          const revived = reviveFaintedParty(state.dungeon, state.familiarLevels, effect.percentage);
+          stateEffectNote = `revives ${revived.length} party member${revived.length === 1 ? '' : 's'}`;
+        }
+      }
+    }
+
+    // Heal Pulse also mends the bench. The engine reports only the fraction;
+    // apply it to the living non-fighting party member using that member's own
+    // level-scaled max HP, then mirror the recovery as its own log step right
+    // after the heal (like other extra effects).
+    let benchHealed: BattleTurnResult['benchHealed'];
+    if (state.dungeon && playerActed) {
+      const healStep = turnSteps.find(
+        (step) => step.actorUid === actingPlayerUid && (step.result.benchHealFraction ?? 0) > 0
+      );
+      const fraction = healStep?.result.benchHealFraction ?? 0;
+      if (healStep && fraction > 0) {
+        const partyIds = state.dungeon.party?.length ? state.dungeon.party : (state.activeParty ?? []);
+        const benchId = partyIds.find((id) => id !== actingFamiliarId && (state.dungeon?.partyHp[id] ?? 0) > 0);
+        const currentHp = benchId ? state.dungeon.partyHp[benchId] : undefined;
+        const base = benchId ? getFamiliar(benchId) : undefined;
+        if (benchId && base && typeof currentHp === 'number') {
+          const maxHp = scaleFamiliarStats(base.stats, state.familiarLevels?.[benchId] ?? 1).maxHp;
+          const amount = Math.max(0, Math.min(Math.round(maxHp * fraction), maxHp - currentHp));
+          if (amount > 0) {
+            state.dungeon.partyHp[benchId] = currentHp + amount;
+            benchHealed = { familiarId: benchId, name: base.name, amount };
+            turnSteps.splice(turnSteps.indexOf(healStep) + 1, 0, {
+              actorUid: healStep.actorUid,
+              result: {
+                effectType: EffectType.Heal,
+                targetId: healStep.result.targetId,
+                value: 0,
+                isCritical: false,
+                description: `${base.name} recovers ${amount} HP`,
+              },
+              playerAfter: healStep.playerAfter,
+              enemyAfter: healStep.enemyAfter,
+            });
           }
-          stateEffectNote = `revives ${faintedPartyIds.length} party member${faintedPartyIds.length === 1 ? '' : 's'}`;
         }
       }
     }
@@ -439,7 +685,7 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       const otherId = state.activeParty.find((id) => id !== fallenId);
       if (otherId !== undefined && getFamiliar(otherId) && (state.dungeon.partyHp[otherId] ?? 0) > 0) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
-        const incoming = buildIncomingCombatant(state.dungeon, otherId);
+        const incoming = swapInCombatant(battle, state, otherId);
         forcedSwap = {
           fallenName: battle.playerFamiliar.familiarData.name,
           incomingName: incoming.familiarData.name,
@@ -458,12 +704,97 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     }
 
     let rewards: BattleRewards | undefined;
+    let xpGained = 0;
+    let xpCatchUp = false;
+    let levelUps = 0;
+    let benchReward: Pick<BattleRewards, 'benchXp' | 'benchXpCatchUp' | 'benchFamiliarId' | 'benchLevelUp'> | undefined;
+    let learned: NonNullable<BattleRewards['learned']> = [];
+    let passiveUnlockList: NonNullable<BattleRewards['passiveUnlocks']> = [];
+    let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
+    let runSummaryResponse: ReturnType<typeof buildRunSummary> | undefined;
     if (outcome === Outcome.Win) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
       state.winCount = (state.winCount ?? 0) + 1;
 
-      const room = state.dungeon?.rooms[state.dungeon.currentRoomId];
+      const runStats = state.dungeon ? getRunStats(state.dungeon) : undefined;
+      if (runStats) {
+        runStats.battlesWon += 1;
+        if (battle.enemyFamiliar.elite) runStats.elitesWon += 1;
+        const bestHit = findBestHit(turnSteps, actingPlayerUid, actingFamiliarId, action);
+        if (bestHit && (!runStats.bestHit || bestHit.damage > runStats.bestHit.damage)) {
+          runStats.bestHit = bestHit;
+        }
+      }
+
+      const activeId = battle.playerFamiliar.familiarData.id;
+      // XP is derived from the level the enemy was actually scaled to. Legacy
+      // battles persisted before enemyLevel existed fall back to level 1.
+      const baseXp =
+        battle.isBoss || !battle.enemyFamiliar.elite
+          ? battleXp(battle.enemyLevel ?? 1, battle.isBoss)
+          : Math.round(battleXp(battle.enemyLevel ?? 1, battle.isBoss) * BALANCE.eliteXpMultiplier);
+      // Catch-up is measured against the party's best level BEFORE this award,
+      // so a familiar two levels behind earns a boosted share of the same fight.
+      const highestLevel = highestOwnedLevel(state);
+      state.familiarLevels ??= {};
+      state.familiarXp ??= {};
+      const activeLevelBefore = state.familiarLevels[activeId] ?? 1;
+      const activeMultiplier = catchUpXpMultiplier(activeLevelBefore, highestLevel);
+      xpGained = Math.round(baseXp * activeMultiplier);
+      xpCatchUp = activeMultiplier > 1;
+      const progress = applyFamiliarXp(activeLevelBefore, state.familiarXp[activeId] ?? 0, xpGained);
+      state.familiarLevels[activeId] = progress.level;
+      state.familiarXp[activeId] = progress.xp;
+      levelUps = progress.levelsGained;
+      if (runStats) {
+        runStats.xpByFamiliar[activeId] = (runStats.xpByFamiliar[activeId] ?? 0) + xpGained;
+        runStats.levelsByFamiliar[activeId] = (runStats.levelsByFamiliar[activeId] ?? 0) + levelUps;
+      }
+      learned = learned.concat(learnedAbilities(activeId, activeLevelBefore, progress.level));
+      passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(activeId, activeLevelBefore, progress.level));
+
+      // The party member who did not land the winning blow still gains a
+      // reduced share, so swapping/relaying does not starve the bench. Its own
+      // catch-up multiplier applies to that share.
+      const benchId = (state.activeParty ?? []).find((id) => id !== activeId);
+      if (benchId) {
+        const benchLevelBefore = state.familiarLevels[benchId] ?? 1;
+        const benchMultiplier = catchUpXpMultiplier(benchLevelBefore, highestLevel);
+        const benchXp = Math.round(Math.round(baseXp * BALANCE.benchXpShare) * benchMultiplier);
+        if (benchXp > 0) {
+          const benchProgress = applyFamiliarXp(benchLevelBefore, state.familiarXp[benchId] ?? 0, benchXp);
+          state.familiarLevels[benchId] = benchProgress.level;
+          state.familiarXp[benchId] = benchProgress.xp;
+          if (runStats) {
+            runStats.xpByFamiliar[benchId] = (runStats.xpByFamiliar[benchId] ?? 0) + benchXp;
+            runStats.levelsByFamiliar[benchId] = (runStats.levelsByFamiliar[benchId] ?? 0) + benchProgress.levelsGained;
+          }
+          learned = learned.concat(learnedAbilities(benchId, benchLevelBefore, benchProgress.level));
+          passiveUnlockList = passiveUnlockList.concat(passiveUnlocks(benchId, benchLevelBefore, benchProgress.level));
+          benchReward = {
+            benchXp,
+            ...(benchMultiplier > 1 ? { benchXpCatchUp: true } : {}),
+            benchFamiliarId: benchId,
+            benchLevelUp: benchProgress.levelsGained,
+          };
+        }
+      }
+
+      if (runStats) {
+        for (const entry of learned) {
+          runStats.learned.push(`${entry.familiarName} learned ${entry.abilityName}`);
+        }
+        for (const entry of passiveUnlockList) {
+          runStats.passiveUnlocks.push(`${entry.familiarName} unlocked ${entry.passiveName}`);
+        }
+      }
+
+      // Resolve the room the battle was started in. A player cannot move during
+      // a battle, but legacy battles persisted before roomId existed fall back
+      // to the current room.
+      const resolvedRoomId = resolveBattleRoomId(state.dungeon, battle);
+      const room = resolvedRoomId && state.dungeon ? state.dungeon.rooms[resolvedRoomId] : undefined;
       if (room?.pendingEncounter) {
         room.pendingEncounter.resolved = true;
       }
@@ -476,36 +807,125 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
             state.defeatedBosses.push(area.bossId);
             // One-time reward: re-fighting a defeated boss does not farm
             // currency or items (the encounter can otherwise be re-entered).
-            state.inventory.currency += area.bossReward.currency;
+            // The epic boss chest is part of that one-time reward.
+            const bossChest = rollChest('epic', rng);
+            const runLoot = getRunLoot(state.dungeon);
+            runLoot.currency += area.bossReward.currency + bossChest.currency;
             for (const itemId of area.bossReward.items) {
-              const existing = state.inventory.items.find((i) => i.itemId === itemId);
-              if (existing) {
-                existing.quantity += 1;
-              } else {
-                state.inventory.items.push({ itemId, quantity: 1 });
-              }
+              addInventoryItem(runLoot, itemId);
             }
-            rewards = { currency: area.bossReward.currency, items: [...area.bossReward.items] };
+            for (const itemId of bossChest.items) {
+              addInventoryItem(runLoot, itemId);
+            }
+            if (bossChest.charm && state.dungeon) {
+              (state.dungeon.runCharms ??= []).push({ ...bossChest.charm, uid: generateId() });
+            }
+            rewards = {
+              currency: area.bossReward.currency,
+              items: [...area.bossReward.items],
+              bossChest,
+            };
           }
           if (!state.playerFamiliars.includes(area.baseFamiliar)) {
             state.playerFamiliars.push(area.baseFamiliar);
+            // The boss's gift joins at a level that is useful where it was earned.
+            setJoinLevel(state, area.baseFamiliar, area.levelRange[1]);
           }
           if (area.unlocks && !state.unlockedAreas.includes(area.unlocks)) {
             state.unlockedAreas.push(area.unlocks);
           }
         }
+        // Daily Expedition first-clear bonus: only for today's daily run, and
+        // only once per UTC day.
+        if (state.dungeon && state.dungeon.daily === today && state.dailyClearedDay !== today) {
+          state.dailyClearedDay = today;
+          const dailyChest = rollChest('epic', rng);
+          const runLoot = getRunLoot(state.dungeon);
+          const bonusCurrency = BALANCE.dailyBonusCurrency + dailyChest.currency;
+          runLoot.currency += bonusCurrency;
+          for (const itemId of dailyChest.items) {
+            addInventoryItem(runLoot, itemId);
+          }
+          if (dailyChest.charm) {
+            (state.dungeon.runCharms ??= []).push({ ...dailyChest.charm, uid: generateId() });
+          }
+          rewards = {
+            ...(rewards ?? { currency: 0, items: [] }),
+            dailyBonus: {
+              currency: bonusCurrency,
+              items: [...dailyChest.items],
+              ...(dailyChest.charm ? { charm: dailyChest.charm } : {}),
+            },
+          };
+        }
+
+        // A boss clear ends the run; bank everything found plus the boss reward.
+        const clearedAreaId = state.dungeon?.areaId ?? '';
+        const banked = bankRunLoot(state);
+        if (state.dungeon) {
+          state.lastRunSummary = buildRunSummary({
+            outcome: 'cleared',
+            areaId: clearedAreaId,
+            areaName: AREAS[clearedAreaId]?.name,
+            stats: getRunStats(state.dungeon),
+            loot: banked,
+          });
+          runSummaryResponse = state.lastRunSummary;
+        }
         state.dungeon = null;
       } else {
-        rewards = generateBattleRewards(rng);
-        state.inventory.currency += rewards.currency;
-        for (const itemId of rewards.items) {
-          const existing = state.inventory.items.find((i) => i.itemId === itemId);
-          if (existing) {
-            existing.quantity += 1;
-          } else {
-            state.inventory.items.push({ itemId, quantity: 1 });
+        const battleRewards = generateBattleRewards(rng);
+        // Elite victories pay double coins and a rare chest. The chest and its
+        // charm are banked with the run loot exactly like the boss chest.
+        if (battle.enemyFamiliar.elite) {
+          battleRewards.currency *= 2;
+          const eliteChest = rollChest('rare', rng);
+          battleRewards.eliteChest = eliteChest;
+          const eliteLoot = getRunLoot(state.dungeon);
+          for (const itemId of eliteChest.items) {
+            addInventoryItem(eliteLoot, itemId);
+          }
+          eliteLoot.currency += eliteChest.currency;
+          if (eliteChest.charm && state.dungeon) {
+            (state.dungeon.runCharms ??= []).push({ ...eliteChest.charm, uid: generateId() });
           }
         }
+        rewards = battleRewards;
+        const runLoot = getRunLoot(state.dungeon);
+        runLoot.currency += battleRewards.currency;
+        for (const itemId of battleRewards.items) {
+          addInventoryItem(runLoot, itemId);
+        }
+
+        // Non-boss victories can recruit the defeated species. Rarer species
+        // are less likely; already-owned species and bosses are skipped. Wins
+        // also build bond, so a guaranteed recruit eventually follows unlucky
+        // runs instead of leaving it purely to chance.
+        const species = getFamiliar(battle.enemyFamiliar.familiarData.id);
+        if (species && !species.isBoss && !state.playerFamiliars.includes(species.id)) {
+          const recruit = applyRecruitWin(state, species.id, rng());
+          if (recruit.recruited) {
+            setJoinLevel(state, species.id, battle.enemyLevel ?? 1);
+            battleRewards.recruitedFamiliar = species.id;
+            battleRewards.recruitedName = species.name;
+            battleRewards.recruitedLevel = state.familiarLevels?.[species.id] ?? 1;
+            runStats?.recruits.push(species.id);
+            if (state.dungeon) {
+              state.dungeon.runRecruits = [...(state.dungeon.runRecruits ?? []), species.id];
+            }
+          } else {
+            if (runStats) {
+              runStats.bondGains[species.id] = (runStats.bondGains[species.id] ?? 0) + 1;
+            }
+            battleRewards.recruitProgress = {
+              familiarId: species.id,
+              name: species.name,
+              bond: recruit.bond,
+              needed: recruit.needed,
+            };
+          }
+        }
+
         if (state.dungeon) {
           persistCombatantResources(state.dungeon, battle.playerFamiliar);
         }
@@ -513,11 +933,35 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
     } else if (outcome === Outcome.Loss) {
       state.battleCount = (state.battleCount ?? 0) + 1;
       countCompletedBattle(state);
+      // The run's loot is lost; the banked inventory is untouched.
+      lostLoot = discardRunLoot(state);
+      if (state.dungeon) {
+        state.lastRunSummary = buildRunSummary({
+          outcome: 'defeated',
+          areaId: state.dungeon.areaId,
+          areaName: AREAS[state.dungeon.areaId]?.name,
+          stats: getRunStats(state.dungeon),
+          lost: lostLoot,
+        });
+        runSummaryResponse = state.lastRunSummary;
+      }
       state.dungeon = null;
     } else {
       if (state.dungeon) {
         persistCombatantResources(state.dungeon, battle.playerFamiliar);
       }
+    }
+
+    if (xpGained > 0) {
+      const xpReward = {
+        xp: xpGained,
+        ...(xpCatchUp ? { xpCatchUp: true } : {}),
+        levelUp: levelUps,
+        ...benchReward,
+        ...(learned.length > 0 ? { learned } : {}),
+        ...(passiveUnlockList.length > 0 ? { passiveUnlocks: passiveUnlockList } : {}),
+      };
+      rewards = rewards ? { ...rewards, ...xpReward } : { currency: 0, items: [], ...xpReward };
     }
 
     const turnResult: BattleTurnResult = {
@@ -527,9 +971,11 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       enemyFamiliar: battle.enemyFamiliar,
       battleOutcome: outcome,
       rewards,
+      lostLoot,
       steps: turnSteps,
       canceledActions,
       forcedSwap,
+      benchHealed,
     };
 
     // State-level item effects resolve outside the engine; surface them in
@@ -543,32 +989,56 @@ gameBattleRouter.post('/game/battle/action', async (c) => {
       }
     }
 
-    // Atomic: state + battle writes must succeed or fail together. Both
-    // statements are conditional on the rows read above, so a stale writer
-    // matches 0 rows and neither commit (D1 batch does not roll back a
-    // 0-row match on its own).
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, turnBefore);
-
-    const battleStmt =
+    // Atomic: state + battle writes must succeed or fail together. The battle
+    // statement runs first, guarded by the state version read above; the state
+    // statement is guarded by the same version plus the post-write battle shape.
+    // A 0-row match on either therefore forces a 0-row match on the other (D1
+    // batch does not roll back 0-row matches on its own).
+    const newBattleJson = JSON.stringify(battle);
+    const battleWrite =
       outcome !== Outcome.Continue
-        ? c.env.DB.prepare(
-            `DELETE FROM active_battles
-               WHERE battle_id = ? AND anonymous_id = ?
-                 AND json_extract(battle_json, '$.turnCount') = ?`
-          ).bind(battleId, anonymousId, turnBefore)
-        : c.env.DB.prepare(
-            `UPDATE active_battles
-               SET battle_json = ?, updated_at = datetime('now')
-               WHERE battle_id = ? AND anonymous_id = ?
-                 AND json_extract(battle_json, '$.turnCount') = ?`
-          ).bind(JSON.stringify(battle), battleId, anonymousId, turnBefore);
+        ? {
+            sql: `DELETE FROM active_battles
+                    WHERE battle_id = ? AND anonymous_id = ?
+                      AND json_extract(battle_json, '$.turnCount') = ?`,
+            params: [battleId, anonymousId, turnBefore],
+          }
+        : {
+            sql: `UPDATE active_battles
+                    SET battle_json = ?, updated_at = datetime('now')
+                    WHERE battle_id = ? AND anonymous_id = ?
+                      AND json_extract(battle_json, '$.turnCount') = ?`,
+            params: [newBattleJson, battleId, anonymousId, turnBefore],
+          };
+    const postBattle =
+      outcome !== Outcome.Continue
+        ? {
+            sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+            params: [battleId, anonymousId],
+          }
+        : {
+            sql: `EXISTS (SELECT 1 FROM active_battles
+                           WHERE battle_id = ? AND anonymous_id = ? AND battle_json = ?)`,
+            params: [battleId, anonymousId, newBattleJson],
+          };
 
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: battleWrite,
+      postBattle,
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ turnResult, state, turnCount: battle.turnCount });
+    return c.json({
+      turnResult,
+      state: sanitizeStateForClient(state),
+      turnCount: battle.turnCount,
+      ...(runSummaryResponse ? { runSummary: runSummaryResponse } : {}),
+    });
   } catch (error: unknown) {
     return internalError(c, error, 'Battle action');
   }
@@ -623,6 +1093,7 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
     }
 
     const state = loaded.state;
+    battle.playerPassives ??= battlePassives(state);
 
     const party = state.activeParty ?? [];
     if (!party.includes(newFamiliarId)) {
@@ -635,25 +1106,43 @@ gameBattleRouter.post('/game/battle/swap', async (c) => {
       return c.json({ error: 'Cannot swap to a fainted familiar' }, 400);
     }
 
+    // Snapshot the fields the swap changes so the battle write can be
+    // conditional on the exact row this swap was computed from. turnCount does
+    // not change on a swap, so it cannot be the concurrency token here.
+    const previousFamiliarId = battle.playerFamiliar.familiarData.id;
+    const previousSwaps = battle.swapsThisTurn ?? 0;
+
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
-    battle.playerFamiliar = buildIncomingCombatant(state.dungeon, newFamiliarId);
-    battle.swapsThisTurn = (battle.swapsThisTurn ?? 0) + 1;
+    battle.playerFamiliar = swapInCombatant(battle, state, newFamiliarId);
+    battle.swapsThisTurn = previousSwaps + 1;
 
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
-
-    const battleStmt = c.env.DB.prepare(
-      `UPDATE active_battles
-         SET battle_json = ?, updated_at = datetime('now')
-         WHERE battle_id = ? AND anonymous_id = ?
-           AND json_extract(battle_json, '$.turnCount') = ?`
-    ).bind(JSON.stringify(battle), battleId, anonymousId, battle.turnCount);
-
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    // See the action route: battle first (guarded by the state version), then
+    // the state write (guarded by the version AND the post-write battle row), so
+    // the two statements are all-or-nothing.
+    const newBattleJson = JSON.stringify(battle);
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `UPDATE active_battles
+                SET battle_json = ?, updated_at = datetime('now')
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND COALESCE(json_extract(battle_json, '$.swapsThisTurn'), 0) = ?
+                  AND json_extract(battle_json, '$.playerFamiliar.familiarData.id') = ?`,
+        params: [newBattleJson, battleId, anonymousId, previousSwaps, previousFamiliarId],
+      },
+      postBattle: {
+        sql: `EXISTS (SELECT 1 FROM active_battles
+                       WHERE battle_id = ? AND anonymous_id = ? AND battle_json = ?)`,
+        params: [battleId, anonymousId, newBattleJson],
+      },
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ battle });
+    return c.json({ battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Swap familiar');
   }
@@ -702,22 +1191,97 @@ gameBattleRouter.post('/game/battle/flee', async (c) => {
 
     persistCombatantResources(state.dungeon, battle.playerFamiliar);
 
-    const stateStmt = conditionalStateUpdate(c.env.DB, state, anonymousId, loaded.version, battleId, battle.turnCount);
-
-    const battleStmt = c.env.DB.prepare(
-      `DELETE FROM active_battles
-         WHERE battle_id = ? AND anonymous_id = ?
-           AND json_extract(battle_json, '$.turnCount') = ?`
-    ).bind(battleId, anonymousId, battle.turnCount);
-
-    const results = await c.env.DB.batch([stateStmt, battleStmt]);
-    if (results[0].meta.changes !== 1 || results[1].meta.changes !== 1) {
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `DELETE FROM active_battles
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND json_extract(battle_json, '$.turnCount') = ?`,
+        params: [battleId, anonymousId, battle.turnCount],
+      },
+      postBattle: {
+        sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+        params: [battleId, anonymousId],
+      },
+    });
+    if (!committed) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, message: 'Successfully fled from battle', battle });
+    return c.json({ success: true, message: 'Successfully fled from battle', battle: sanitizeBattleForClient(battle) });
   } catch (error: unknown) {
     return internalError(c, error, 'Flee battle');
+  }
+});
+
+gameBattleRouter.post('/game/battle/abandon', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string; battleId: string; expectedTurnCount: number }>(c);
+    if (!body) {
+      return c.json({ error: 'Invalid JSON body' }, 400);
+    }
+
+    const { anonymousId, battleId, expectedTurnCount } = body;
+    if (!anonymousId || !battleId) {
+      return c.json({ error: 'Missing required fields: anonymousId, battleId' }, 400);
+    }
+    if (typeof expectedTurnCount !== 'number') {
+      return c.json({ error: 'Missing required field: expectedTurnCount' }, 400);
+    }
+
+    const row = await c.env.DB.prepare(
+      'SELECT battle_json FROM active_battles WHERE battle_id = ? AND anonymous_id = ?'
+    )
+      .bind(battleId, anonymousId)
+      .first<{ battle_json: string }>();
+
+    if (!row) {
+      return c.json({ error: 'Battle not found' }, 404);
+    }
+
+    const battle = JSON.parse(row.battle_json) as BattleState;
+    if (expectedTurnCount !== battle.turnCount) {
+      return c.json({ error: 'Battle state is stale; please refresh and retry' }, 409);
+    }
+
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, c.get('isGuest') ?? false);
+    const state = loaded.state;
+
+    // Persist the active combatant's attrition. A non-boss abandon leaves the
+    // room's encounter unresolved (same as flee); a boss abandon forfeits the
+    // run. Run-loot penalties land with the run lifecycle work.
+    persistCombatantResources(state.dungeon, battle.playerFamiliar);
+    const forfeited = battle.isBoss;
+    let lostLoot: ReturnType<typeof discardRunLoot> | undefined;
+    if (forfeited) {
+      lostLoot = discardRunLoot(state);
+      state.dungeon = null;
+    }
+
+    const committed = await commitBattleAndState(c.env.DB, {
+      anonymousId,
+      expectedVersion: loaded.version,
+      state,
+      battle: {
+        sql: `DELETE FROM active_battles
+                WHERE battle_id = ? AND anonymous_id = ?
+                  AND json_extract(battle_json, '$.turnCount') = ?`,
+        params: [battleId, anonymousId, battle.turnCount],
+      },
+      postBattle: {
+        sql: 'NOT EXISTS (SELECT 1 FROM active_battles WHERE battle_id = ? AND anonymous_id = ?)',
+        params: [battleId, anonymousId],
+      },
+    });
+    if (!committed) {
+      return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
+    }
+
+    return c.json({ success: true, state: sanitizeStateForClient(state), forfeited, lostLoot });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Abandon battle');
   }
 });
 

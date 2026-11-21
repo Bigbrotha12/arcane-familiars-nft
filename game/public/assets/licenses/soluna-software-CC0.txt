@@ -1,0 +1,6 @@
+Work: "Lots of game effects"
+Author: Soluna Software
+Source: https://opengameart.org/content/lots-of-game-effects
+Licence: CC0 1.0 Universal (Public Domain Dedication)
+         https://creativecommons.org/publicdomain/zero/1.0/
+Changes: see docs/assets/CREDITS.md.

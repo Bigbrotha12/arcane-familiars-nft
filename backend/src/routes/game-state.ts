@@ -1,16 +1,21 @@
 import { Hono } from 'hono';
-import { validateParty } from '@arcane-familiars/game-logic';
+import { validateParty, reconcileActiveBattle } from '@arcane-familiars/game-logic';
 import type { Bindings, Variables } from '../types';
-import {
-  getOrCreateGameState,
-  hasActiveBattle,
-  saveGameStateIfVersion,
-  saveGameStateIfVersionNoBattle,
-} from '../utils/saveManager';
+import { getOrCreateGameState, hasActiveBattle, saveGameStateIfVersionNoBattle } from '../utils/saveManager';
 import { internalError, readBody } from '../utils/http';
-import { isOwnershipAuthorityEnabled, resolveFieldableFamiliars } from '../utils/ownership';
+import { sanitizeBattleForClient, sanitizeStateForClient } from '../utils/sanitize';
 
 const gameStateRouter = new Hono<{ Bindings: Bindings; Variables: Variables }>();
+
+async function getActiveBattleRow(
+  db: D1Database,
+  anonymousId: string
+): Promise<{ battle_id: string; battle_json: string } | null> {
+  return db
+    .prepare('SELECT battle_id, battle_json FROM active_battles WHERE anonymous_id = ? LIMIT 1')
+    .bind(anonymousId)
+    .first<{ battle_id: string; battle_json: string }>();
+}
 
 gameStateRouter.post('/game/state/load', async (c) => {
   try {
@@ -22,9 +27,49 @@ gameStateRouter.post('/game/state/load', async (c) => {
 
     const isGuest = c.get('isGuest') ?? false;
     const { state } = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
-    return c.json({ state });
+    return c.json({ state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Load state');
+  }
+});
+
+/**
+ * Bootstrap returns the save plus any active battle to resume, and repairs
+ * orphaned rows (battle without a dungeon, missing room, or already-resolved
+ * encounter) so the unique one-battle index cannot strand the player.
+ */
+gameStateRouter.post('/game/bootstrap', async (c) => {
+  try {
+    const body = await readBody<{ anonymousId: string }>(c);
+    if (!body?.anonymousId) {
+      return c.json({ error: 'Missing required field: anonymousId' }, 400);
+    }
+
+    const anonymousId = body.anonymousId;
+    const isGuest = c.get('isGuest') ?? false;
+    // getOrCreateGameState rejects a guest presenting an account key (403), so
+    // bootstrap inherits the same provenance check as every other game route.
+    const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
+
+    const state = loaded.state;
+    const active = await getActiveBattleRow(c.env.DB, anonymousId);
+
+    if (!active) {
+      return c.json({ state: sanitizeStateForClient(state), battle: null });
+    }
+
+    const battle = JSON.parse(active.battle_json);
+    const decision = reconcileActiveBattle(state.dungeon, battle);
+    if (decision.action === 'delete') {
+      await c.env.DB.prepare('DELETE FROM active_battles WHERE battle_id = ? AND anonymous_id = ?')
+        .bind(active.battle_id, anonymousId)
+        .run();
+      return c.json({ state: sanitizeStateForClient(state), battle: null });
+    }
+
+    return c.json({ state: sanitizeStateForClient(state), battle: sanitizeBattleForClient(battle) });
+  } catch (error: unknown) {
+    return internalError(c, error, 'Bootstrap');
   }
 });
 
@@ -51,16 +96,11 @@ gameStateRouter.post('/game/state/party', async (c) => {
     const loaded = await getOrCreateGameState(c.env.DB, anonymousId, isGuest);
     const state = loaded.state;
 
-    // Fieldable set is the persisted grants plus (flag-gated) on-chain
-    // ownership. With the flag off this is exactly playerFamiliars and no
-    // extra read happens.
-    const fieldable = await resolveFieldableFamiliars(
-      c.env.DB,
-      c.get('accountKey'),
-      state,
-      isOwnershipAuthorityEnabled(c.env)
-    );
-    const validation = validateParty(activeParty, fieldable);
+    if (await getActiveBattleRow(c.env.DB, anonymousId)) {
+      return c.json({ error: 'Cannot change party during an active battle' }, 409);
+    }
+
+    const validation = validateParty(activeParty, state.playerFamiliars);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }
@@ -71,12 +111,12 @@ gameStateRouter.post('/game/state/party', async (c) => {
 
     state.activeParty = [...activeParty];
 
-    const saved = await saveGameStateIfVersion(c.env.DB, anonymousId, state, loaded.version);
+    const saved = await saveGameStateIfVersionNoBattle(c.env.DB, anonymousId, state, loaded.version);
     if (!saved) {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state });
+    return c.json({ success: true, state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Set party');
   }
@@ -141,7 +181,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
     const activePartyInOrder = state.activeParty[0] === familiarId;
     const dungeonPartyInOrder = !state.dungeon || state.dungeon.party[0] === familiarId;
     if (activePartyInOrder && dungeonPartyInOrder) {
-      return c.json({ success: true, state });
+      return c.json({ success: true, state: sanitizeStateForClient(state) });
     }
 
     const reorderToLead = (party: string[]): string[] => {
@@ -152,16 +192,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
 
     const reordered = reorderToLead(state.activeParty);
 
-    // Resolved only past the no-op short-circuit above, so the common
-    // already-leading case stays a single state read. Flag off (default) is
-    // exactly playerFamiliars, no extra D1 read.
-    const fieldable = await resolveFieldableFamiliars(
-      c.env.DB,
-      c.get('accountKey'),
-      state,
-      isOwnershipAuthorityEnabled(c.env)
-    );
-    const validation = validateParty(reordered, fieldable);
+    const validation = validateParty(reordered, state.playerFamiliars);
     if (!validation.valid) {
       return c.json({ error: validation.error ?? 'Invalid party' }, 400);
     }
@@ -176,7 +207,7 @@ gameStateRouter.post('/game/state/party/active', async (c) => {
       return c.json({ error: 'Game state changed concurrently; please retry' }, 409);
     }
 
-    return c.json({ success: true, state });
+    return c.json({ success: true, state: sanitizeStateForClient(state) });
   } catch (error: unknown) {
     return internalError(c, error, 'Set active familiar');
   }

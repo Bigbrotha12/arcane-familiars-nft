@@ -1,42 +1,29 @@
 import type { Context, Next } from 'hono';
 import type { Bindings, Variables } from '../types';
-import { readBearerToken, verifyIdToken } from '../utils/auth';
+import { getSessionUser } from '../utils/auth';
+import { readSessionToken } from '../utils/cookies';
 
 type GameContext = Context<{ Bindings: Bindings; Variables: Variables }>;
 
 /**
- * Guard for /api/game/*. When a valid Passport Bearer ID token is present, its
- * `sub` claim becomes the game's account key (stored in the request context) and
- * `isGuest` is set to `false`.
+ * Guard for /api/game/*.
  *
- * When NO token is present the request is allowed through in ALL environments
- * with `accountKey` unset and `isGuest = true` (guest trial play). Guests are
- * identified by a client-generated anonymous id, but their game state is still
- * PERSISTED to D1 exactly like a signed-in user's (marked `is_anonymous = 1` so
- * a future cleanup job can purge stale guest rows).
+ * No token → guest play, keyed by the client-generated anonymous id.
+ * Valid session token → `accountKey` is the local user id and `isGuest` is false.
+ * Invalid/expired token → 401, never a silent downgrade to the guest save.
  *
- * When a token IS present but cannot be verified (expired, forged, wrong
- * issuer/audience, or a transient JWKS failure) the request is rejected with
- * 401 rather than falling through to guest. Silently downgrading a signed-in
- * player to their anonymous guest key would fork their state (and, after an
- * adopt, create a fresh empty save) — the client refreshes the ID token and
- * retries. A request that never carried a token is unaffected guest play.
- *
- * SECURITY INVARIANT: every handler behind this gate MUST read its body via
- * `readBody()` from `utils/http.ts`, which overrides `anonymousId` with the
- * verified `accountKey` from context. A handler that reads `c.req.json()`
- * directly would trust the client-provided anonymousId, reintroducing the
- * account-forgery risk this middleware was designed to prevent.
+ * Every handler behind this gate MUST read its body via `readBody()` in
+ * `utils/http.ts`, which overrides `anonymousId` with `accountKey`.
  */
 export async function authMiddleware(c: GameContext, next: Next): Promise<Response | void> {
-  const token = readBearerToken(c);
+  const token = readSessionToken(c);
 
   if (token) {
-    const result = await verifyIdToken(token, c.env);
-    if (!result) {
+    const user = await getSessionUser(c.env.DB, token);
+    if (!user) {
       return c.json({ error: 'Unauthorized' }, 401);
     }
-    c.set('accountKey', result.sub);
+    c.set('accountKey', user.userId);
     c.set('isGuest', false);
     return next();
   }

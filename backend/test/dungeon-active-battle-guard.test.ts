@@ -132,7 +132,7 @@ describe('dungeon mutations are blocked during an active battle', () => {
   ];
 
   it.each(endpoints)('$path returns 409 while a battle is active', async ({ path, body }) => {
-    const anonId = `anon-guard-${path.split('/').pop()}`;
+    const anonId = crypto.randomUUID();
     await seedState(anonId);
     await seedBattle(`battle-${path.split('/').pop()}`, anonId);
 
@@ -142,7 +142,7 @@ describe('dungeon mutations are blocked during an active battle', () => {
   });
 
   it('allows the mutation once the battle row is gone', async () => {
-    const anonId = 'anon-guard-released';
+    const anonId = '84e11b5b-9b3c-4b82-87de-fa27c655cd60';
     await seedState(anonId);
     await seedBattle('battle-guard-released', anonId);
 
@@ -159,7 +159,7 @@ describe('dungeon mutations are blocked during an active battle', () => {
 describe('saveGameStateIfVersionNoBattle', () => {
   it('refuses to commit while a battle row exists, even at the current version', async () => {
     const db = env.DB;
-    const anonId = 'anon-nobattle-unit';
+    const anonId = '1475b699-ae9a-48fe-88b4-d21304206200';
     const loaded = await getOrCreateGameState(db, anonId, true);
 
     await db

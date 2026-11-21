@@ -1,5 +1,6 @@
 import type { GameState } from '@arcane-familiars/game-logic';
 import { generateId } from './uuid';
+import { GuestAccountAccessError } from './errors';
 
 export interface LoadedState {
   state: GameState;
@@ -15,6 +16,8 @@ export function createDefaultGameState(anonymousId: string): GameState {
     anonymousId,
     playerFamiliars: ['whiteDog', 'yellowFighter', 'aquaSprite'],
     activeParty: [],
+    familiarLevels: {},
+    familiarXp: {},
     inventory: {
       currency: 100,
       items: [{ itemId: 'potion_small', quantity: 3 }],
@@ -43,20 +46,44 @@ export async function loadGameState(db: D1Database, anonymousId: string): Promis
 }
 
 /**
+ * True when `anonymousId` belongs to a registered account. Guests must never be
+ * allowed to access these rows: readBody binds authenticated bodies to the
+ * verified account key, but a guest controls `anonymousId` freely and could
+ * otherwise present a user id to read/write that account's save (including
+ * pre-creating a guest-marked row under an account id that has not saved yet).
+ */
+async function isAccountKey(db: D1Database, anonymousId: string): Promise<boolean> {
+  const user = await db.prepare('SELECT 1 AS one FROM users WHERE user_id = ? LIMIT 1').bind(anonymousId).first();
+  return user !== null;
+}
+
+/**
  * Load an existing state or create (and persist) a default one. Uses an
  * idempotent INSERT so concurrent first loads cannot collide.
  *
- * Guest sessions (no Passport token) are persisted exactly like signed-in
+ * Guest sessions (no session token) are persisted exactly like signed-in
  * users, but marked `is_anonymous = 1` so a future cleanup job can purge
- * stale guest rows.
+ * stale guest rows. A guest may only ever touch guest-marked rows: trying to
+ * use an account's id (or a non-guest save) throws GuestAccountAccessError,
+ * which routes surface as 403. This is the single choke point every /api/game
+ * route goes through, so no route can opt out by forgetting a local check.
  */
 export async function getOrCreateGameState(
   db: D1Database,
   anonymousId: string,
   isGuest: boolean = false
 ): Promise<LoadedState> {
+  if (isGuest && (await isAccountKey(db, anonymousId))) {
+    throw new GuestAccountAccessError();
+  }
+
   const existing = await loadGameState(db, anonymousId);
-  if (existing) return existing;
+  if (existing) {
+    if (isGuest && !existing.isAnonymous) {
+      throw new GuestAccountAccessError();
+    }
+    return existing;
+  }
 
   const state = createDefaultGameState(anonymousId);
   await db
@@ -71,6 +98,9 @@ export async function getOrCreateGameState(
   const created = await loadGameState(db, anonymousId);
   if (!created) {
     throw new Error(`Failed to create game state for ${anonymousId}`);
+  }
+  if (isGuest && !created.isAnonymous) {
+    throw new GuestAccountAccessError();
   }
   return created;
 }
@@ -141,30 +171,76 @@ export async function saveGameStateIfVersionNoBattle(
   return result.meta.changes === 1;
 }
 
+/** A SQL predicate plus its bind parameters. */
+export interface SqlPredicate {
+  sql: string;
+  params: (string | number)[];
+}
+
 /**
- * Conditional state write used by battle routes: the UPDATE matches only when
- * BOTH the state row is at `expectedVersion` AND the battle row still exists
- * with `battleTurnCount` (via its persisted turnCount). The battle write in
- * the same D1 batch is conditional on the same battle row, so both statements
- * match-or-both-no-op — a stale battle row can no longer commit a state write
- * (which would leak cap increments/rewards). Returns the prepared statement;
- * the caller batches it with the battle statement.
+ * Conditional state write used by battle routes. It matches only when the
+ * state row is still at `expectedVersion` AND, when supplied, the post-write
+ * battle predicate holds. In a battle batch the battle statement runs FIRST
+ * (guarded by the same state version), so:
+ *
+ * - if the battle write matched, the version is still `expectedVersion` and the
+ *   post-write predicate describes the row we just wrote → the state write
+ *   matches too;
+ * - if the battle write matched 0 rows (stale writer), the battle row is
+ *   unchanged, so a predicate describing the intended new battle row cannot
+ *   hold and the state write matches 0 rows as well.
+ *
+ * That makes the pair all-or-nothing despite D1 batch not rolling back 0-row
+ * matches. Returns the prepared statement; the caller batches it after the
+ * battle statement via `commitBattleAndState`.
  */
 export function conditionalStateUpdate(
   db: D1Database,
   state: GameState,
   anonymousId: string,
   expectedVersion: number,
-  battleId: string,
-  battleTurnCount: number
+  postBattle?: SqlPredicate
 ): D1PreparedStatement {
+  const postBattleGuard = postBattle ? ` AND (${postBattle.sql})` : '';
   return db
     .prepare(
       `UPDATE game_states
          SET state_json = ?, version = version + 1, updated_at = datetime('now')
-         WHERE anonymous_id = ? AND version = ?
-           AND (SELECT json_extract(battle_json, '$.turnCount') FROM active_battles
-                WHERE battle_id = ? AND anonymous_id = ?) = ?`
+         WHERE anonymous_id = ? AND version = ?${postBattleGuard}`
     )
-    .bind(JSON.stringify(state), anonymousId, expectedVersion, battleId, anonymousId, battleTurnCount);
+    .bind(JSON.stringify(state), anonymousId, expectedVersion, ...(postBattle?.params ?? []));
+}
+
+export interface AtomicBattleWrite {
+  anonymousId: string;
+  expectedVersion: number;
+  state: GameState;
+  /** Full UPDATE/DELETE statement (with its own WHERE) plus bind parameters. */
+  battle: SqlPredicate;
+  /** Predicate that must hold AFTER the battle statement lands. */
+  postBattle: SqlPredicate;
+}
+
+/**
+ * Atomically commit a battle-row mutation together with its game-state write.
+ *
+ * The battle statement is first and additionally requires the game_states row
+ * to still be at `expectedVersion`; the state statement is second and requires
+ * both the same version and `postBattle` (which describes the battle row as it
+ * must look after the battle statement). Both therefore match 1 row or both
+ * match 0 rows, closing the hole where a 0-row state update still let the
+ * battle write commit (free boss abandon / lost rewards).
+ */
+export async function commitBattleAndState(db: D1Database, write: AtomicBattleWrite): Promise<boolean> {
+  const battleStmt = db
+    .prepare(
+      `${write.battle.sql}
+         AND EXISTS (SELECT 1 FROM game_states WHERE anonymous_id = ? AND version = ?)`
+    )
+    .bind(...write.battle.params, write.anonymousId, write.expectedVersion);
+
+  const stateStmt = conditionalStateUpdate(db, write.state, write.anonymousId, write.expectedVersion, write.postBattle);
+
+  const results = await db.batch([battleStmt, stateStmt]);
+  return results[0]?.meta.changes === 1 && results[1]?.meta.changes === 1;
 }

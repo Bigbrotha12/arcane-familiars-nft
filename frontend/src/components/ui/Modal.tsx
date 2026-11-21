@@ -1,5 +1,14 @@
 import { useEffect, ReactNode } from 'react';
 
+// How many modals are mounted right now. Overlays that own global shortcuts
+// (encounter Fight/Flee, boss Enter/Retreat) consult this so an open modal —
+// the exit dialog, for example — does not also trigger them.
+let openModalCount = 0;
+
+export function isModalOpen(): boolean {
+  return openModalCount > 0;
+}
+
 interface ModalProps {
   open: boolean;
   onClose: () => void;
@@ -12,19 +21,26 @@ interface ModalProps {
   /** Dense in-game sizing (narrow width, tighter padding/type) for modals
       that live inside the 800x600 design-space HUD stage. */
   compact?: boolean;
+  /** Wider HUD panel (max-w 640px) for two-column content such as Team. */
+  wide?: boolean;
 }
 
-function Modal({ open, onClose, title, children, hud = false, compact = false }: ModalProps) {
+function Modal({ open, onClose, title, children, hud = false, compact = false, wide = false }: ModalProps) {
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
     };
     document.addEventListener('keydown', handler);
+    openModalCount += 1;
+    const previousOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', handler);
-      document.body.style.overflow = '';
+      openModalCount = Math.max(0, openModalCount - 1);
+      // Only release the scroll lock when the last modal closes, so closing a
+      // nested dialog cannot un-lock a still-open parent.
+      if (openModalCount === 0) document.body.style.overflow = previousOverflow;
     };
   }, [open, onClose]);
 
@@ -33,17 +49,22 @@ function Modal({ open, onClose, title, children, hud = false, compact = false }:
   return (
     <div className="pointer-events-auto fixed inset-0 z-50 flex items-center justify-center p-md">
       <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} aria-hidden="true" />
+      {/* `compact` modals live inside the 800x600 HUD stage, so on a phone they
+          render at roughly half size; the `max-sm:` rules double the design-space
+          type so the in-game panels stay readable at 390px wide. */}
       <div
         className={`relative w-full rounded-lg animate-in fade-in zoom-in-95 duration-200 ${
-          compact ? 'max-w-[300px] p-md' : 'max-w-md p-lg'
-        } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'}`}
+          compact ? 'max-w-[300px] p-2.5' : hud ? (wide ? 'max-w-[640px] p-md' : 'max-w-md p-md') : 'max-w-md p-lg'
+        } ${hud ? 'hud-frame rounded-lg' : 'bg-surface-card shadow-card-hover'} ${
+          compact ? 'max-sm:max-w-[600px] max-sm:p-lg max-sm:[&_p]:text-[19px] max-sm:[&_button]:text-[20px]' : ''
+        }`}
       >
         {title && (
           <div className={`flex items-center justify-between ${compact ? 'mb-sm' : 'mb-md'}`}>
             <h2
-              className={`font-display font-semibold ${compact ? 'text-sm' : 'text-xl'} ${
-                hud ? 'text-[#F0EFFF]' : 'text-text-primary'
-              }`}
+              className={`font-display font-semibold ${
+                compact ? 'text-sm max-sm:text-[28px]' : `text-xl ${wide ? 'max-sm:text-[30px]' : ''}`
+              } ${hud ? 'text-[#F0EFFF]' : 'text-text-primary'}`}
             >
               {title}
             </h2>

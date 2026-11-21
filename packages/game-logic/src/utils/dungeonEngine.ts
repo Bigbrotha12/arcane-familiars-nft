@@ -1,7 +1,21 @@
-import { type Area, type Room, type DungeonState, RoomType } from '@/types/exploration';
-import type { FamiliarData } from '@/data/familiars';
-import { ITEMS } from '@/data/items';
+import {
+  type Area,
+  type ChestTier,
+  type Room,
+  type DungeonState,
+  RoomType,
+  type RestHealAmount,
+} from '@/types/exploration';
+import { getFamiliar, type FamiliarData } from '@/data/familiars';
+import { BALANCE } from '@/data/balance';
+import { ITEMS, itemRarity } from '@/data/items';
 import { randomInRange, weightedRandom, seededRandom } from '@/utils/mathUtils';
+import { scaleFamiliarStats } from '@/utils/progression';
+import { abilitiesAtLevel } from '@/utils/learnset';
+import { emptyInventory } from '@/utils/runLoot';
+import { curiosForArea } from '@/data/curios';
+import { rollCharm } from '@/utils/charms';
+import type { CharmRarity, CharmRoll } from '@/data/charms';
 
 /**
  * Dungeon treasure pool, derived from item data: any item with a dropWeight
@@ -39,6 +53,14 @@ const ROOM_DESCRIPTIONS = [
   'The walls glisten with moisture.',
   'A gentle breeze flows through.',
   'Ancient runes line the walls.',
+];
+
+/** Named side chambers that guarantee a chest at the end of a detour. */
+const BRANCH_ROOMS = [
+  { name: 'Forgotten Cache', description: 'A stash left by a traveller who never returned.' },
+  { name: 'Overgrown Alcove', description: 'Vines part to reveal a hidden alcove.' },
+  { name: 'Sunken Strongbox', description: 'A rusted strongbox rests in the damp quiet.' },
+  { name: 'Dust-Choked Vault', description: 'An old vault, sealed until now.' },
 ];
 
 export enum Directions {
@@ -79,21 +101,26 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   rooms['room_0'] = startRoom;
   roomIds.push('room_0');
 
-  // Create normal rooms
+  // Create normal rooms. Longer dungeons swap the last main-path room for a
+  // rest shrine: the chain is linear, so the shrine is the room players pass
+  // through on their way into the boss chamber, giving an attrition run one
+  // guaranteed breather before the fight that actually ends it.
   const normalCount = area.roomCount - 2;
+  const restIndex = area.roomCount >= 6 ? normalCount - 1 : -1;
   for (let i = 0; i < normalCount; i++) {
     const nameIdx = randomInRange(rng, 0, ROOM_NAMES.length - 1);
     const descIdx = randomInRange(rng, 0, ROOM_DESCRIPTIONS.length - 1);
     const depth = (i + 1) / normalCount;
+    const isRest = i === restIndex;
     const room: Room = {
       id: `room_${i + 1}`,
-      name: ROOM_NAMES[nameIdx],
-      description: ROOM_DESCRIPTIONS[descIdx],
-      type: RoomType.Normal,
+      name: isRest ? 'Quiet Shrine' : ROOM_NAMES[nameIdx],
+      description: isRest ? 'Soft light pools around an old stone shrine.' : ROOM_DESCRIPTIONS[descIdx],
+      type: isRest ? RoomType.Rest : RoomType.Normal,
       exits: [],
-      encounterChance: 0.3 + depth * 0.3,
-      treasureChance: 0.15 + depth * 0.1,
-      treasurePool: TREASURE_POOL.map((entry) => ({ ...entry })),
+      encounterChance: isRest ? 0 : 0.3 + depth * 0.3,
+      treasureChance: isRest ? 0 : 0.25 + depth * 0.15,
+      treasurePool: isRest ? [] : TREASURE_POOL.map((entry) => ({ ...entry })),
       cleared: false,
     };
     rooms[room.id] = room;
@@ -104,7 +131,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
   const bossRoom: Room = {
     id: `room_${normalCount + 1}`,
     name: 'Boss Chamber',
-    description: `The ${area.bossId} awaits in the final chamber.`,
+    description: `The ${getFamiliar(area.bossId)?.name ?? area.bossId} awaits in the final chamber.`,
     type: RoomType.Boss,
     exits: [],
     encounterChance: 0,
@@ -144,6 +171,52 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     }
   }
 
+  // Add side branches: dead-end chambers that always hold a chest. They attach
+  // to distinct normal main-path rooms so a detour is always optional. The
+  // branch ids live outside the room_0..room_N chain, so every piece of
+  // main-path logic (boss reachability, rest placement) is untouched.
+  const branchCount = area.roomCount <= 6 ? 1 : 2;
+  const branchHosts = roomIds.map((id) => rooms[id]).filter((room) => room.type === RoomType.Normal);
+  for (let b = 0; b < branchCount && branchHosts.length > 0; b++) {
+    const hostIdx = randomInRange(rng, 0, branchHosts.length - 1);
+    const [host] = branchHosts.splice(hostIdx, 1);
+    const branchId = `branch_${b + 1}`;
+    const template = BRANCH_ROOMS[randomInRange(rng, 0, BRANCH_ROOMS.length - 1)];
+    const branch: Room = {
+      id: branchId,
+      name: template.name,
+      description: template.description,
+      type: RoomType.Deadend,
+      exits: [],
+      // Guarded by a fight 60% of the time; the chest itself is guaranteed.
+      encounterChance: 0.6,
+      treasureChance: 1,
+      treasurePool: TREASURE_POOL.map((entry) => ({ ...entry })),
+      cleared: false,
+      chest: 'rare',
+    };
+    rooms[branchId] = branch;
+
+    const dir = randomInRange(rng, 0, 7) as Directions;
+    host.exits.push({ direction: dir, roomId: branchId, label: branch.name });
+    branch.exits.push({ direction: getOppositeDirection(dir), roomId: host.id, label: host.name });
+  }
+
+  // Place curios only after the main path and branches are built, so their RNG
+  // draws never shift the existing room/exits/branch layout for a given seed.
+  // Only normal main-path rooms qualify; each curio is used at most once per
+  // dungeon and must belong to the area.
+  const curioCount = area.roomCount <= 6 ? 1 : 2;
+  const curioHosts = roomIds.map((id) => rooms[id]).filter((room) => room.type === RoomType.Normal);
+  const areaCurios = curiosForArea(area.id);
+  for (let i = 0; i < curioCount && curioHosts.length > 0 && areaCurios.length > 0; i++) {
+    const hostIdx = randomInRange(rng, 0, curioHosts.length - 1);
+    const [host] = curioHosts.splice(hostIdx, 1);
+    const curioIdx = randomInRange(rng, 0, areaCurios.length - 1);
+    const [curio] = areaCurios.splice(curioIdx, 1);
+    host.curio = { id: curio.id, used: false };
+  }
+
   return {
     areaId: area.id,
     currentRoomId: 'room_0',
@@ -152,6 +225,7 @@ export function generateDungeon(area: Area, seed: number): DungeonState {
     partyMp: {},
     rooms,
     seed,
+    runLoot: emptyInventory(),
   };
 }
 
@@ -183,6 +257,113 @@ export function rollTreasure(room: Room, rng: () => number): boolean {
   return rng() < room.treasureChance;
 }
 
+const CHEST_CONFIG: Record<ChestTier, { itemCount: number; minCoins: number; maxCoins: number }> = {
+  common: { itemCount: 1, minCoins: 0, maxCoins: 0 },
+  rare: { itemCount: 2, minCoins: 30, maxCoins: 60 },
+  epic: { itemCount: 3, minCoins: 80, maxCoins: 150 },
+};
+
+const CHEST_CHARM: Record<ChestTier, { chance: number; rarity: CharmRarity }> = {
+  common: { chance: 0.05, rarity: 'common' },
+  rare: { chance: 0.3, rarity: 'uncommon' },
+  epic: { chance: 1, rarity: 'rare' },
+};
+
+function rollPoolItem(rng: () => number): string {
+  return TREASURE_POOL[weightedRandom(rng, TREASURE_POOL)].itemId;
+}
+
+function rollPoolItems(count: number, rng: () => number): string[] {
+  return Array.from({ length: count }, () => rollPoolItem(rng));
+}
+
+function meetsChestFloor(tier: ChestTier, itemIds: string[]): boolean {
+  if (tier === 'common') return true;
+  return itemIds.some((id) => {
+    const item = ITEMS[id];
+    if (!item) return false;
+    const rarity = itemRarity(item);
+    return tier === 'epic' ? rarity === 'rare' : rarity !== 'common';
+  });
+}
+
+/**
+ * Roll a chest of the given tier from the shared treasure pool.
+ * Rare chests guarantee at least one uncommon-or-better item; epic chests
+ * guarantee at least one rare item. The set is rerolled up to 5 times, then
+ * the last item is drawn from qualifying items only, so the floor always holds.
+ */
+export function rollChest(
+  tier: ChestTier,
+  rng: () => number
+): { items: string[]; currency: number; charm?: CharmRoll } {
+  const config = CHEST_CONFIG[tier];
+  if (TREASURE_POOL.length === 0) return { items: [], currency: 0 };
+
+  let items = rollPoolItems(config.itemCount, rng);
+  if (tier !== 'common') {
+    for (let reroll = 0; reroll < 5 && !meetsChestFloor(tier, items); reroll++) {
+      items = rollPoolItems(config.itemCount, rng);
+    }
+    if (!meetsChestFloor(tier, items)) {
+      // Still unlucky: swap the last item for one drawn only from the items
+      // that satisfy the floor, so the tier's promise always holds.
+      const qualifying = TREASURE_POOL.filter((entry) => meetsChestFloor(tier, [entry.itemId]));
+      if (qualifying.length > 0) {
+        items = [...items.slice(0, -1), qualifying[weightedRandom(rng, qualifying)].itemId];
+      }
+    }
+  }
+
+  const currency = config.maxCoins > 0 ? randomInRange(rng, config.minCoins, config.maxCoins) : 0;
+  const result: { items: string[]; currency: number; charm?: CharmRoll } = { items, currency };
+
+  // Rolled after the items/coins so adding charms never shifts existing item
+  // rolls for a given rng sequence.
+  const charmConfig = CHEST_CHARM[tier];
+  if (rng() < charmConfig.chance) {
+    result.charm = rollCharm(charmConfig.rarity, rng);
+  }
+
+  return result;
+}
+
+export interface RoomTreasure {
+  tier: ChestTier;
+  items: string[];
+  currency: number;
+  charm?: CharmRoll;
+}
+
+/**
+ * First-visit treasure roll for one room. Shared by the explore route and the
+ * loot-rate simulation so the two can never drift. A room with `chest` set
+ * always yields that chest; a normal room rolls its treasureChance and then a
+ * common chest, with a 15% chance of an upgrade to rare.
+ */
+export function rollRoomTreasure(room: Room, rng: () => number): RoomTreasure | null {
+  if (room.chest) {
+    return { tier: room.chest, ...rollChest(room.chest, rng) };
+  }
+  if (room.type !== RoomType.Normal || room.treasurePool.length === 0) return null;
+  if (!rollTreasure(room, rng)) return null;
+
+  const tier: ChestTier = rng() < 0.15 ? 'rare' : 'common';
+  return { tier, ...rollChest(tier, rng) };
+}
+
+/**
+ * Deterministic seed for a room's first-visit rolls: same dungeon seed and
+ * room id always replay the same outcome.
+ */
+export function roomRollSeed(dungeonSeed: number, roomId: string): number {
+  let hash = 0;
+  for (let i = 0; i < roomId.length; i++) {
+    hash = (Math.imul(hash, 31) + roomId.charCodeAt(i)) | 0;
+  }
+  return (dungeonSeed ?? 0) ^ (hash >>> 0);
+}
+
 /**
  * Select a random treasure item from the room's pool using weighted random.
  */
@@ -202,13 +383,77 @@ export function selectEnemy(area: Area, rng: () => number): string | null {
 }
 
 /**
+ * Apply the one-time rest-shrine heal to a dungeon's party.
+ *
+ * Fainted members (hp <= 0) are skipped and stay down: a shrine is a breather,
+ * not a revive. Each living member regains `restHealFraction` of its
+ * level-scaled max HP and MP, capped at that max. Returns the amount actually
+ * restored per familiar id.
+ */
+export function healPartyAtRest(
+  dungeon: DungeonState,
+  familiarLevels: Record<string, number> = {}
+): Record<string, RestHealAmount> {
+  const healed: Record<string, RestHealAmount> = {};
+
+  for (const familiarId of dungeon.party ?? []) {
+    const base = getFamiliar(familiarId);
+    const currentHp = dungeon.partyHp[familiarId];
+    if (!base || typeof currentHp !== 'number' || currentHp <= 0) continue;
+
+    const max = scaleFamiliarStats(base.stats, familiarLevels[familiarId] ?? 1);
+    const currentMp = dungeon.partyMp[familiarId] ?? 0;
+
+    const hpRestored = Math.max(0, Math.min(max.maxHp - currentHp, Math.round(max.maxHp * BALANCE.restHealFraction)));
+    const mpRestored = Math.max(0, Math.min(max.maxMp - currentMp, Math.round(max.maxMp * BALANCE.restHealFraction)));
+
+    dungeon.partyHp[familiarId] = currentHp + hpRestored;
+    dungeon.partyMp[familiarId] = currentMp + mpRestored;
+    healed[familiarId] = { hp: hpRestored, mp: mpRestored };
+  }
+
+  return healed;
+}
+
+/**
+ * Position of a main-path room as a fraction of the dungeon's normal rooms
+ * (0..1). This is the same depth used to scale encounter/treasure chances at
+ * generation. Branch/unknown room ids count as deepest.
+ */
+export function roomDepth(room: Room, area: Area): number {
+  const match = /^room_(\d+)$/.exec(room.id);
+  if (!match) return 1;
+  const normalCount = Math.max(1, area.roomCount - 2);
+  return Math.min(1, Math.max(0, Number(match[1]) / normalCount));
+}
+
+/**
+ * Whether a room can host an elite encounter. Only main-path normal rooms
+ * qualify: never the start room, the boss chamber, or `room_1` (the first room
+ * after the entrance). Curio ambushes never call this.
+ */
+export function isEliteRoom(room: Room): boolean {
+  if (room.type !== RoomType.Normal) return false;
+  const match = /^room_(\d+)$/.exec(room.id);
+  return match ? Number(match[1]) > 1 : false;
+}
+
+/** Per-room elite chance: base + depth-scaled bonus. */
+export function eliteChanceForRoom(room: Room, area: Area): number {
+  return BALANCE.eliteChance + BALANCE.eliteChancePerDepth * roomDepth(room, area);
+}
+
+/**
  * Scale an enemy familiar's stats based on level.
  * Uses the plan's scaling: base stats * (1 + 0.1 * (level - 1))
  */
 export function scaleEnemy(baseFamiliar: FamiliarData, level: number): FamiliarData {
-  const scaleFactor = 1 + 0.1 * (level - 1);
+  // Keep the enemy curve in lockstep with player familiar levels (+6%/level).
+  const scaleFactor = 1 + 0.06 * (level - 1);
   return {
     ...baseFamiliar,
+    // Enemies learn on the same schedule as the player; bosses keep their kit.
+    abilities: abilitiesAtLevel(baseFamiliar, level),
     stats: {
       hp: Math.round(baseFamiliar.stats.hp * scaleFactor),
       maxHp: Math.round(baseFamiliar.stats.maxHp * scaleFactor),

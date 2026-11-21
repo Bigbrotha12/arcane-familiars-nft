@@ -19,16 +19,16 @@ import {
 } from '@arcane-familiars/game-logic';
 
 /**
- * Coverage for "item KO-cancellation" (production plan step 15): when the
- * player's slot is KO'd before it acts (a faster enemy one-shots them under
- * speed-ordered turns), the pending item action must be cancelled — the item
- * is NOT consumed and its state-level effects (heal, currency) are NOT applied.
+ * Items always resolve before the enemy's action (like many monster RPGs), so
+ * a slower player's potion lands even when a faster enemy would otherwise KO
+ * them first. The item is consumed and its state-level effects fire; the
+ * enemy's hit still resolves afterwards. Non-item actions keep speed order.
  *
- * Seeded deterministically: shadowLord (speed 255) always acts before
- * aquaSprite (speed 55) and one-shots its 90 HP from any branch of
- * selectEnemyAction (fireball 425+, basic attack 185+, either way >= 90).
- * A speed buff is pre-seeded on the enemy so the AI's 50% buff branch is
- * skipped (hasBuffs = true), leaving only the guaranteed-damage branches.
+ * Seeded deterministically: shadowLord (speed 255) is faster than aquaSprite
+ * (speed 55) and one-shots its 90 HP from any branch of selectEnemyAction
+ * (fireball 425+, basic attack 185+, either way >= 90). A speed buff is
+ * pre-seeded on the enemy so the AI's 50% buff branch is skipped
+ * (hasBuffs = true), leaving only the guaranteed-damage branches.
  */
 
 function makeEnv(environment: string): Bindings {
@@ -143,7 +143,7 @@ function makeKoBattle(battleId: string): BattleState {
   };
   return {
     id: battleId,
-    playerFamiliar: makeCombatant('aquaSprite', 90, 100, true),
+    playerFamiliar: makeCombatant('aquaSprite', 60, 100, true),
     enemyFamiliar: makeCombatant('shadowLord', 300, 270, false, [speedBuff]),
     isBoss: true,
     turnCount: 0,
@@ -153,15 +153,15 @@ function makeKoBattle(battleId: string): BattleState {
   };
 }
 
-describe('battle action: item KO-cancellation', () => {
-  it("does not consume the item when the user is KO'd before acting", async () => {
-    const anonId = 'anon-item-ko-potion';
+describe('battle action: items resolve before the enemy', () => {
+  it('consumes a potion before a faster enemy acts, then the enemy still hits', async () => {
+    const anonId = 'e4fc25ab-84b3-425e-8bf9-96eb5ae1d69c';
     await seedState(
       anonId,
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'potion_small', quantity: 1 }] },
         activeParty: ['aquaSprite', 'yellowFighter'],
-        partyHp: { aquaSprite: 90, yellowFighter: 140 },
+        partyHp: { aquaSprite: 60, yellowFighter: 140 },
         partyMp: { aquaSprite: 100, yellowFighter: 60 },
       })
     );
@@ -183,24 +183,20 @@ describe('battle action: item KO-cancellation', () => {
       turnCount: number;
     };
 
-    // The faster enemy (speed 255) acted first and one-shotted the 90 HP
-    // sprite, so the player's item slot was cancelled.
-    expect(body.turnResult.canceledActions).toEqual([
-      { uid: 'u-aquaSprite', reason: 'Aqua Sprite was knocked out before it could act!' },
-    ]);
+    // The potion is used first even though the enemy is much faster. It heals
+    // the sprite to full, is consumed, and the enemy's hit then lands but no
+    // longer KOs.
+    expect(body.turnResult.canceledActions).toEqual([]);
     expect(body.turnResult.battleOutcome).toBe(Outcome.Continue);
-    expect(body.turnResult.forcedSwap).toEqual({
-      fallenName: 'Aqua Sprite',
-      incomingName: 'Yellow Fighter',
-    });
-    expect(body.turnResult.playerFamiliar.familiarData.id).toBe('yellowFighter');
+    expect(body.turnResult.forcedSwap).toBeUndefined();
+    expect(body.turnResult.playerFamiliar.familiarData.id).toBe('aquaSprite');
+    expect(body.turnResult.playerFamiliar.currentHp).toBeGreaterThan(0);
     expect(body.turnCount).toBe(1);
 
-    // The KO-cancelled actor never used the item: quantity is untouched and no
-    // heal was applied. The fallen combatant's 0 HP is persisted into the run.
-    expect(body.state.inventory.items).toEqual([{ itemId: 'potion_small', quantity: 1 }]);
+    // The item executed, so it was consumed.
+    expect(body.state.inventory.items).toEqual([{ itemId: 'potion_small', quantity: 0 }]);
     expect(body.state.inventory.currency).toBe(100);
-    expect(body.state.dungeon?.partyHp['aquaSprite']).toBe(0);
+    expect(body.state.dungeon?.partyHp['aquaSprite']).toBeGreaterThan(0);
 
     // The relayed battle row persists with the new combatant, still active.
     const row = await (env as unknown as Bindings).DB.prepare(
@@ -210,18 +206,18 @@ describe('battle action: item KO-cancellation', () => {
       .first<{ battle_json: string }>();
     const persisted = JSON.parse(row!.battle_json) as BattleState;
     expect(persisted.turnCount).toBe(1);
-    expect(persisted.playerFamiliar.familiarData.id).toBe('yellowFighter');
+    expect(persisted.playerFamiliar.familiarData.id).toBe('aquaSprite');
     expect(persisted.status).toBe(BattleResult.Active);
   });
 
-  it('does not grant state-level currency when a lucky_coin use is KO-cancelled', async () => {
-    const anonId = 'anon-item-ko-coin';
+  it('grants state-level currency even when a faster enemy KOs the user afterwards', async () => {
+    const anonId = '0f5ab92b-92eb-4ad4-8bfc-ae055c5aef5e';
     await seedState(
       anonId,
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'lucky_coin', quantity: 1 }] },
         activeParty: ['aquaSprite', 'yellowFighter'],
-        partyHp: { aquaSprite: 90, yellowFighter: 140 },
+        partyHp: { aquaSprite: 60, yellowFighter: 140 },
         partyMp: { aquaSprite: 100, yellowFighter: 60 },
       })
     );
@@ -238,20 +234,20 @@ describe('battle action: item KO-cancellation', () => {
 
     expect(res.status).toBe(200);
     const body = (await res.json()) as { turnResult: BattleTurnResult; state: GameState };
-    expect(body.turnResult.canceledActions.length).toBe(1);
-    expect(body.state.inventory.items).toEqual([{ itemId: 'lucky_coin', quantity: 1 }]);
-    // grant_currency (+50) must NOT have fired for a cancelled action.
-    expect(body.state.inventory.currency).toBe(100);
+    expect(body.turnResult.canceledActions).toEqual([]);
+    expect(body.state.inventory.items).toEqual([{ itemId: 'lucky_coin', quantity: 0 }]);
+    // The item resolved first, so grant_currency (+50) fired before the KO.
+    expect(body.state.inventory.currency).toBe(150);
   });
 
   it('consumes the item when the user survives the turn', async () => {
-    const anonId = 'anon-item-survives';
+    const anonId = 'ca8a0984-2c9e-49ab-8754-34a5937d3ef4';
     await seedState(
       anonId,
       makeState(anonId, {
         inventory: { currency: 100, items: [{ itemId: 'potion_small', quantity: 1 }] },
         activeParty: ['yellowFighter', 'whiteDog'],
-        partyHp: { yellowFighter: 140, whiteDog: 120 },
+        partyHp: { yellowFighter: 100, whiteDog: 120 },
         partyMp: { yellowFighter: 60, whiteDog: 80 },
       })
     );
@@ -261,7 +257,7 @@ describe('battle action: item KO-cancellation', () => {
     const battleId = 'battle-item-survives';
     const battle: BattleState = {
       id: battleId,
-      playerFamiliar: makeCombatant('yellowFighter', 140, 60, true),
+      playerFamiliar: makeCombatant('yellowFighter', 100, 60, true),
       enemyFamiliar: makeCombatant('tideTurtle', 130, 70, false),
       isBoss: false,
       turnCount: 0,
@@ -286,5 +282,46 @@ describe('battle action: item KO-cancellation', () => {
     expect(body.turnResult.forcedSwap).toBeUndefined();
     expect(body.turnCount).toBe(1);
     expect(body.state.inventory.items).toEqual([{ itemId: 'potion_small', quantity: 0 }]);
+  });
+
+  it('revives a fainted party member to its level-scaled max HP (Phoenix Feather)', async () => {
+    const anonId = crypto.randomUUID();
+    const state = makeState(anonId, {
+      inventory: { currency: 100, items: [{ itemId: 'phoenix_feather', quantity: 1 }] },
+      activeParty: ['yellowFighter', 'whiteDog'],
+      partyHp: { yellowFighter: 100, whiteDog: 0 },
+      partyMp: { yellowFighter: 60, whiteDog: 80 },
+    });
+    // Level 10 whiteDog: multiplier 1 + 0.06 * 9 = 1.54 → maxHp round(120 * 1.54) = 185.
+    // 50% revive ⇒ floor(185 / 2) = 92. The old code used the level-1 base
+    // maxHp (120) and revived to 60.
+    state.familiarLevels = { whiteDog: 10 };
+    await seedState(anonId, state);
+
+    const battleId = crypto.randomUUID();
+    const battle: BattleState = {
+      id: battleId,
+      playerFamiliar: makeCombatant('yellowFighter', 100, 60, true),
+      enemyFamiliar: makeCombatant('tideTurtle', 130, 70, false),
+      isBoss: false,
+      turnCount: 0,
+      status: BattleResult.Active,
+      swapsThisTurn: 0,
+      seed: 7,
+    };
+    await seedBattle(battleId, anonId, battle);
+
+    const res = await fetchApp(
+      post('/api/game/battle/action', {
+        anonymousId: anonId,
+        battleId,
+        action: { type: ActionType.Item, itemId: 'phoenix_feather' },
+        expectedTurnCount: 0,
+      })
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as { state: GameState };
+    expect(body.state.dungeon?.partyHp['whiteDog']).toBe(92);
   });
 });

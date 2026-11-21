@@ -1,0 +1,7 @@
+{
+  "$schema": "../../node_modules/wrangler/config-schema.json",
+  "name": "arcane-familiars-staging",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2026-07-01",
+  "services": [{ "binding": "API", "service": "arcane-familiars-backend-staging" }]
+}

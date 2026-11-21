@@ -1,8 +1,8 @@
 # Arcane Familiars
 
-A browser-based NFT creature-collector game integrated with the Immutable X (IMX) L2 marketplace. Summon familiars, battle with turn-based combat, and trade on-chain — all from your browser.
+A browser-based creature-collector game. Summon familiars, battle with turn-based combat, explore six regions, and grow your team — all from your browser.
 
-> **Status:** Active development — **playable vertical slice**: dungeon exploration, server-authoritative turn-based combat (speed-ordered turns, status effects, items, party swapping, KO relay), loot and currency. Blockchain integration is the next milestone.
+> **Status:** Playable content-complete slice — 6 regions, 25 familiars, 26 abilities, 20 items, server-authoritative combat, party swapping, KO relay, shops, and familiar leveling. Email/password accounts keep saves across devices; guests can play without signing in.
 
 ## Project Structure
 
@@ -28,20 +28,17 @@ A browser-based NFT creature-collector game integrated with the Immutable X (IMX
 - **Hono** on Cloudflare Workers (edge runtime)
 - **Cloudflare D1** (SQLite) for persistent storage
 - **TypeScript** with type-safe env bindings
-- Proxies Immutable X API for asset/balance data
 
 ### Game
 - **Phaser 4** scenes embedded in the React app (`game/`), bridged via an event bus
-- **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution) consumed by both backend and client; 127 vitest specs
+- **`packages/game-logic`** — shared, dependency-free combat engine (damage math, status effects, items, turn resolution, progression) consumed by both backend and client; 150 vitest specs
 - Server-authoritative battles: the client sends actions, the Worker resolves the full turn and returns a replayable result (ordered steps, canceled actions, forced swaps)
 - HUD is React (Tailwind, DESIGN.md tokens) rendered in an 800×600 design-space stage scaled to the canvas
 
-### Blockchain
-The legacy **Immutable X (StarkEx)** contracts — a Hardhat/Truffle hybrid with a custom
-ERC-721/ERC-2981 proxy and a `Mintable`/`IMX_Bridge` bridge — were **retired** (StarkEx is
-sunset; see `docs/BLOCKCHAIN-IMPLEMENTATION-PLAN.md`). The blockchain/NFT workstream now
-targets **Immutable Chain** (zkEVM) and is tracked separately in that plan; it is not part
-of the playable game app and is not yet started.
+### Accounts & saves
+Players can create an email/password account to keep progress across sessions and devices.
+Guest play remains available, keyed by a browser-local anonymous ID. Passwords are stored as
+salted PBKDF2 hashes; sessions are opaque HttpOnly cookies with a 30-day TTL, CSRF protection, and credential-scoped CORS.
 
 ## Getting Started
 
@@ -52,6 +49,17 @@ of the playable game app and is not yet started.
 ```bash
 npm install
 ```
+
+### Audio assets
+Audio files are intentionally not committed. After installing, fetch them once:
+
+```bash
+npm run audio:fetch   # requires curl, unzip, python3, and ffmpeg
+npm run audio:check
+```
+
+See [docs/AUDIO-PIPELINE.md](./docs/AUDIO-PIPELINE.md) for sources, licenses, manual
+fallback, and the deploy note.
 
 ### Run backend + frontend together (development)
 ```bash
@@ -73,7 +81,7 @@ npm run frontend:dev   # http://localhost:8080
 
 ## Game Mechanics
 
-Players summon **familiars** — creature NFTs with unique stats and abilities:
+Players summon **familiars** — creatures with unique stats and abilities:
 
 | Stat | Description |
 |------|-------------|
@@ -90,7 +98,10 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 - **Dungeon runs**: pick a party of 2, explore room graphs (minimap), treasure rooms, boss rooms
 - **Turn-based combat**: speed-ordered sequential turns (faster familiar acts first; a KO'd-before-acting familiar loses its action), abilities with cooldowns and MP costs, status effects (buffs, debuffs, DoT/HoT), defend, flee
 - **Party management**: swap the active familiar between rooms or mid-battle (once per turn, free); if the active familiar falls, the backup relays in automatically — defeat only when both are down
-- **Items**: inventory drops (potions, bombs, revives, currency) usable in battle; consumption respects KO cancellation
+- **Items**: inventory drops and a world-map shop (potions, ethers, bombs, cures, buffs, revives, currency); consumption respects KO cancellation
+- **Progression**: familiars earn XP and level up to 20, scaling their stats; non-boss victories can recruit the defeated species; regions unlock through boss clears
+- **Shop**: spend gold on consumables from the world map
+- **Push-your-luck loot**: items and gold found in a run are run loot, usable immediately but lost if the party is KO'd; exit or clear the boss to bank them
 
 ## Development Phases
 
@@ -98,9 +109,9 @@ Each familiar has an **affinity** (Light, Dark, Fire, Water, Earth, Wind), a **r
 |-------|-------|--------|
 | 1 — Foundation | Cleanup, backend scaffolding, Vite migration, CI | Done |
 | 2 — Game Prototype | Phaser 4 engine, core game loop, dungeons, battles, items, party | Done |
-| 3 — Blockchain | Retired legacy StarkEx contracts; Immutable Chain (zkEVM) + Immutable SDK track | Legacy StarkEx contracts retired (BC0); Immutable Chain workstream planned, not started |
-| 4 — MVP Polish | Wallet connect, mint flow, landing page | Landing + Immutable Passport sign-in/wallet binding done; mint/collection/marketplace pending |
-| 5 — Mainnet | Audit, mainnet deploy, IMX trading | Post-MVP |
+| 3 — Accounts | Email/password registration, login, sessions, guest adoption | Implemented |
+| 4 — MVP Polish | Landing, codex, onboarding, content art/audio | In progress |
+| 5 — Launch | Production deploy, monitoring, final QA | Planned |
 
 ## CI
 

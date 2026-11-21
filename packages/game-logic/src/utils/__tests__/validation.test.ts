@@ -118,6 +118,16 @@ describe('validateBattleAction', () => {
     });
   });
 
+  describe('charge', () => {
+    it('rejects Charge from the player as an unknown action type', () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Charge };
+      const result = validateBattleAction(action, state);
+      expect(result.valid).toBe(false);
+      expect(result.error).toContain('Unknown action type');
+    });
+  });
+
   describe('item', () => {
     it('requires itemId', () => {
       const state = createBattleState();
@@ -128,10 +138,24 @@ describe('validateBattleAction', () => {
       });
     });
 
-    it('is valid with itemId', () => {
-      const state = createBattleState();
+    it('is valid with a useful item', () => {
+      const state = createBattleState({
+        playerFamiliar: {
+          ...createBattleState().playerFamiliar,
+          currentHp: 60,
+        },
+      });
       const action: BattleAction = { type: ActionType.Item, itemId: 'potion_small' };
       expect(validateBattleAction(action, state)).toEqual({ valid: true });
+    });
+
+    it('rejects a healing item at full HP', () => {
+      const state = createBattleState();
+      const action: BattleAction = { type: ActionType.Item, itemId: 'potion_small' };
+      expect(validateBattleAction(action, state)).toEqual({
+        valid: false,
+        error: 'Item would have no effect',
+      });
     });
   });
 
